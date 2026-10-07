@@ -1,0 +1,35 @@
+# Specification Quality Checklist: 티스토리형 블로그 플랫폼
+
+**Purpose**: plan 단계로 넘어가기 전에 spec의 완성도와 품질을 확인한다
+**Created**: 2026-10-07
+**Feature**: [spec.md](../spec.md)
+
+## Content Quality
+
+- [x] 구현 세부사항(언어, 프레임워크, API)이 없다
+- [x] 사용자 가치와 비즈니스 필요에 집중한다
+- [x] 비개발자도 읽을 수 있게 썼다
+- [x] 필수 섹션(User Scenarios, Requirements, Success Criteria)을 모두 채웠다
+
+## Requirement Completeness
+
+- [ ] `[NEEDS CLARIFICATION]` 표시가 남아 있지 않다 → **Q1~Q9 9건 남음** (Clarifications 표 참고)
+- [x] 요구사항이 테스트 가능하고 모호하지 않다
+- [x] Success Criteria가 측정 가능하다
+- [x] Success Criteria에 기술 세부사항이 없다
+- [x] 모든 유저 스토리에 Acceptance Scenarios가 있다
+- [x] Edge Cases를 정리했다
+- [x] 범위(포함·제외)를 명확히 했다
+- [x] 의존성과 가정을 적었다
+
+## Feature Readiness
+
+- [x] 모든 FR이 원본 통합 ID(71개)와 연결된다
+- [x] 유저 스토리가 주요 흐름을 덮는다 (P1 스토리 4개 = 원본 P0 24개 기능)
+- [x] 기능이 Success Criteria의 측정 결과를 만족하도록 정의됐다
+- [x] 구현 세부사항이 spec에 새어 들어가지 않았다
+
+## Notes
+
+- 미결정 9건 중 Q1~Q6, Q9는 세 사람의 합의가 필요하다. Q7·Q8은 민주 개인의 선택이라 민주의 plan에서 정해도 된다.
+- 미결정이 남아 있어도 P1 스토리(US1~US4) 범위의 plan은 시작할 수 있다. Q1(글자 수)만 P0 범위에 걸리므로 먼저 정하는 것을 권장한다.
