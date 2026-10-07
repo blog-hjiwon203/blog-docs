@@ -2,7 +2,7 @@
 
 > **이 문서는?** 지원 서비스의 REST API 초안이다. 프론트와 백엔드가 주고받는 약속(경로, 요청, 응답 코드)을 정한다. 전체 문서 안내는 [README](../../../README.md)에 있다.
 
-원 문서의 API 명세 탭은 아직 예전 ID 기준이다. 이 초안은 설계 문서 4~6장과 spec FR에서 뽑은 것이고, API 탭을 갱신할 때 기준으로 쓴다. 경로·필드 이름은 바꿔도 되지만 **응답 코드 규칙은 spec을 따른다**.
+설계 문서의 API 명세 탭은 아직 예전 ID 기준이다. 이 초안은 설계 문서 4~6장과 spec FR에서 뽑은 것이고, API 탭을 갱신할 때 기준으로 쓴다. 경로·필드 이름은 바꿔도 되지만 **응답 코드 규칙은 spec을 따른다**.
 
 ## 공통
 
@@ -86,7 +86,7 @@
 | PUT/DELETE | /api/blogs/{blogId}/subscription | 구독·해제 (멱등) | SUB-01 |
 | GET | /api/feed?cursor= | 구독 피드 20 | SUB-02 |
 | GET | /api/search?q=&page= | 블로그 내 검색 (블로그 Host) | SRCH-01 |
-| GET | /api/search?q=&type=post\|blog | 통합 검색 (플랫폼 Host) | SRCH-02 |
+| GET | /api/search?q=&type=post\|blog | 전체 검색 (플랫폼 Host) | SRCH-02 |
 | GET | /api/home/latest?cursor= | 홈 최신 글 20 | HOME-01 |
 | GET | /api/home/popular | 최근 1시간 조회수 상위 10 (캐시 5분) | HOME-02 |
 | GET | /api/home/topics/{topic} | 주제별 인기 6 | HOME-03 |
