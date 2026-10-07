@@ -82,6 +82,10 @@
 
 **notification** (P2): receiver_id, type(COMMENT, REPLY, LIKE, SUBSCRIBE, SANCTION), target 정보, read_at.
 
+## 추천 (PostgreSQL + pgvector, stretch)
+
+**post_embedding**: post_id(MySQL post.id, FK 아님), embedding(vector), updated_at. 글 삭제·비공개 전환 시 함께 지우거나 조회 시 가시성으로 거른다.
+
 ## 관리
 
 **report** (P2): reporter_id, target_type(POST, COMMENT, BLOG), target_id, reason(SPAM, ADULT, ABUSE, COPYRIGHT, ETC), description(기타일 때 필수), status(PENDING, DONE). UNIQUE(reporter_id, target_type, target_id).

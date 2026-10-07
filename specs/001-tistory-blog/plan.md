@@ -14,9 +14,9 @@
 
 **Language/Version**: Java 17+ (Spring Boot 3.x), TypeScript/JavaScript (React 18) — 버전은 [research.md R-01](./research.md) 기본값
 
-**Primary Dependencies**: Spring Boot (Web, Security, Data JPA, Validation, Cache), JWT 라이브러리, OWASP Java HTML Sanitizer, jsoup / React, React Router, Vite, Tiptap, DOMPurify
+**Primary Dependencies**: Spring Boot (Web, Security, Data JPA, Validation, Cache, Data Redis), JWT 라이브러리, OWASP Java HTML Sanitizer, jsoup / React, React Router, Vite, Tiptap, DOMPurify
 
-**Storage**: 개발 H2(MySQL 호환 모드, 파일 저장) / 운영 MySQL. 캐시는 Spring Cache(@Cacheable, TTL 5분). 이미지는 서버 로컬 `./uploads/`(UUID 파일명), DB에는 경로·원본 파일명·크기만. 원 문서의 "운영: MySQL, Redis, PostgreSQL" 중 Redis·PostgreSQL 용도는 [NEEDS CLARIFICATION: R-02]
+**Storage**: 주 DB는 개발 H2(MySQL 호환 모드, 파일 저장) / 운영 MySQL. Redis는 캐시(@Cacheable, TTL 5분)와 연타 방지 키 저장. PostgreSQL + pgvector는 '비슷한 글 추천' 전용으로 2주 안에 도전(stretch, R-02). 이미지는 서버 로컬 `./uploads/`(UUID 파일명), DB에는 경로·원본 파일명·크기만.
 
 **Testing**: JUnit 5 + Spring Boot Test + MockMvc(백엔드), Vitest(프론트, 최소) — 원 문서에 없어 기본값으로 둠 (R-01)
 
@@ -69,10 +69,10 @@
 | III. 공유된 주소는 깨지지 않는다 | ✅ | 블로그 소프트 삭제로 주소 영구 예약, 글 전역 번호 불변, 이사·글 이동 시 서버에서 301 |
 | IV. 권한은 서버가 지킨다 | ✅ | Spring Security(URL·role) + 서비스 계층 주인 검사. XSS 이중 정화, CSP. 토큰 방식이라 CSRF 해당 없음(쿠키 도입 시 재검토) |
 | V. 제재는 숨김이며 되돌릴 수 있다 | ✅ | 블라인드·정지·블로그 제한 모두 상태값, 해제 시 원복. 관리 이력은 조회만 |
-| VI. 입력과 숫자는 잃거나 틀리지 않는다 | ⚠️ | 연타 방지 방식 미정(R-09). 2주 안에 정하고 T-태스크에 포함함 |
+| VI. 입력과 숫자는 잃거나 틀리지 않는다 | ✅ | 공감·구독은 DB UNIQUE, 발행·댓글은 Idempotency-Key(Redis TTL) (R-09 확정) |
 | VII. 추적 가능한 ID | ✅ | 통합 ID 사용. ERD·API 탭의 예전 ID는 갱신 예정 |
 
-**Phase 1 재확인**: data-model과 contracts가 II(가시성 필터를 공통 쿼리 조건으로), III(블로그 deleted_at, moved_to_blog_id), V(블라인드 컬럼)를 반영함 → 통과. VI는 R-09 결정 전까지 ⚠️ 유지.
+**Phase 1 재확인**: data-model과 contracts가 II(가시성 필터를 공통 쿼리 조건으로), III(블로그 deleted_at, moved_to_blog_id), V(블라인드 컬럼)를 반영함 → 통과. VI도 R-09 확정으로 통과.
 
 ## Project Structure
 
@@ -112,7 +112,8 @@ backend/
     │   ├── home/
     │   ├── manage/          # 블로그 주인 관리
     │   ├── admin/           # 서비스 관리
-    │   └── image/
+    │   ├── image/
+    │   └── recommend/       # 비슷한 글 추천 (PostgreSQL + pgvector, stretch)
     ├── main/resources/      # application.yml, data.sql(ADMIN 초기 계정), static/(React 빌드 결과)
     └── test/java/com/blog/
 
@@ -132,5 +133,6 @@ frontend/
 | 항목 | 이유 | 더 단순한 대안을 안 쓴 이유 |
 | --- | --- | --- |
 | 서브도메인 주소(V3) | 티스토리와 같은 경험 | 경로 방식이 더 단순하지만 학습 목표. 대신 블로그 간 로그인 공유 문제(R-03)를 떠안음 |
+| 저장소 3종(MySQL, Redis, PostgreSQL) | Redis는 캐시·연타 방지, PostgreSQL은 벡터 검색 | 벡터 검색을 MySQL로 하기 어려움. PostgreSQL은 추천 기능에만 쓰고, 일정이 밀리면 통째로 뺄 수 있게 분리 |
 | XSS 이중 정화 | WYSIWYG HTML 저장 | 마크다운이면 단순하지만 V4에서 WYSIWYG를 고름. 서버 정화가 필수, 클라이언트는 보조 |
 | 자체 기능: 비회원 댓글 | 예전 설계 | **구현 보류**. 넣으면 spec 권한표·원칙 IV와 달라져 교차 테스트가 깨짐 |

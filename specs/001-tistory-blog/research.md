@@ -7,11 +7,12 @@
 - **Decision**: Java 17, Spring Boot 3.x, React 18 + Vite. 테스트는 JUnit 5, Spring Boot Test, MockMvc, 프론트는 Vitest 최소.
 - **Rationale**: 원 문서에 버전·테스트 도구가 없어 Spring Boot 3 기본 조합으로 둠. 바꾸면 이 항목만 고친다.
 
-## R-02 운영 저장소 — [NEEDS CLARIFICATION]
+## R-02 운영 저장소 (2026-10-07 확정)
 
-- 원 문서 3장: "운영: MySQL, Redis, PostgreSQL".
-- **현재 가정**: 주 DB는 MySQL. Redis는 캐시·토큰 차단 목록 후보, PostgreSQL은 '비슷한 글 추천'(벡터 검색, P2) 후보로 보임.
-- **필요한 결정**: Redis·PostgreSQL을 2주 범위에 넣을지. 넣지 않으면 캐시는 Spring 기본(Caffeine/ConcurrentMap)으로 시작.
+- **Decision**: 주 DB는 MySQL(개발 H2). **Redis 사용**: Spring Cache 저장소(인기 글·주제별 글 TTL 5분), 연타 방지 Idempotency-Key 저장(R-09). 정지 회원 토큰 차단·로그아웃 토큰 처리도 R-03 확정 시 Redis 후보. **PostgreSQL + pgvector**: '비슷한 글 추천'(자체 기능) 전용, 2주 안에 도전(stretch).
+- **Rationale**: 개발에 AI를 쓰므로 2주 안에 벡터 검색까지 가능하다고 판단(지원). 단, 주 데이터는 MySQL 하나로 두고 PostgreSQL에는 글 id와 임베딩만 저장해 일정이 밀리면 기능째 뺄 수 있게 한다.
+- **로컬 개발**: Redis와 PostgreSQL(pgvector)은 docker compose로 띄운다. Redis가 없을 때 테스트는 embedded/Testcontainers 또는 ConcurrentMap 캐시로 대체.
+- **Open**: 임베딩 생성 방법(외부 임베딩 API 또는 로컬 모델), 임베딩 갱신 시점(발행·수정 시 비동기).
 
 ## R-03 인증 — 일부 미결정
 
@@ -64,11 +65,11 @@
 - 삭제는 소프트 삭제(deleted_at). 개설 한도 5개는 활성 블로그만 셈.
 - 이사 간 새 블로그(B)를 삭제하면 A의 리다이렉트도 끊기고 없는 블로그.
 
-## R-09 연타 방지 — [NEEDS CLARIFICATION]
+## R-09 연타 방지 (2026-10-07 확정: 기본값 채택)
 
 - spec FR-025, FR-048, FR-055, FR-058, NFR-003 요구. 원 문서: "버튼 비활성화 + 서버 측 중복 방지(10장)".
 - **후보**: (a) 클라이언트가 만든 Idempotency-Key 헤더를 짧은 TTL로 저장, (b) 공감·구독은 DB UNIQUE 제약(member_id, post_id / member_id, blog_id)으로 충분, 발행·댓글은 (a).
-- **권장 기본값**: 공감·구독은 UNIQUE 제약, 발행·댓글은 Idempotency-Key. 확정 전까지 이 기본값으로 tasks에 넣었다.
+- **Decision**: 공감·구독은 DB UNIQUE 제약 + PUT/DELETE 멱등 API, 발행·댓글은 클라이언트가 만든 `Idempotency-Key`를 Redis에 짧은 TTL로 저장해 같은 키의 두 번째 요청은 첫 결과를 돌려준다. 버튼 비활성화는 보조.
 
 ## R-10 홈 섹션 API (5.10)
 

@@ -44,7 +44,8 @@ description: "지원 서비스 구현 작업 (2주 일정 기준)"
 - [ ] T013 [P] [W1] `data.sql`에 ADMIN 초기 계정 in `backend/src/main/resources/` (ADMIN-01)
 - [ ] T014 [P] [W1] XSS: OWASP HTML Sanitizer 허용 목록 `HtmlSanitizer`, jsoup 요약 `SummaryExtractor`, CSP 헤더 in `global/security/` (R-05, NFR-001)
 - [ ] T015 [P] [W1] 프론트 라우터: 플랫폼 도메인 / 블로그 서브도메인 분기, API 클라이언트(Bearer 첨부, 401 → 로그인 후 원래 주소 복귀) in `frontend/src/app/`, `frontend/src/api/`
-- [ ] T016 [W1] 연타 방지: `Idempotency-Key` 저장 인터셉터(짧은 TTL) in `global/web/` (R-09 기본값, NFR-003)
+- [ ] T016 [W1] 연타 방지: `Idempotency-Key` 인터셉터, 키·첫 응답을 Redis에 짧은 TTL로 저장 in `global/web/` (R-09, NFR-003)
+- [ ] T016a [P] [W1] Redis 연결 설정, Spring Cache 저장소를 Redis로, 로컬 `docker-compose.yml`(Redis) in `global/config/`, 저장소 루트 (R-02)
 
 **Checkpoint**: 인증·권한·Host 해석·가시성 판단이 준비됨
 
@@ -139,7 +140,7 @@ description: "지원 서비스 구현 작업 (2주 일정 기준)"
 
 ## Phase 8: US7 탐색 (P2) — 2주 범위 일부
 
-- [ ] T063 [US7] [W2a] 인기 글 API: 최근 1시간 view_log 집계, 공개 글 상위 10, @Cacheable 5분 in `home/` (HOME-02, V6)
+- [ ] T063 [US7] [W2a] 인기 글 API: 최근 1시간 view_log 집계, 공개 글 상위 10, @Cacheable(Redis) 5분 in `home/` (HOME-02, V6)
 - [ ] T064 [US7] [W2b] 주제별 글 API: 주제 탭별 인기 6, 캐시 5분 in `home/` (HOME-03)
 - [ ] T065 [US7] 통합 검색 (SRCH-02)
 - [ ] T066 [US7] 댓글 수정 (CMT-03), 방명록 (CMT-04)
@@ -152,6 +153,17 @@ description: "지원 서비스 구현 작업 (2주 일정 기준)"
 ## Phase 10: US11 일부 앞당김 (P3)
 
 - [ ] T069 [US11] [W2a] 답글 1단계, 답글 있는 댓글 삭제 시 '삭제된 댓글입니다' 표시 in `comment/` (CMT-05)
+
+---
+
+## Phase 10a: 자체 기능 비슷한 글 추천 (stretch) [W2b]
+
+**Goal**: 글 상세 아래 비슷한 글 몇 개. 일정이 밀리면 이 Phase 전체를 백로그로 돌린다(다른 Phase와 의존 없음).
+
+- [ ] T069a [W2b] docker compose에 PostgreSQL + pgvector 추가, 두 번째 DataSource 설정(추천 전용) in `recommend/config/` (R-02)
+- [ ] T069b [W2b] `post_embedding(post_id, embedding vector)` 테이블, 발행·수정 시 비동기로 임베딩 생성·저장 in `recommend/` (임베딩 방법은 R-02 Open)
+- [ ] T069c [W2b] 비슷한 글 API: 코사인 유사도 상위 N에서 보는 사람이 볼 수 없는 글 제외(가시성 판단 재사용) in `recommend/`
+- [ ] T069d [P] [W2b] 글 상세 하단 '비슷한 글' 영역 in `frontend/src/pages/post/`
 
 ---
 
@@ -174,7 +186,7 @@ description: "지원 서비스 구현 작업 (2주 일정 기준)"
 | US10 | 블로그 이사·삭제·대표·꾸미기, 탈퇴 (BLOG-05~08, AUTH-06, R-08) |
 | US11 | 구독자 공개(구독 필요), 예약 발행, 카테고리 비공개, 태그 관리, 비밀댓글, 댓글 허용, 저장 |
 | US12~14 | 알림, 맞구독, 추천, 랭킹, 통계, 스팸, 신고, 블로그 제한, 공지·이력·대시보드 |
-| 자체 | 같은 카테고리 다른 글, 비슷한 글 추천(벡터), 비회원 댓글(보류) |
+| 자체 | 같은 카테고리 다른 글, 비회원 댓글(보류). 비슷한 글 추천은 Phase 10a(stretch) |
 
 ---
 
@@ -184,6 +196,8 @@ description: "지원 서비스 구현 작업 (2주 일정 기준)"
 - T031 발행은 T014(정화)·T016(연타 방지)에 의존
 - T036 이미지 업로드 → T037 에디터 연결
 - T053 view_log → T063 인기 글 → T064 주제별 글
+- T016a(Redis) → T016, T063, T064
+- Phase 10a는 T031(발행)과 T011(가시성)에만 의존하고, 다른 작업이 기다리지 않는다
 - T046 공감, T047 검색은 US2 글·태그(T038) 이후
 
 ## Implementation Strategy
