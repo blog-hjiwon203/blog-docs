@@ -16,7 +16,7 @@ cd frontend && npm run build && cp -r dist/* ../backend/src/main/resources/stati
 cd ../backend && ./gradlew bootJar
 ```
 
-- 블로그 주소 사이 로그인 공유(기능 명세 Q6)를 확인하려면 `/etc/hosts`에 `127.0.0.1 blog.test alpha.blog.test beta.blog.test gamma.blog.test`를 넣고 `blog.test:8080`, `{주소}.blog.test:8080`으로 연다. `*.localhost`는 하위 도메인 쿠키 공유가 브라우저마다 달라 쓰지 않는다.
+- 블로그 주소 사이 로그인 공유(상위 도메인 쿠키)를 확인하려면 `/etc/hosts`에 `127.0.0.1 blog.test alpha.blog.test beta.blog.test gamma.blog.test`를 넣고 `blog.test:8080`, `{주소}.blog.test:8080`으로 연다. `*.localhost`는 하위 도메인 쿠키 공유가 브라우저마다 달라 쓰지 않는다.
 - 서비스 관리자 초기 계정은 `data.sql`로 들어간다.
 
 ## P0 한 바퀴 (spec SC-001, US1~US3)

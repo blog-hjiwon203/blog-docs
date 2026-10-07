@@ -37,8 +37,7 @@ description: "지원 서비스 구현 작업 (2주 일정 기준)"
 
 - [ ] T005 [W1] 공통 엔티티 기반(BaseTimeEntity), `member` 엔티티(role, status) in `member/` (data-model)
 - [ ] T006 [W1] 공통 오류 응답 형식과 `@RestControllerAdvice` (400 fieldErrors, 401, 403, 404, 409, 500은 내부 정보 없이) in `global/error/` (COM-02)
-- [ ] T006a [W1] **먼저 결정**: 블로그 주소 사이 로그인 공유 방식(기능 명세 Q6, 추천안 R-03). T007, T015, T020이 이 결정을 따른다
-- [ ] T007 [W1] JWT 발급·검증 필터(Q6 추천안이면 `.blog.com` HttpOnly 쿠키 + CSRF 대책), Spring Security 설정(`/api/admin/**` hasRole ADMIN, 나머지 permitAll + 메서드 단위 인증) in `global/config/SecurityConfig.java` (COM-01, ADMIN-01, AUTH-03)
+- [ ] T007 [W1] JWT 발급·검증 필터(`.blog.com` HttpOnly 쿠키로 발급, SameSite=Lax + CSRF 대책, R-03), Spring Security 설정(`/api/admin/**` hasRole ADMIN, 나머지 permitAll + 메서드 단위 인증) in `global/config/SecurityConfig.java` (COM-01, ADMIN-01, AUTH-03)
 - [ ] T008 [W1] 요청마다 member.status 확인(SUSPENDED → 403 + 사유·기한, WITHDRAWN → 401) in JWT 필터 (ADMIN-02 대비, R-03)
 - [ ] T009 [W1] Host 헤더 → 블로그 해석 `BlogHostResolver` (플랫폼 도메인 / 서브도메인 / 없으면 404 / 이사 301) in `global/host/` (R-04)
 - [ ] T010 [W1] 화면 주소 처리: `/api/**` 외 요청은 블로그·글 확인 후 `index.html` 포워드, 301은 서버가 직접 in `global/config/SpaForwardController.java` (6장 ①)
@@ -46,7 +45,7 @@ description: "지원 서비스 구현 작업 (2주 일정 기준)"
 - [ ] T012 [W1] 페이지 요청 보정(size 1~50, page 음수→0)과 페이지·커서 응답 DTO in `global/web/` (R-06)
 - [ ] T013 [P] [W1] `data.sql`에 ADMIN 초기 계정 in `backend/src/main/resources/` (ADMIN-01)
 - [ ] T014 [P] [W1] XSS: OWASP HTML Sanitizer 허용 목록 `HtmlSanitizer`, jsoup 요약 `SummaryExtractor`, CSP 헤더 in `global/security/` (R-05, 기능 명세 공통 규칙 보안)
-- [ ] T015 [P] [W1] 프론트 라우터: 플랫폼 도메인 / 블로그 서브도메인 분기, API 클라이언트(Q6 방식으로 인증 전달, 401 → 플랫폼 로그인 후 원래 주소 복귀) in `frontend/src/app/`, `frontend/src/api/`
+- [ ] T015 [P] [W1] 프론트 라우터: 플랫폼 도메인 / 블로그 서브도메인 분기, API 클라이언트(쿠키 자동 전송 + CSRF 헤더, 401 → 플랫폼 로그인 후 원래 주소 복귀) in `frontend/src/app/`, `frontend/src/api/`
 - [ ] T016 [W1] 연타 방지: `Idempotency-Key` 인터셉터, 키·첫 응답을 Redis에 짧은 TTL로 저장 in `global/web/` (R-09, POST-01, CMT-01)
 - [ ] T016a [P] [W1] Redis 연결 설정, Spring Cache 저장소를 Redis로, 로컬 `docker-compose.yml`(Redis) in `global/config/`, 저장소 루트 (R-02)
 
@@ -62,7 +61,7 @@ description: "지원 서비스 구현 작업 (2주 일정 기준)"
 - [ ] T017 [P] [US1] [W1] 이메일 인증 코드 발송·확인 (개발은 로그 출력, 메일 발송은 2주차로 미뤄도 됨) in `auth/` (OWN-01, 가입에 필요해 1주차)
 - [ ] T018 [US1] [W1] 가입 API: 인증 코드 확인 후 회원 생성, 이메일·닉네임 중복, 비밀번호 8자+영문+숫자, bcrypt in `auth/` (AUTH-01)
 - [ ] T019 [US1] [W1] 로그인 API: 실패 문구 통일, 정지 회원 안내, 토큰 발급 in `auth/` (AUTH-01)
-- [ ] T020 [US1] [W1] 로그아웃: 모든 블로그 주소에서 로그아웃 상태 (Q6 방식대로 토큰 무효화) (AUTH-02)
+- [ ] T020 [US1] [W1] 로그아웃: 모든 블로그 주소에서 로그아웃 상태 (쿠키 삭제 + 토큰 무효화) (AUTH-02)
 - [ ] T021 [P] [US1] [W1] `blog` 엔티티(address UNIQUE, is_primary, moved_to_blog_id, deleted_at) in `blog/`
 - [ ] T022 [US1] [W1] 주소 확인 API(정규식·예약어·중복, 삭제된 주소 포함) + 개설 API(활성 5개 한도, 첫 블로그 대표) in `blog/` (BLOG-01)
 - [ ] T023 [US1] [W1] 블로그 정보 조회·수정 API (주소 수정 불가) in `blog/` (BLOG-02)
@@ -85,7 +84,7 @@ description: "지원 서비스 구현 작업 (2주 일정 기준)"
 - [ ] T030 [US2] [W1] 카테고리별 글 목록 `/category/{id}` (상위는 하위 포함·합산, CAT-03 이후 적용) in `post/` (CAT-02)
 - [ ] T031 [US2] [W1] 글 발행 API: 제목 1~200자 필수, 주제·카테고리(기본 미분류)·공개 범위, 서버 정화, 요약 생성, published_at 기록, Idempotency-Key in `post/` (POST-01)
 - [ ] T032 [US2] [W1] 글 수정 API: 주인만, 주소·published_at·수치·순서 불변 in `post/` (POST-02)
-- [ ] T033 [US2] [W1] 글 삭제 API: 주인만, 댓글·공감·알림 함께 처리(한 트랜잭션). **시작 전 Q3(소프트/하드) 결정** in `post/` (POST-03)
+- [ ] T033 [US2] [W1] 글 삭제 API: 주인만, 소프트 삭제(`deleted_at`), 댓글·공감·알림 함께 처리(한 트랜잭션), 글 수·공감 수에서 바로 빠짐 in `post/` (POST-03)
 - [ ] T034 [US2] [W1] 공개 범위 변경 API (PUBLIC, PRIVATE; SUBSCRIBERS는 구독 이후) in `post/` (POST-06)
 - [ ] T035 [P] [US2] [W1] 화면: Tiptap 에디터(허용 서식만), 글쓰기·수정, 카테고리 관리, 삭제 확인 in `frontend/src/components/editor/`, `pages/manage/`
 - [ ] T036 [US2] [W2a] 이미지 업로드 API: 10MB, 확장자+실제 내용 검사(위장 파일 거절), UUID 저장, 리사이즈·썸네일, EXIF 방향 보정, GIF 유지 in `image/` (POST-05)
@@ -130,7 +129,7 @@ description: "지원 서비스 구현 작업 (2주 일정 기준)"
 
 ## 7단계: US5 글쓰기·블로그 정리 편의 (P2) — 2주 범위 일부
 
-- [ ] T053 [US5] [W2a] `view_log` 기록 + 중복 조회 판정(시간은 Q2, 정하기 전 30분 가정) + view_count in `post/` (POST-09)
+- [ ] T053 [US5] [W2a] `view_log` 기록 + 중복 조회 판정(같은 사용자 5분) + view_count in `post/` (POST-09)
 - [ ] T054 [US5] [W2a] 사이드바 태그 목록·글 수 in `blog/` (TAG-03)
 - [ ] T055 [US5] [W2b] 회원정보 수정: 닉네임·프로필·비밀번호 in `member/` (AUTH-05)
 - [ ] T056 [US5] [W2b] 주제 enum, 글 작성 시 주제 선택 in `post/` (POST-11, 밀리면 확장으로)
@@ -140,12 +139,12 @@ description: "지원 서비스 구현 작업 (2주 일정 기준)"
 - [ ] T060 [US5] [W2b] 하위 카테고리 2단계, 사이드바 트리와 상위 목록 합산 켜기 in `category/`, `blog/` (CAT-03, 원본 검토 6)
 - [ ] T060a [US5] 드래그로 순서·상하위 변경 (CAT-04)
 - [ ] T061 [US5] 블로그 없는 회원 글쓰기 → 개설 안내 (AUTH-04)
-- [ ] T062 [US5] 로그인 유지(브라우저를 닫아도 유지) (AUTH-03, Q6 방식대로)
+- [ ] T062 [US5] 로그인 유지(브라우저를 닫아도 유지, 만료가 긴 Refresh Token 쿠키) (AUTH-03)
 
 ## 8단계: US7 탐색 (P2) — 2주 범위 일부
 
-- [ ] T063 [US7] [W2a] 인기 글 API: 최근 1시간 view_log 집계, 공개 글 상위 10, @Cacheable(Redis) 5분 in `home/` (HOME-02)
-- [ ] T064 [US7] [W2b] 주제별 글 API: 주제 탭별 인기 6(기준은 Q7, 정하기 전 최근 1시간 조회수, 모자라면 최신 글), 캐시 5분 in `home/` (HOME-03)
+- [ ] T063 [US7] [W2a] 인기 점수 계산(최근 1시간 조회×1 + 공감×3 + 댓글×5, 가중치는 설정값)과 인기 글 API: 공개 글 상위 10, @Cacheable(Redis) 5분 in `home/` (HOME-02, R-12)
+- [ ] T064 [US7] [W2b] 주제별 글 API: 주제 탭별 인기 점수 순 6개, 모자라면 최신 글로 채움, 캐시 5분 in `home/` (HOME-03)
 - [ ] T065 [US7] 전체 검색 (SRCH-02)
 - [ ] T066 [US7] 댓글 수정 (CMT-03), 방명록 (CMT-04)
 
@@ -187,20 +186,19 @@ description: "지원 서비스 구현 작업 (2주 일정 기준)"
 | US5, US10 | 소셜 로그인(AUTH-01 P1, R-07), 소셜 연동(OWN-03), 비밀번호 재설정(OWN-02), 개설 안내(AUTH-04), 로그인 유지 화면(AUTH-03) |
 | US6 | 구독·피드·구독자 수·공유 (SUB-01~03, SOC-02) |
 | US9 | 회원 정지 화면·API, 게시물 블라인드 (ADMIN-02, 03) |
-| US10 | 블로그 이사·삭제·대표·꾸미기, 탈퇴 (BLOG-05~08, AUTH-06, R-08) |
-| US11 | 구독자 공개(구독 필요), 예약 발행, 카테고리 비공개, 태그 관리, 비밀댓글, 댓글 허용, 저장 |
+| US10 | 블로그 이사·삭제·대표·꾸미기, 탈퇴(블로그·글·댓글 모두 소프트 삭제, Q1) (BLOG-05~08, AUTH-06, R-08) |
+| US11 | 구독자 공개(구독 필요. 목록에서 빼고 링크로 열면 구독 안내, Q4), 예약 발행, 카테고리 비공개, 태그 관리, 비밀댓글, 댓글 허용, 저장 |
 | US12~14 | 알림, 맞구독, 추천, 랭킹, 통계, 스팸, 신고, 블로그 제한, 공지·이력·대시보드 |
 | US15 | 같은 카테고리 다른 글(OWN-05). 비슷한 글 추천(OWN-06)은 10a단계(도전 과제) |
-| 보류 | 비회원 댓글(OWN-04, Q5) |
 
 ---
 
 ## 의존 관계와 실행 순서
 
-- 프로젝트 준비 → T006a 로그인 공유 결정 → 기반 작업(T005~T016) → US1 → US2 → US3, US4는 기반 작업 직후 병행 가능
+- 프로젝트 준비 → 기반 작업(T005~T016) → US1 → US2 → US3, US4는 기반 작업 직후 병행 가능
 - T031 발행은 T014(정화)·T016(연타 방지)에 의존
 - T036 이미지 업로드 → T037 에디터 연결
-- T053 view_log → T063 인기 글 → T064 주제별 글
+- T053 view_log, T046 공감, T044 댓글 → T063 인기 점수·인기 글 → T064 주제별 글
 - T016a(Redis) → T016, T063, T064
 - 10a단계는 T031(발행)과 T011(가시성)에만 의존하고, 다른 작업이 기다리지 않는다
 - T046 공감, T047 검색은 US2 글·태그(T038) 이후

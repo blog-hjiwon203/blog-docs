@@ -6,7 +6,7 @@
 
 ## 공통
 
-- JSON. 인증 전달 방식은 기능 명세 Q6에서 정한다(추천: `.blog.com` HttpOnly 쿠키, [조사](../research.md) R-03). 쿠키를 쓰면 상태를 바꾸는 요청에 CSRF 대책을 함께 둔다.
+- JSON. 인증은 `.blog.com` 상위 도메인 HttpOnly 쿠키로 전달한다(Q6, [조사](../research.md) R-03). 상태를 바꾸는 요청에는 CSRF 대책(사용자 지정 헤더 확인 또는 CSRF 토큰)을 함께 둔다.
 - 블로그 범위 API는 Host의 서브도메인으로 블로그를 정한다(`myblog.blog.com/api/...`). 플랫폼 API는 `blog.com/api/...`.
 - 응답 코드: 404 없음 또는 볼 수 없음(기능 명세 "볼 수 없는 글", 로그인 여부보다 먼저), 401 로그인이 필요한 행동에 로그인 안 함·만료, 403 권한 없음, 409 중복(주소·이메일·태그 등), 400 입력 오류.
 - 오류 본문(형식은 확정 전): `{ "code": "BLOG_ADDRESS_TAKEN", "message": "...", "fieldErrors": [{ "field": "address", "reason": "..." }] }`. 내부 정보는 담지 않는다(COM-02).
@@ -19,8 +19,8 @@
 | --- | --- | --- | --- |
 | POST | /api/auth/email-verifications | 인증 코드 발송 | OWN-01 |
 | POST | /api/auth/signup | 이메일·코드·비밀번호·닉네임 → 회원 생성 | AUTH-01 |
-| POST | /api/auth/login | 로그인 (Q6 방식으로 인증 전달). 정지면 403 + 사유·기한 | AUTH-01, ADMIN-02 |
-| POST | /api/auth/logout | 모든 블로그 주소에서 로그아웃 (Q6) | AUTH-02 |
+| POST | /api/auth/login | 로그인, `.blog.com` 쿠키 발급. 정지면 403 + 사유·기한 | AUTH-01, ADMIN-02 |
+| POST | /api/auth/logout | 쿠키 삭제, 모든 블로그 주소에서 로그아웃 | AUTH-02 |
 | GET | /api/auth/oauth/{provider}/authorize?redirect= | state 생성, 제공사로 이동 | AUTH-01 (P1) |
 | GET | /api/auth/oauth/{provider}/callback | state 검증, 로그인 또는 닉네임 확인 단계 | AUTH-01 (P1) |
 | POST | /api/auth/password-reset | 재설정 링크 발송 / PUT으로 변경 | OWN-02 |
@@ -49,7 +49,7 @@
 | --- | --- | --- | --- |
 | GET | /api/posts?page=&size= | 블로그 글 목록 (+`categoryId`, `tag`) | BLOG-03, CAT-02, TAG-02 |
 | POST | /api/posts | 발행 또는 임시저장(`status`) | POST-01, POST-08 |
-| GET | /api/posts/{id} | 상세 + 이전·다음 글. 가시성 판단(data-model) | POST-04, POST-10 |
+| GET | /api/posts/{id} | 상세 + 이전·다음 글. 가시성 판단(data-model). 구독 안 한 사람이 구독자 공개 글을 열면 403 `SUBSCRIBERS_ONLY` + `{ blogName }`만(제목·본문 없음), 화면은 구독 안내 | POST-04, POST-10, POST-12 |
 | PUT | /api/posts/{id} | 수정 (주인) | POST-02 |
 | DELETE | /api/posts/{id} | 삭제 (주인) | POST-03 |
 | PATCH | /api/posts/{id}/visibility | 공개 범위 변경 | POST-06 |
@@ -91,7 +91,7 @@
 | GET | /api/search?q=&type=post\|blog | 전체 검색 (플랫폼 Host) | SRCH-02 |
 | GET | /api/home/latest?cursor= | 홈 최신 글 20 | HOME-01 |
 | GET | /api/home/popular | 최근 1시간 조회수 상위 10 (캐시 5분) | HOME-02 |
-| GET | /api/home/topics/{topic} | 주제별 인기 6 | HOME-03 |
+| GET | /api/home/topics/{topic} | 주제별 인기 점수 순 6, 모자라면 최신 글 | HOME-03 |
 | GET | /api/notices | 공지 | ADMIN-06 |
 
 ## MNG (블로그 Host, 주인만)
