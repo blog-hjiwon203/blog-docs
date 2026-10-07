@@ -1,38 +1,43 @@
-# Research: 티스토리형 블로그 (지원)
+# 조사 (Research): 티스토리형 블로그 (지원)
 
-각 항목은 **Decision / Rationale / Alternatives** 순서다. 출처는 지원 개인 설계 문서의 장 번호.
+> **이 문서는?** 구현 계획의 기술 결정을 하나씩 결정·이유·대안으로 적은 기록이다. "왜 이렇게 정했지?"가 궁금할 때 본다. 전체 문서 안내는 [README](../../README.md)에 있다.
+
+각 항목은 **결정 / 이유 / 대안** 순서다. 괄호 안 숫자는 원본(`docs/기능명세서_지원 (개인 설계 문서).md`)의 절 번호다.
 
 ## R-01 버전과 테스트 도구 (기본값)
 
-- **Decision**: Java 17, Spring Boot 3.x, React 18 + Vite. 테스트는 JUnit 5, Spring Boot Test, MockMvc, 프론트는 Vitest 최소.
-- **Rationale**: 원 문서에 버전·테스트 도구가 없어 Spring Boot 3 기본 조합으로 둠. 바꾸면 이 항목만 고친다.
+- **결정**: Java 17, Spring Boot 3.x, React 18 + Vite. 테스트는 JUnit 5, Spring Boot Test, MockMvc, 프론트는 Vitest 최소.
+- **이유**: 원본에 버전·테스트 도구가 없어 Spring Boot 3 기본 조합으로 둠. 바꾸면 이 항목만 고친다.
 
-## R-02 운영 저장소 — [NEEDS CLARIFICATION]
+## R-02 운영 저장소 (2026-10-07 확정)
 
-- 원 문서 3장: "운영: MySQL, Redis, PostgreSQL".
-- **현재 가정**: 주 DB는 MySQL. Redis는 캐시·토큰 차단 목록 후보, PostgreSQL은 '비슷한 글 추천'(벡터 검색, P2) 후보로 보임.
-- **필요한 결정**: Redis·PostgreSQL을 2주 범위에 넣을지. 넣지 않으면 캐시는 Spring 기본(Caffeine/ConcurrentMap)으로 시작.
+- **결정**: 주 DB는 MySQL(개발 H2). **Redis 사용**: Spring Cache 저장소(인기 글·주제별 글 TTL 5분), 연타 방지 Idempotency-Key 저장(R-09). 정지 회원 토큰 차단·로그아웃 토큰 처리도 R-03 확정 시 Redis 후보. **PostgreSQL + pgvector**: 비슷한 글 추천(OWN-06) 전용, 2주 안에 도전(도전 과제).
+- **이유**: 개발에 AI를 쓰므로 2주 안에 벡터 검색까지 가능하다고 판단(지원). 단, 주 데이터는 MySQL 하나로 두고 PostgreSQL에는 글 id와 임베딩만 저장해 일정이 밀리면 기능째 뺄 수 있게 한다.
+- **로컬 개발**: Redis와 PostgreSQL(pgvector)은 docker compose로 띄운다. Redis가 없을 때 테스트는 embedded/Testcontainers 또는 ConcurrentMap 캐시로 대체.
+- **미결정**: 임베딩 생성 방법(외부 임베딩 API 또는 로컬 모델), 임베딩 갱신 시점(발행·수정 시 비동기).
 
-## R-03 인증 — 일부 미결정
+## R-03 인증 (기능 명세 Q6, 1주차 시작 전에 정함)
 
-- **Decision**: JWT Access Token, `Authorization: Bearer`. 비밀번호 bcrypt. 토큰 없음 401, 권한 없음 403, 남의 비공개 404.
-- **Open** (원 문서 10장, 인증 학습 후 확정): 서브도메인 간 로그인 공유(상위 도메인 HttpOnly 쿠키 등), 로그인 유지(Refresh Token), 로그아웃 시 토큰 처리, 정지 회원의 기존 토큰 차단(요청마다 상태 확인 등), 쿠키 사용 시 SameSite + CSRF 토큰.
-- **Note**: spec V3 규칙 "여러 블로그를 오가도 로그인 유지"를 지키려면 서브도메인 간 공유 방식이 반드시 정해져야 한다. localStorage + Bearer는 출처(origin)별이라 서브도메인마다 따로 저장됨.
+- **정해진 것**: JWT, 비밀번호 bcrypt. 로그인이 필요한 행동에 로그인 안 함 401, 권한 없음 403, 볼 수 없는 글·블로그 404(401보다 먼저).
+- **문제** ([원본 검토](./review.md) 3): 원본 3장은 Access Token을 `Authorization: Bearer` 헤더로 보낸다. 토큰을 브라우저 저장소(localStorage)에 두면 출처(origin)마다 따로라서, `blog.com`에서 로그인해도 `myblog.blog.com/manage`에서는 로그아웃 상태다. 이건 P0 한 바퀴(로그인 → 내 블로그에서 글쓰기)를 막는다.
+- **추천안**: 로그인하면 서버가 `Domain=.blog.com; HttpOnly; Secure; SameSite=Lax` 쿠키로 토큰을 준다. 모든 블로그 주소가 같은 쿠키를 보내므로 공유가 저절로 된다(AUTH-03 일부). 쿠키를 쓰므로 상태를 바꾸는 요청에는 CSRF 대책(SameSite=Lax + 사용자 지정 헤더 확인 또는 CSRF 토큰)을 함께 둔다(원본 4.5 ③). 로그인 유지는 만료가 긴 Refresh Token 쿠키, 로그아웃은 쿠키 삭제 + Redis에 남은 토큰 무효화, 정지 회원은 요청마다 회원 상태를 확인(짧은 캐시)한다.
+- **대안**: (a) 블로그 주소로 넘어갈 때마다 플랫폼 주소에서 토큰을 다시 받아 오는 방식(SSO 리다이렉트): 쿠키를 피할 수 있지만 화면 이동마다 왕복이 생기고 만들기 어렵다. (b) 모든 화면을 `blog.com` 한 출처에 두기: 서브도메인 선택(원본 7.3)과 맞지 않는다.
+- **로컬 개발**: `localhost`는 하위 도메인 쿠키 공유가 브라우저마다 다르므로 `blog.test` 같은 이름을 hosts에 넣어 `myblog.blog.test`로 확인한다(빠른 시작).
 
 ## R-04 블로그 주소 해석 (4.2, 6장 ①)
 
-- **Decision**: 정규식 `^[a-z0-9][a-z0-9-]{2,30}[a-z0-9]$`, 예약어(www, api, admin, static, mail, login 등) 거절. 요청 Host에서 서브도메인을 읽어 블로그 조회. `blog.com`, `www.blog.com`은 플랫폼 화면.
+- **결정**: 정규식 `^[a-z0-9][a-z0-9-]{2,30}[a-z0-9]$`, 예약어(www, api, admin, static, mail, login 등) 거절. 요청 Host에서 서브도메인을 읽어 블로그 조회. `blog.com`, `www.blog.com`은 플랫폼 화면.
 - 화면 주소는 서버가 먼저 확인(없으면 404, 이사했으면 301, 다른 블로그 소속 글이면 301)한 뒤 `index.html`을 준다. 리다이렉트를 서버가 하는 이유는 검색엔진도 따라가게 하기 위함.
 - `/api/**`는 같은 출처의 상대 경로라 CORS 설정이 필요 없다.
 
 ## R-05 에디터와 XSS (7.4, 4.5)
 
-- **Decision**: Tiptap(React, MIT), 본문 HTML 저장. 저장 전 서버에서 OWASP Java HTML Sanitizer로 허용 목록 정화(문단 제목, 굵게·기울임, 목록, 인용, 코드 블록, http/https 링크, 자체 업로드 경로 이미지). script·이벤트 속성·style 제거. 출력 시 DOMPurify로 한 번 더. 본문 외 입력은 React 자동 이스케이프만, `dangerouslySetInnerHTML`은 DOMPurify를 거친 본문에만. CSP로 인라인 스크립트 차단. 목록 요약은 jsoup으로 태그 제거.
-- **Alternatives**: 마크다운(예전 선택) → WYSIWYG로 변경. Lucy XSS Filter·ESAPI는 쓰지 않음.
+- **결정**: Tiptap(React, MIT), 본문 HTML 저장. 저장 전 서버에서 OWASP Java HTML Sanitizer로 허용 목록 정화(문단 제목, 굵게·기울임, 목록, 인용, 코드 블록, http/https 링크, 자체 업로드 경로 이미지). script·이벤트 속성·style 제거. 출력 시 DOMPurify로 한 번 더. 본문 외 입력은 React 자동 이스케이프만, `dangerouslySetInnerHTML`은 DOMPurify를 거친 본문에만. CSP로 인라인 스크립트 차단. 목록 요약은 jsoup으로 태그 제거.
+- **대안**: 마크다운(예전 선택) → WYSIWYG로 변경. Lucy XSS Filter·ESAPI는 쓰지 않음.
 
 ## R-06 페이지네이션 (4.4)
 
-- **Decision**: 기본 offset(`?page=0&size=10`, 응답 content/page/size/totalElements/totalPages). 홈 최신 글·구독 피드는 커서 `(published_at, id)` 이후. size 1~50 보정, 음수 page는 0, 마지막 초과는 빈 content. '최신순' = published_at 내림차순, 같으면 id 내림차순. 화면 번호는 10개씩 묶음.
+- **결정**: 기본 offset(`?page=0&size=10`, 응답 content/page/size/totalElements/totalPages). 홈 최신 글·구독 피드는 커서 `(published_at, id)` 이후. size 1~50 보정, 음수 page는 0, 마지막 초과는 빈 content. '최신순' = published_at 내림차순, 같으면 id 내림차순. 화면 번호는 10개씩 묶음.
 
 | 목록 | 방식 | 크기 | 정렬 |
 | --- | --- | --- | --- |
@@ -48,13 +53,13 @@
 
 ## R-07 계정·소셜 연동 (4.6)
 
-- **Decision**: 처음 가입한 방식이 기본 수단. 묶는 길은 "로그인 상태에서 마이페이지 소셜 연동" 하나뿐이고, 더할 수 있는 것은 소셜뿐. 이메일이 같다고 합치지 않고 충돌하면 거절.
+- **결정**: 처음 가입한 방식이 기본 수단. 묶는 길은 "로그인 상태에서 마이페이지 소셜 연동" 하나뿐이고, 더할 수 있는 것은 소셜뿐. 이메일이 같다고 합치지 않고 충돌하면 거절.
 - 소셜 신규 가입: 닉네임 확인 후 member(email·password NULL) + social_account를 한 트랜잭션. 제공사 이메일은 저장하지 않음.
 - 연동 거절: 이미 다른 회원에 연결된 소셜 계정, 같은 제공사 중복. 해제 후 로그인 수단이 남지 않으면 거절.
 - 모든 로그인 경로에서 member.status 먼저 확인(SUSPENDED → 사유·기한 안내, WITHDRAWN → 없는 계정).
 - OAuth state 검증 + 복귀 주소는 우리 서비스 주소만 허용.
 - 이메일 로그인 실패 문구는 가입 여부를 드러내지 않게 통일.
-- 탈퇴: 본인 확인 후 한 트랜잭션으로 status=WITHDRAWN, withdrawn_at, email·password_hash 비우기, social_account 행 직접 삭제, 제공사 연결 해제. 블로그·글·댓글은 spec Q2 결정 전까지 남김.
+- 탈퇴: 본인 확인 후 한 트랜잭션으로 status=WITHDRAWN, withdrawn_at, email·password_hash 비우기, social_account 행 직접 삭제, 제공사 연결 해제. 블로그·글·댓글은 기능 명세 Q1 결정 전까지 남김.
 
 ## R-08 블로그 이사·삭제 (4.2)
 
@@ -64,22 +69,25 @@
 - 삭제는 소프트 삭제(deleted_at). 개설 한도 5개는 활성 블로그만 셈.
 - 이사 간 새 블로그(B)를 삭제하면 A의 리다이렉트도 끊기고 없는 블로그.
 
-## R-09 연타 방지 — [NEEDS CLARIFICATION]
+## R-09 연타 방지 (2026-10-07 확정: 기본값 채택)
 
-- spec FR-025, FR-048, FR-055, FR-058, NFR-003 요구. 원 문서: "버튼 비활성화 + 서버 측 중복 방지(10장)".
+- 기능 명세 POST-01, CMT-01, SOC-01, SUB-01과 비기능 요구사항(신뢰성)이 요구한다. 원본 POST-01: "버튼 비활성화 + 서버 측 중복 방지(10장)".
 - **후보**: (a) 클라이언트가 만든 Idempotency-Key 헤더를 짧은 TTL로 저장, (b) 공감·구독은 DB UNIQUE 제약(member_id, post_id / member_id, blog_id)으로 충분, 발행·댓글은 (a).
-- **권장 기본값**: 공감·구독은 UNIQUE 제약, 발행·댓글은 Idempotency-Key. 확정 전까지 이 기본값으로 tasks에 넣었다.
+- **결정**: 공감·구독은 DB UNIQUE 제약 + PUT/DELETE 멱등 API, 발행·댓글은 클라이언트가 만든 `Idempotency-Key`를 Redis에 짧은 TTL로 저장해 같은 키의 두 번째 요청은 첫 결과를 돌려준다. 버튼 비활성화는 보조.
 
 ## R-10 홈 섹션 API (5.10)
 
-- 섹션별 API를 따로 두고 프론트에서 Promise.all. 인기 글·주제별 글은 @Cacheable TTL 5분. 통합 `/api/home`은 섹션 5개 초과 또는 앱이 생기면 검토.
+- 섹션별 API를 따로 두고 프론트에서 Promise.all. 인기 글·주제별 글은 @Cacheable TTL 5분. 하나로 묶는 `/api/home`은 섹션 5개 초과 또는 앱이 생기면 검토.
 
-## R-11 남은 결정 (원 문서 10장)
+## R-11 남은 결정
 
-| 항목 | 상태 |
-| --- | --- |
-| 구독자 공개 글을 비구독자의 블로그 목록에 표시할지 | 미정 (V8) |
-| 비회원 댓글 | 보류 (spec과 충돌) |
-| 글 삭제 소프트/하드, 조회수 중복 판정 시간 | 미정 |
-| 예전 '블로그 커스텀'(사이드바 구성 변경) | 빼 둠 (BLOG-04 고정 사이드바와 충돌) |
-| ERD·API 명세 탭의 통합 ID 갱신 | 할 일 (contracts/rest-api.md가 초안) |
+기능 명세 명확화의 미결정 표가 기준이다. 기술 쪽에서 함께 정할 것만 적는다.
+
+| 항목 | 상태 | 관련 |
+| --- | --- | --- |
+| 블로그 주소 사이 로그인 공유, 로그인 유지, 로그아웃, 정지 회원 차단 | 추천안 있음, 1주차 시작 전 확정 | Q6, R-03 |
+| 글 삭제 소프트/하드 | 미정. 소프트면 `post.deleted_at`, 하드면 댓글·공감·알림을 한 트랜잭션으로 삭제 | Q3 |
+| 조회수 중복 판정 시간 | 미정. 정해지면 `post_view` 조회 조건에 쓴다 | Q2 |
+| 주제별 글 인기 기준 | 미정. 기본값은 최근 1시간 조회수, 6개 미만이면 최신 글로 채움 | Q7 |
+| 임베딩 생성 방법과 갱신 시점 | 미정 | R-02 |
+| 예전 '블로그 커스텀'(사이드바 구성 변경) | 뺌 (BLOG-04 고정 사이드바와 맞지 않음) | 원본 10장 |
