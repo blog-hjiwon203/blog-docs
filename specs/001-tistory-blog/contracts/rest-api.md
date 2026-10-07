@@ -90,7 +90,7 @@
 | GET | /api/search?q=&page= | 블로그 내 검색 (블로그 Host) | SRCH-01 |
 | GET | /api/search?q=&type=post\|blog | 전체 검색 (플랫폼 Host) | SRCH-02 |
 | GET | /api/home/latest?cursor= | 홈 최신 글 20 | HOME-01 |
-| GET | /api/home/popular | 최근 1시간 조회수 상위 10 (캐시 5분) | HOME-02 |
+| GET | /api/home/popular | 인기 점수(최근 1시간 조회×1 + 공감×3 + 댓글×5) 상위 10 (캐시 5분) | HOME-02 |
 | GET | /api/home/topics/{topic} | 주제별 인기 점수 순 6, 모자라면 최신 글 | HOME-03 |
 | GET | /api/notices | 공지 | ADMIN-06 |
 
