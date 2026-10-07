@@ -1,52 +1,96 @@
-# 1팀 블로그 명세 (Spec Kit 형식) · 지원 작업본
+# 티스토리형 블로그 문서 (지원)
 
-> 공통 Spec Kit 명세(constitution, spec)에 지원의 plan·tasks를 더한 작업본이다. 원본 문서는 `docs/`에 있다(통합 기능명세서 v0.2, 지원 개인 설계 문서). 이 저장소 루트에서 Claude Code를 열면 `/speckit-*` 스킬을 바로 쓸 수 있다.
+지원의 기능명세서(`docs/기능명세서_지원 (개인 설계 문서).md`, 이하 **원본**)를 [GitHub Spec Kit](https://github.com/github/spec-kit) 형식으로 정리한 저장소다. 원본의 기능 코드(`AUTH-01` 등)를 그대로 쓰고, 옮기며 고친 곳은 원본 검토에 모았다. 이 저장소 루트에서 Claude Code를 열면 `/speckit-*` 스킬을 바로 쓸 수 있다.
 
+> **확인하거나 정할 게 있는지 보려면 [지원이 확인할 것](specs/001-tistory-blog/review.md) 하나만 보면 된다.** 지원이 정한 것(A), Claude가 임의로 정한 것(B), 확인만 하면 되는 것(C)이 모두 거기 있다.
 
-`docs/1팀 블로그 통합 기능명세서.md` v0.2를 [GitHub Spec Kit](https://github.com/github/spec-kit) 구조로 다시 정리한 것이다. 내용(71개 기능, 선택 8개, 미결정 9개)은 그대로이고 형식만 바꿨다.
+## 문서 안내
 
-## 파일 구성
+어떤 질문이 생겼을 때 어느 문서를 보면 되는지 정리한 표다. 위에서 아래로 갈수록 "무엇을"에서 "어떻게"로 내려간다.
+
+| 문서 | 무엇을 담나 | 이런 질문이 생기면 본다 |
+| --- | --- | --- |
+| [헌법](.specify/memory/constitution.md) | 이 서비스가 절대 어기면 안 되는 원칙 7개 | "비공개 글은 403이야 404야?", "관리자가 글을 지워도 돼?" |
+| [기능 명세](specs/001-tistory-blog/spec.md) | 사용자가 확인할 수 있는 동작 전부. 주요 방식, 유저 스토리, 권한, 공통 규칙, 기능 코드별 요구사항, 미결정 사항 | "이 기능이 어떻게 동작해야 해?", "우선순위가 뭐야?", "아직 안 정해진 건?" |
+| [지원이 확인할 것](specs/001-tistory-blog/review.md) | 지원이 정한 Q1~Q7, Claude가 임의로 정한 것, 원본을 옮기며 찾은 문제 16건 | "내가 정하거나 확인할 게 뭐야?", "원본이랑 왜 달라?" |
+| [명세 품질 체크리스트](specs/001-tistory-blog/checklists/requirements.md) | 기능 명세가 구현 계획으로 넘어가도 될 만큼 완성됐는지 점검표 | "명세에 빠진 게 있어?" |
+| [구현 계획](specs/001-tistory-blog/plan.md) | 기술 스택, 주요 방식의 구현, 자율 값, 헌법 점검, 폴더 구조 | "무슨 기술로 만들어?", "폴더는 어떻게 나눠?" |
+| [조사](specs/001-tistory-blog/research.md) | 기술 결정 하나하나의 결정·이유·대안, 남은 미결정 | "왜 JWT야?", "Redis는 어디에 써?", "연타 방지는 어떻게 해?" |
+| [데이터 모델](specs/001-tistory-blog/data-model.md) | 테이블과 컬럼, 제약, 글 가시성 판단 순서 | "post 테이블에 뭐가 있어?", "이 글을 누가 볼 수 있어?" |
+| [REST API 초안](specs/001-tistory-blog/contracts/rest-api.md) | 엔드포인트, 응답 코드 규칙, 오류 형식 | "글 목록 API 경로가 뭐야?", "몇 번 상태 코드를 줘?" |
+| [빠른 시작](specs/001-tistory-blog/quickstart.md) | 로컬 실행 방법과 손으로 확인하는 검증 시나리오 | "어떻게 띄워?", "다 만들었는지 어떻게 확인해?" |
+| [작업 목록](specs/001-tistory-blog/tasks.md) | 2주 일정에 맞춘 작업 T001~T073, 순서와 의존 관계 | "오늘 뭐 해?", "이건 몇 주차야?" |
+| [기능명세서_지원 원본](docs/기능명세서_지원%20%28개인%20설계%20문서%29.md) | 위 문서들의 원본인 개인 설계 문서 | "원래 문서 문장 그대로 보고 싶어", "예전 ID가 지금 어느 코드야?" (원본 5.15) |
+
+### 문서끼리의 관계
 
 ```
-spec-kit/
-├── .claude/skills/speckit-*/                # Claude Code용 Spec Kit 스킬 (specify init --integration claude)
-├── .specify/
-│   ├── memory/constitution.md               # 세 서비스가 꼭 지킬 원칙 7개
-│   ├── templates/, scripts/bash/, workflows/ # Spec Kit 1.1.2 기본 파일
-│   └── feature.json                         # 현재 기능 폴더 = specs/001-tistory-blog
-└── specs/001-tistory-blog/
-    ├── spec.md                              # 유저 스토리, 수용 기준, FR, 성공 기준 (공통)
-    ├── plan.md, research.md, data-model.md  # 지원: 스택·선택 항목·설계 결정
-    ├── contracts/rest-api.md, quickstart.md # 지원: API 초안, 로컬 검증 시나리오
-    ├── tasks.md                             # 지원: 2주 일정 기준 T001~T073
-    └── checklists/requirements.md           # spec 품질 체크리스트
+기능명세서_지원 원본
+ ├─ 지원이 확인할 것 (정할 것, Claude가 정한 것, 원본 검토)
+ └─ 헌법 (원칙)
+     └─ 기능 명세 (무엇을)
+         ├─ 명세 품질 체크리스트
+         └─ 구현 계획 (어떻게)
+             ├─ 조사 (왜 그렇게 정했나)
+             ├─ 데이터 모델 · REST API 초안 (설계)
+             ├─ 빠른 시작 (어떻게 확인하나)
+             └─ 작업 목록 (언제, 어떤 순서로)
 ```
 
-## 원본과 대응
+- 동작이 바뀌면 기능 명세를 먼저 고치고, 구현 계획과 작업 목록을 따라 고친다. 반대 방향으로는 고치지 않는다.
+- 원본 문서(`docs/`)는 기록용으로 그대로 둔다. 지금 기준은 Spec Kit 문서들이고, 원본과 달라진 곳은 원본 검토에 이유가 있다.
 
-| 원본 통합 명세서 | Spec Kit |
+## 자주 쓰는 표기
+
+| 표기 | 뜻 | 정의된 곳 |
+| --- | --- | --- |
+| `POST-01` 같은 코드 | 원본 기능 코드 (영역코드-번호). 모든 문서가 이 코드로 기능을 가리킨다 | 원본 5장, 기능 명세 |
+| `OWN-01`~`OWN-06` | 원본 5.14 자체 기능에 새로 붙인 코드 | 기능 명세 표기 |
+| (원본 4.2) | 원본 문서의 절 번호 | 원본 |
+| (채움) | 원본에 없어 채운 값 | 원본 검토 10 |
+| P0 / P1 / P2 | 기능 등급: 필수 / 권장 / 확장 | 헌법 원칙 VII |
+| 스토리 우선순위 P1 / P2 / P3 | Spec Kit 표기. 각각 기능 등급 P0 / P1 / P2와 같다 | 기능 명세 머리말 |
+| US1~US15 | 유저 스토리 번호. 머리에 확인하는 기능 코드가 있다 | 기능 명세 |
+| SC-001~007 | 성공 기준 | 기능 명세 |
+| Q1~Q7 | 원본에서 정해지지 않았던 질문. 2026-10-07 지원이 모두 정함 | 기능 명세 명확화, 지원이 확인할 것 A |
+| R-01~R-11 | 기술 결정 항목 | 조사 |
+| T001~T073 | 작업 번호 | 작업 목록 |
+| [W1] / [W2a] / [W2b] | 1주차 / 2주차 전반 / 2주차 후반 | 작업 목록 |
+| `[NEEDS CLARIFICATION]` | 아직 정해지지 않아 확인이 필요한 곳 (Spec Kit 예약 표기라 영어로 둔다) | 모든 문서 |
+
+## 원본 설계 문서와의 대응
+
+| 기능명세서_지원 | 이 저장소 |
 | --- | --- |
-| 1.3 통합 원칙, 3장 권한, 4장 공통 정책, 8장 비기능 | constitution.md 원칙 I~VII |
-| 5장 기능 목록 + 6장 기능 상세 | spec.md 유저 스토리 14개, FR-001~083 |
-| 4장 공통 정책 | FR-001~010, Edge Cases |
-| 8장 비기능 요구사항 | NFR-001~004, SC-002~008 |
-| 7장 선택 항목 | spec.md "선택 항목 (Variation Points)" V1~V8 |
-| 9.1 확정 사항 | Clarifications > 확정 사항 |
-| 9.2 미결정 사항 | `[NEEDS CLARIFICATION]` + Q1~Q9 |
-| 2장 용어, 데이터 | Key Entities |
-| 부록 A·B·C | 원본에 그대로 둠 |
-
-우선순위: 스토리 **P1 = 원본 P0**, **P2 = 원본 P1**, **P3 = 원본 P2**. 각 FR 끝의 `[POST-01 · P0]`로 원본 ID와 등급을 추적한다.
+| 1장 개요, 2장 선택 항목 | 기능 명세 개요·주요 방식, 구현 계획 주요 방식과 구현 |
+| 3장 기술 스택 | 구현 계획 기술 맥락, 조사 R-01·R-02 |
+| 4장 공통 구현 정책 (권한, 주소, 페이지네이션, 보안, 계정 연동) | 기능 명세 권한·공통 규칙, 조사 R-03~R-08 |
+| 5장 기능별 구현 | 기능 명세 기능 요구사항(같은 기능 코드), 데이터 모델, REST API 초안 |
+| 5.14 자체 기능 | 기능 명세 OWN-01~06, 작업 목록 10a단계 |
+| 6장 화면 주소와 주요 흐름 | REST API 초안, 데이터 모델 가시성 판단, 빠른 시작 |
+| 7장 일정 | 작업 목록 [W1]·[W2a]·[W2b] |
+| 8장 자율로 정한 값 | 구현 계획 자율로 정한 값 |
+| 9장 다른 점, 10장 남은 일 | 기능 명세 명확화 Q1~Q7, 조사 R-11, 원본 검토 11 |
 
 ## Claude Code에서 쓰는 법
 
-이 폴더는 `specify init --here --integration claude`로 만든 구조에 공통 constitution과 spec을 채운 상태다. `/speckit-specify`는 이미 끝난 것으로 보고 다음 단계부터 진행한다.
+`/speckit-specify`(기능 명세), `/speckit-plan`(구현 계획), `/speckit-tasks`(작업 목록)는 이미 끝난 상태다.
 
-1. 이 폴더 전체(`.claude`, `.specify` 포함)를 자기 저장소 루트에 복사하고 그 폴더에서 Claude Code를 연다.
-2. `/speckit-clarify`: 미결정 Q1~Q9 정리 (최소 Q1)
-3. (지원은 완료) `/speckit-plan <내 스택과 선택 항목 V1~V8>`: plan.md, research.md, data-model.md, contracts/ 생성. Constitution Check는 원칙 I~VII로 채워진다
-4. (지원은 완료) `/speckit-tasks`: tasks.md 생성. P1 스토리(US1~US4)부터 MVP 순서
-5. `/speckit-analyze`로 일관성 확인 후 `/speckit-implement`
-6. spec.md의 Acceptance Scenarios로 서로의 서비스를 교차 테스트한다
+1. 저장소를 클론하고 루트에서 Claude Code를 연다.
+2. 처음 한 번은 기능 폴더를 알려 준다: `SPECIFY_FEATURE_DIRECTORY=specs/001-tistory-blog` 환경 변수를 주거나, 첫 스킬을 실행할 때 폴더를 말해 준다. (`.specify/feature.json`은 Spec Kit 기본 설정상 git에서 빠진다.)
+3. [지원이 확인할 것](specs/001-tistory-blog/review.md)의 B(Claude가 정한 것)를 확인한다. 미결정 질문은 없어서 `/speckit-clarify`는 새 질문이 생길 때만 쓴다
+4. `/speckit-analyze`: 기능 명세·구현 계획·작업 목록이 서로 맞는지 점검
+5. `/speckit-implement`: 작업 목록 순서대로 구현
+6. 다 만들면 기능 명세의 수용 시나리오와 빠른 시작으로 확인한다
 
-plan과 tasks는 기술 스택마다 달라지므로 공통 폴더에는 두지 않는다(constitution 원칙 I). `.specify/feature.json`은 체크아웃마다 다른 로컬 상태라 git에서 제외되므로, 새로 클론했다면 `SPECIFY_FEATURE_DIRECTORY=specs/001-tistory-blog`를 지정하거나 이 파일을 다시 만든다.
+## 폴더 구성
+
+```
+.
+├── .claude/skills/speckit-*/      # Claude Code용 Spec Kit 스킬
+├── .specify/
+│   ├── memory/constitution.md     # 헌법
+│   └── templates/, scripts/, workflows/  # Spec Kit 1.1.2 기본 파일 (수정하지 않음)
+├── specs/001-tistory-blog/        # 기능 명세, 구현 계획, 작업 목록
+└── docs/                          # 원본 설계 문서
+```
