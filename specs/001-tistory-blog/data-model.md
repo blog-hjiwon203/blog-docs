@@ -1,4 +1,6 @@
-# Data Model: 티스토리형 블로그 (지원)
+# 데이터 모델 (Data Model): 티스토리형 블로그 (지원)
+
+> **이 문서는?** 지원 서비스의 테이블·컬럼·제약과 글 가시성 판단 순서다. 기능 명세의 핵심 엔티티를 실제 저장 구조로 옮긴 것이다. 전체 문서 안내는 [README](../../README.md)에 있다.
 
 원 문서의 ERD 탭은 아직 예전 ID 기준이라, 이 문서는 설계 문서 본문(4~6장)과 spec Key Entities에서 다시 뽑은 초안이다. ERD 탭을 갱신할 때 이 문서와 맞춘다. 공통 컬럼 `id`(PK, bigint), `created_at`, `updated_at`은 생략.
 
@@ -82,7 +84,7 @@
 
 **notification** (P2): receiver_id, type(COMMENT, REPLY, LIKE, SUBSCRIBE, SANCTION), target 정보, read_at.
 
-## 추천 (PostgreSQL + pgvector, stretch)
+## 추천 (PostgreSQL + pgvector, 도전 과제)
 
 **post_embedding**: post_id(MySQL post.id, FK 아님), embedding(vector), updated_at. 글 삭제·비공개 전환 시 함께 지우거나 조회 시 가시성으로 거른다.
 

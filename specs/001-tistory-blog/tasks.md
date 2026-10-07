@@ -2,25 +2,27 @@
 description: "지원 서비스 구현 작업 (2주 일정 기준)"
 ---
 
-# Tasks: 티스토리형 블로그 (지원)
+# 작업 목록 (Tasks): 티스토리형 블로그 (지원)
 
-**Input**: `specs/001-tistory-blog/` 의 spec.md, plan.md, research.md, data-model.md, contracts/rest-api.md
+> **이 문서는?** 지원의 2주 작업 목록이다. 구현 계획을 실제로 할 일(T001~T073)로 쪼개 주차와 순서, 의존 관계를 붙였다. `/speckit-implement`가 이 순서대로 구현한다. 전체 문서 안내는 [README](../../README.md)에 있다.
 
-**Prerequisites**: plan.md, spec.md
+**입력**: `specs/001-tistory-blog/` 의 spec.md, plan.md, research.md, data-model.md, contracts/rest-api.md
 
-**Tests**: spec의 핵심 규칙(가시성 404, 권한, 연타, 주소 불변)은 MockMvc 통합 테스트로 남긴다. 나머지는 2주차 후반 "테스트 보강"에서.
+**선행 문서**: plan.md, spec.md
 
-**일정 표시**: `[W1]` 1주차, `[W2a]` 2주차 전반, `[W2b]` 2주차 후반 (설계 문서 7장). 표시 없는 Phase는 2주 범위 밖.
+**테스트**: spec의 핵심 규칙(가시성 404, 권한, 연타, 주소 불변)은 MockMvc 통합 테스트로 남긴다. 나머지는 2주차 후반 "테스트 보강"에서.
 
-## Format: `[ID] [P?] [Story] [Week] Description (통합 ID)`
+**일정 표시**: `[W1]` 1주차, `[W2a]` 2주차 전반, `[W2b]` 2주차 후반 (설계 문서 7장). 표시 없는 단계는 2주 범위 밖.
 
-- **[P]**: 다른 파일, 의존 없음 → 병렬 가능
-- **[Story]**: spec 유저 스토리(US1~US14)
+## 형식: `[ID] [P?] [스토리] [주차] 설명 (통합 ID)`
+
+- **[P]**: 다른 파일을 건드리고 의존이 없어 병렬로 할 수 있음
+- **[스토리]**: spec 유저 스토리(US1~US14)
 - 경로는 plan.md 구조 기준: `backend/src/main/java/com/blog/...`, `frontend/src/...`
 
 ---
 
-## Phase 1: Setup
+## 1단계: 프로젝트 준비 (Setup)
 
 - [ ] T001 [W1] Gradle Spring Boot 프로젝트 생성 (Web, Security, Data JPA, Validation, Cache, H2, MySQL 드라이버) in `backend/build.gradle`
 - [ ] T002 [P] [W1] Vite + React + TypeScript 프로젝트, `/api` → 8080 프록시 in `frontend/vite.config.ts`
@@ -29,9 +31,9 @@ description: "지원 서비스 구현 작업 (2주 일정 기준)"
 
 ---
 
-## Phase 2: Foundational (모든 스토리의 전제)
+## 2단계: 기반 작업 (Foundational, 모든 스토리의 전제)
 
-**⚠️ 이 Phase가 끝나야 스토리 작업을 시작한다**
+**⚠️ 이 단계가 끝나야 스토리 작업을 시작한다**
 
 - [ ] T005 [W1] 공통 엔티티 기반(BaseTimeEntity), `member` 엔티티(role, status) in `member/` (data-model)
 - [ ] T006 [W1] 공통 오류 응답 형식과 `@RestControllerAdvice` (400 fieldErrors, 401, 403, 404, 409, 500은 내부 정보 없이) in `global/error/` (COM-02)
@@ -47,14 +49,14 @@ description: "지원 서비스 구현 작업 (2주 일정 기준)"
 - [ ] T016 [W1] 연타 방지: `Idempotency-Key` 인터셉터, 키·첫 응답을 Redis에 짧은 TTL로 저장 in `global/web/` (R-09, NFR-003)
 - [ ] T016a [P] [W1] Redis 연결 설정, Spring Cache 저장소를 Redis로, 로컬 `docker-compose.yml`(Redis) in `global/config/`, 저장소 루트 (R-02)
 
-**Checkpoint**: 인증·권한·Host 해석·가시성 판단이 준비됨
+**중간 점검**: 인증·권한·Host 해석·가시성 판단이 준비됨
 
 ---
 
-## Phase 3: US1 가입하고 내 블로그 열기 (P1) 🎯 MVP
+## 3단계: US1 가입하고 내 블로그 열기 (P1) 🎯 MVP
 
-**Goal**: 가입 → 블로그 개설 → 블로그 메인·사이드바 → 로그아웃
-**Independent Test**: quickstart "P0 한 바퀴" 1~2
+**목표**: 가입 → 블로그 개설 → 블로그 메인·사이드바 → 로그아웃
+**독립 테스트**: quickstart "P0 한 바퀴" 1~2
 
 - [ ] T017 [P] [US1] [W1] 이메일 인증 코드 발송·확인 (개발은 로그 출력) in `auth/` (자체 기능)
 - [ ] T018 [US1] [W1] 가입 API: 인증 코드 확인 후 회원 생성, 이메일·닉네임 중복, 비밀번호 8자+영문+숫자, bcrypt in `auth/` (AUTH-01)
@@ -68,14 +70,14 @@ description: "지원 서비스 구현 작업 (2주 일정 기준)"
 - [ ] T026 [P] [US1] [W1] 화면: 가입, 로그인, 블로그 개설(주소 변경 불가 안내), 블로그 메인, 사이드바, 블로그 설정 in `frontend/src/pages/`
 - [ ] T027 [US1] [W1] 통합 테스트: 주소 규칙·중복·삭제된 주소 거절, 6번째 블로그 거절 in `backend/src/test/.../blog/`
 
-**Checkpoint**: US1 단독 동작
+**중간 점검**: US1 단독 동작
 
 ---
 
-## Phase 4: US2 글 쓰고 발행·수정·삭제하기 (P1)
+## 4단계: US2 글 쓰고 발행·수정·삭제하기 (P1)
 
-**Goal**: 블로그 주인이 글을 발행·수정·삭제, 카테고리·태그·이미지
-**Independent Test**: quickstart "P0 한 바퀴" 3, spec US2 수용 시나리오
+**목표**: 블로그 주인이 글을 발행·수정·삭제, 카테고리·태그·이미지
+**독립 테스트**: quickstart "P0 한 바퀴" 3, spec US2 수용 시나리오
 
 - [ ] T028 [P] [US2] [W1] `post`, `category` 엔티티 in `post/`, `category/`
 - [ ] T029 [US2] [W1] 카테고리 추가·이름 변경·삭제(소속 글 미분류로, 같은 단계 이름 중복 불가) API in `category/` (CAT-01)
@@ -91,14 +93,14 @@ description: "지원 서비스 구현 작업 (2주 일정 기준)"
 - [ ] T039 [US2] [W2a] 태그별 글 목록 `/tag/{name}` in `post/` (TAG-02)
 - [ ] T040 [US2] [W1] 통합 테스트: 수정 후 주소·순서 불변, 카테고리 삭제 시 미분류, 비공개 전환 시 목록·개수에서 빠짐 in `backend/src/test/.../post/`
 
-**Checkpoint**: US1 + US2 동작
+**중간 점검**: US1 + US2 동작
 
 ---
 
-## Phase 5: US3 독자가 발견하고 읽고 반응하기 (P1)
+## 5단계: US3 독자가 발견하고 읽고 반응하기 (P1)
 
-**Goal**: 홈 → 글 상세 → 검색 → 댓글·공감
-**Independent Test**: quickstart "P0 한 바퀴" 4~6
+**목표**: 홈 → 글 상세 → 검색 → 댓글·공감
+**독립 테스트**: quickstart "P0 한 바퀴" 4~6
 
 - [ ] T041 [US3] [W1] 글 상세 API: 가시성 7단계, 다른 블로그 소속이면 301/404, 주인에게만 수정·삭제 플래그 in `post/` (POST-04)
 - [ ] T042 [US3] [W1] 홈 최신 글 API: 커서 `(published_at, id)`, 20개, 숨긴 글·블로그 제외 in `home/` (HOME-01, FR-007)
@@ -112,20 +114,20 @@ description: "지원 서비스 구현 작업 (2주 일정 기준)"
 
 ---
 
-## Phase 6: US4 접근 제어·오류·관리자 영역 (P1)
+## 6단계: US4 접근 제어·오류·관리자 영역 (P1)
 
-**Goal**: 화면이 아니라 서버에서 권한이 지켜짐
-**Independent Test**: quickstart "권한·가시성" 표
+**목표**: 화면이 아니라 서버에서 권한이 지켜짐
+**독립 테스트**: quickstart "권한·가시성" 표
 
 - [ ] T050 [US4] [W1] 서비스 계층 주인 검사 공통화 `BlogOwnerGuard` in `global/` (COM-01)
 - [ ] T051 [P] [US4] [W1] 화면: 404·403 페이지, 입력 오류 항목 표시(입력 유지), 관리자 영역 진입 보호 `/admin` in `frontend/src/` (COM-02, ADMIN-01)
 - [ ] T052 [US4] [W1] 통합 테스트: 남의 비공개 글 404, 남의 수정 403, 일반 회원 `/api/admin/**` 403, 다른 블로그 주소+글 번호 301/404, 500 응답에 스택 없음 in `backend/src/test/.../security/`
 
-**Checkpoint**: P0 24개 중 1주차 분량 완성 → "가입 → 개설 → 발행 → 홈 발견 → 읽기·댓글" 한 바퀴
+**중간 점검**: P0 24개 중 1주차 분량 완성 → "가입 → 개설 → 발행 → 홈 발견 → 읽기·댓글" 한 바퀴
 
 ---
 
-## Phase 7: US5 글쓰기·블로그 정리 편의 (P2) — 2주 범위 일부
+## 7단계: US5 글쓰기·블로그 정리 편의 (P2) — 2주 범위 일부
 
 - [ ] T053 [US5] [W2a] `view_log` 기록 + 중복 조회 판정(시간 미정, 우선 30분 가정) + view_count in `post/` (POST-09)
 - [ ] T054 [US5] [W2a] 사이드바 태그 목록·글 수 in `blog/` (TAG-03)
@@ -138,27 +140,27 @@ description: "지원 서비스 구현 작업 (2주 일정 기준)"
 - [ ] T061 [US5] 블로그 없는 회원 글쓰기 → 개설 안내 (AUTH-04)
 - [ ] T062 [US5] 로그인 유지 (AUTH-03, R-03 확정 후)
 
-## Phase 8: US7 탐색 (P2) — 2주 범위 일부
+## 8단계: US7 탐색 (P2) — 2주 범위 일부
 
 - [ ] T063 [US7] [W2a] 인기 글 API: 최근 1시간 view_log 집계, 공개 글 상위 10, @Cacheable(Redis) 5분 in `home/` (HOME-02, V6)
 - [ ] T064 [US7] [W2b] 주제별 글 API: 주제 탭별 인기 6, 캐시 5분 in `home/` (HOME-03)
 - [ ] T065 [US7] 통합 검색 (SRCH-02)
 - [ ] T066 [US7] 댓글 수정 (CMT-03), 방명록 (CMT-04)
 
-## Phase 9: US8 내 블로그 관리 (P2) — 2주 범위 일부
+## 9단계: US8 내 블로그 관리 (P2) — 2주 범위 일부
 
 - [ ] T067 [US8] [W2b] 내 글 관리 API·화면: 상태·카테고리 필터, 검색, 페이지 20, 블라인드 사유 표시, 일괄 공개 범위 변경·삭제 in `manage/` (MNG-01)
 - [ ] T068 [US8] 댓글 관리 (MNG-02)
 
-## Phase 10: US11 일부 앞당김 (P3)
+## 10단계: US11 일부 앞당김 (P3)
 
 - [ ] T069 [US11] [W2a] 답글 1단계, 답글 있는 댓글 삭제 시 '삭제된 댓글입니다' 표시 in `comment/` (CMT-05)
 
 ---
 
-## Phase 10a: 자체 기능 비슷한 글 추천 (stretch) [W2b]
+## 10a단계: 자체 기능 비슷한 글 추천 (도전 과제) [W2b]
 
-**Goal**: 글 상세 아래 비슷한 글 몇 개. 일정이 밀리면 이 Phase 전체를 백로그로 돌린다(다른 Phase와 의존 없음).
+**목표**: 글 상세 아래 비슷한 글 몇 개. 일정이 밀리면 이 단계 전체를 백로그로 돌린다(다른 단계와 의존 없음).
 
 - [ ] T069a [W2b] docker compose에 PostgreSQL + pgvector 추가, 두 번째 DataSource 설정(추천 전용) in `recommend/config/` (R-02)
 - [ ] T069b [W2b] `post_embedding(post_id, embedding vector)` 테이블, 발행·수정 시 비동기로 임베딩 생성·저장 in `recommend/` (임베딩 방법은 R-02 Open)
@@ -167,7 +169,7 @@ description: "지원 서비스 구현 작업 (2주 일정 기준)"
 
 ---
 
-## Phase 11: Polish [W2b]
+## 11단계: 마무리 (Polish) [W2b]
 
 - [ ] T070 [W2b] 테스트 보강: quickstart 전 항목을 MockMvc·수동으로 확인
 - [ ] T071 [P] [W2b] 모바일 360px 레이아웃 확인 (NFR-004)
@@ -186,23 +188,23 @@ description: "지원 서비스 구현 작업 (2주 일정 기준)"
 | US10 | 블로그 이사·삭제·대표·꾸미기, 탈퇴 (BLOG-05~08, AUTH-06, R-08) |
 | US11 | 구독자 공개(구독 필요), 예약 발행, 카테고리 비공개, 태그 관리, 비밀댓글, 댓글 허용, 저장 |
 | US12~14 | 알림, 맞구독, 추천, 랭킹, 통계, 스팸, 신고, 블로그 제한, 공지·이력·대시보드 |
-| 자체 | 같은 카테고리 다른 글, 비회원 댓글(보류). 비슷한 글 추천은 Phase 10a(stretch) |
+| 자체 | 같은 카테고리 다른 글, 비회원 댓글(보류). 비슷한 글 추천은 10a단계(도전 과제) |
 
 ---
 
-## Dependencies & Execution Order
+## 의존 관계와 실행 순서
 
-- Setup → Foundational(T005~T016) → US1 → US2 → US3, US4는 Foundational 직후 병행 가능
+- 프로젝트 준비 → 기반 작업(T005~T016) → US1 → US2 → US3, US4는 기반 작업 직후 병행 가능
 - T031 발행은 T014(정화)·T016(연타 방지)에 의존
 - T036 이미지 업로드 → T037 에디터 연결
 - T053 view_log → T063 인기 글 → T064 주제별 글
 - T016a(Redis) → T016, T063, T064
-- Phase 10a는 T031(발행)과 T011(가시성)에만 의존하고, 다른 작업이 기다리지 않는다
+- 10a단계는 T031(발행)과 T011(가시성)에만 의존하고, 다른 작업이 기다리지 않는다
 - T046 공감, T047 검색은 US2 글·태그(T038) 이후
 
-## Implementation Strategy
+## 구현 전략
 
-1. **1주차**: Phase 1~6 중 [W1] 전부 → P0 한 바퀴 시연 (quickstart 1~6, 권한 표)
+1. **1주차**: 1~6단계 중 [W1] 전부 → P0 한 바퀴 시연 (quickstart 1~6, 권한 표)
 2. **2주차 전반**: 이미지, 공감, 답글, 태그·검색, 조회수·인기 글
 3. **2주차 후반**: 회원정보, 내 글 관리, 주제, 테스트·문서
-4. 각 Checkpoint에서 spec 수용 시나리오로 확인하고 커밋 메시지에 통합 ID를 쓴다 (constitution VII)
+4. 각 중간 점검에서 spec 수용 시나리오로 확인하고 커밋 메시지에 통합 ID를 쓴다 (constitution VII)

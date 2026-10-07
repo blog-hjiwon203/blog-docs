@@ -1,36 +1,38 @@
-# Implementation Plan: 티스토리형 블로그 플랫폼 (지원)
+# 구현 계획 (Implementation Plan): 티스토리형 블로그 플랫폼 (지원)
 
-**Branch**: `001-tistory-blog` | **Date**: 2026-10-07 | **Spec**: [spec.md](./spec.md)
+> **이 문서는?** 지원의 구현 계획이다. 기능 명세를 어떤 기술로, 어떤 선택 항목으로, 어떤 구조로 만들지 정한다. 결정의 이유는 조사(research.md)에, 세부 설계는 데이터 모델과 REST API 초안에 있다. 전체 문서 안내는 [README](../../README.md)에 있다.
 
-**Input**: 공통 spec `specs/001-tistory-blog/spec.md` + 지원 개인 설계 문서 (`docs/기능명세서_지원 (개인 설계 문서).md`, 2026-10-01)
+**브랜치**: `001-tistory-blog` | **날짜**: 2026-10-07 | **명세**: [spec.md](./spec.md)
 
-**Note**: 이 plan은 지원의 서비스 전용이다. 민주·서현은 같은 spec.md로 각자 plan을 만든다(constitution 원칙 I).
+**입력**: 공통 spec `specs/001-tistory-blog/spec.md` + 지원 개인 설계 문서 (`docs/기능명세서_지원 (개인 설계 문서).md`, 2026-10-01)
 
-## Summary
+**참고**: 이 plan은 지원의 서비스 전용이다. 민주·서현은 같은 spec.md로 각자 plan을 만든다(constitution 원칙 I).
+
+## 요약
 
 누구나 가입해 자기 블로그(서브도메인)를 열고, WYSIWYG 에디터로 글을 발행하고, 다른 블로그 글을 읽고 댓글·공감하는 멀티 유저 블로그를 만든다. Spring Boot REST API + React SPA를 jar 하나로 함께 배포하고, Host 헤더로 블로그를 찾는다. **2주 안에 공통 P0 24개 기능(US1~US4) 전부**를 구현하고, 남는 시간에 P1 일부(이미지 이후 태그·검색·인기 글·회원정보·내 글 관리·주제)를 붙인다.
 
-## Technical Context
+## 기술 맥락 (Technical Context)
 
-**Language/Version**: Java 17+ (Spring Boot 3.x), TypeScript/JavaScript (React 18) — 버전은 [research.md R-01](./research.md) 기본값
+**언어/버전**: Java 17+ (Spring Boot 3.x), TypeScript/JavaScript (React 18) — 버전은 [research.md R-01](./research.md) 기본값
 
-**Primary Dependencies**: Spring Boot (Web, Security, Data JPA, Validation, Cache, Data Redis), JWT 라이브러리, OWASP Java HTML Sanitizer, jsoup / React, React Router, Vite, Tiptap, DOMPurify
+**주요 의존성**: Spring Boot (Web, Security, Data JPA, Validation, Cache, Data Redis), JWT 라이브러리, OWASP Java HTML Sanitizer, jsoup / React, React Router, Vite, Tiptap, DOMPurify
 
-**Storage**: 주 DB는 개발 H2(MySQL 호환 모드, 파일 저장) / 운영 MySQL. Redis는 캐시(@Cacheable, TTL 5분)와 연타 방지 키 저장. PostgreSQL + pgvector는 '비슷한 글 추천' 전용으로 2주 안에 도전(stretch, R-02). 이미지는 서버 로컬 `./uploads/`(UUID 파일명), DB에는 경로·원본 파일명·크기만.
+**저장소**: 주 DB는 개발 H2(MySQL 호환 모드, 파일 저장) / 운영 MySQL. Redis는 캐시(@Cacheable, TTL 5분)와 연타 방지 키 저장. PostgreSQL + pgvector는 '비슷한 글 추천' 전용으로 2주 안에 도전(도전 과제, R-02). 이미지는 서버 로컬 `./uploads/`(UUID 파일명), DB에는 경로·원본 파일명·크기만.
 
-**Testing**: JUnit 5 + Spring Boot Test + MockMvc(백엔드), Vitest(프론트, 최소) — 원 문서에 없어 기본값으로 둠 (R-01)
+**테스트**: JUnit 5 + Spring Boot Test + MockMvc(백엔드), Vitest(프론트, 최소) — 원 문서에 없어 기본값으로 둠 (R-01)
 
-**Target Platform**: Linux 서버 1대, 와일드카드 도메인 `*.blog.com` → 같은 서버. 로컬은 `myblog.localhost:8080`
+**대상 플랫폼**: Linux 서버 1대, 와일드카드 도메인 `*.blog.com` → 같은 서버. 로컬은 `myblog.localhost:8080`
 
-**Project Type**: web-service (backend + frontend, 단일 jar 배포)
+**프로젝트 유형**: 웹 서비스 (백엔드 + 프론트엔드, 단일 jar 배포)
 
-**Performance Goals**: 목록은 페이지 단위, 홈 인기 글·주제별 글은 서버 캐시 5분, 이미지는 리사이즈·썸네일. 수치 목표는 정하지 않음(자율, 원 문서에 없음)
+**성능 목표**: 목록은 페이지 단위, 홈 인기 글·주제별 글은 서버 캐시 5분, 이미지는 리사이즈·썸네일. 수치 목표는 정하지 않음(자율, 원 문서에 없음)
 
-**Constraints**: 일정 2주. 화면은 최소화하고 백엔드에 집중. 모바일 360px부터 대응. 날짜·시각 KST
+**제약**: 일정 2주. 화면은 최소화하고 백엔드에 집중. 모바일 360px부터 대응. 날짜·시각 KST
 
-**Scale/Scope**: 학습용 단일 서버. 회원당 활성 블로그 최대 5개
+**규모/범위**: 학습용 단일 서버. 회원당 활성 블로그 최대 5개
 
-### 선택 항목 (spec Variation Points)
+### 선택 항목 (spec 선택 항목)
 
 | ID | 내 선택 | 구현 메모 |
 | --- | --- | --- |
@@ -58,9 +60,9 @@
 | 공지 노출 | 플랫폼 홈 상단 최신 1개 + 목록 |
 | 글자 수 | 제목 200, 블로그 이름 50, 카테고리 이름 30 (spec 기준안과 다름, Q1 확정 후 맞춤) |
 
-## Constitution Check
+## 헌법 점검 (Constitution Check)
 
-*GATE: Phase 0 전에 통과, Phase 1 설계 후 다시 확인.*
+*관문: 조사(0단계) 전에 통과하고, 설계(1단계) 후 다시 확인한다.*
 
 | 원칙 | 상태 | 근거 |
 | --- | --- | --- |
@@ -72,11 +74,11 @@
 | VI. 입력과 숫자는 잃거나 틀리지 않는다 | ✅ | 공감·구독은 DB UNIQUE, 발행·댓글은 Idempotency-Key(Redis TTL) (R-09 확정) |
 | VII. 추적 가능한 ID | ✅ | 통합 ID 사용. ERD·API 탭의 예전 ID는 갱신 예정 |
 
-**Phase 1 재확인**: data-model과 contracts가 II(가시성 필터를 공통 쿼리 조건으로), III(블로그 deleted_at, moved_to_blog_id), V(블라인드 컬럼)를 반영함 → 통과. VI도 R-09 확정으로 통과.
+**설계 후 재확인**: data-model과 contracts가 II(가시성 필터를 공통 쿼리 조건으로), III(블로그 deleted_at, moved_to_blog_id), V(블라인드 컬럼)를 반영함 → 통과. VI도 R-09 확정으로 통과.
 
-## Project Structure
+## 프로젝트 구조
 
-### Documentation (this feature)
+### 문서 (이 기능)
 
 ```text
 specs/001-tistory-blog/
@@ -91,7 +93,7 @@ specs/001-tistory-blog/
 └── tasks.md             # 2주 일정 기준 작업
 ```
 
-### Source Code (repository root)
+### 소스 코드 (저장소 루트)
 
 ```text
 backend/
@@ -113,7 +115,7 @@ backend/
     │   ├── manage/          # 블로그 주인 관리
     │   ├── admin/           # 서비스 관리
     │   ├── image/
-    │   └── recommend/       # 비슷한 글 추천 (PostgreSQL + pgvector, stretch)
+    │   └── recommend/       # 비슷한 글 추천 (PostgreSQL + pgvector, 도전 과제)
     ├── main/resources/      # application.yml, data.sql(ADMIN 초기 계정), static/(React 빌드 결과)
     └── test/java/com/blog/
 
@@ -126,9 +128,9 @@ frontend/
     └── api/
 ```
 
-**Structure Decision**: Web application 구조. 빌드 시 `frontend/dist`를 `backend/src/main/resources/static`으로 복사해 jar 하나로 배포한다. 백엔드는 기능(도메인) 단위 패키지.
+**구조 결정**: 웹 애플리케이션 구조. 빌드 시 `frontend/dist`를 `backend/src/main/resources/static`으로 복사해 jar 하나로 배포한다. 백엔드는 기능(도메인) 단위 패키지.
 
-## Complexity Tracking
+## 복잡도 기록 (Complexity Tracking)
 
 | 항목 | 이유 | 더 단순한 대안을 안 쓴 이유 |
 | --- | --- | --- |

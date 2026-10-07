@@ -1,39 +1,41 @@
-# Research: 티스토리형 블로그 (지원)
+# 조사 (Research): 티스토리형 블로그 (지원)
 
-각 항목은 **Decision / Rationale / Alternatives** 순서다. 출처는 지원 개인 설계 문서의 장 번호.
+> **이 문서는?** 구현 계획의 기술 결정을 하나씩 결정·이유·대안으로 적은 기록이다. "왜 이렇게 정했지?"가 궁금할 때 본다. 전체 문서 안내는 [README](../../README.md)에 있다.
+
+각 항목은 **결정 / 이유 / 대안** 순서다. 출처는 지원 개인 설계 문서의 장 번호.
 
 ## R-01 버전과 테스트 도구 (기본값)
 
-- **Decision**: Java 17, Spring Boot 3.x, React 18 + Vite. 테스트는 JUnit 5, Spring Boot Test, MockMvc, 프론트는 Vitest 최소.
-- **Rationale**: 원 문서에 버전·테스트 도구가 없어 Spring Boot 3 기본 조합으로 둠. 바꾸면 이 항목만 고친다.
+- **결정**: Java 17, Spring Boot 3.x, React 18 + Vite. 테스트는 JUnit 5, Spring Boot Test, MockMvc, 프론트는 Vitest 최소.
+- **이유**: 원 문서에 버전·테스트 도구가 없어 Spring Boot 3 기본 조합으로 둠. 바꾸면 이 항목만 고친다.
 
 ## R-02 운영 저장소 (2026-10-07 확정)
 
-- **Decision**: 주 DB는 MySQL(개발 H2). **Redis 사용**: Spring Cache 저장소(인기 글·주제별 글 TTL 5분), 연타 방지 Idempotency-Key 저장(R-09). 정지 회원 토큰 차단·로그아웃 토큰 처리도 R-03 확정 시 Redis 후보. **PostgreSQL + pgvector**: '비슷한 글 추천'(자체 기능) 전용, 2주 안에 도전(stretch).
-- **Rationale**: 개발에 AI를 쓰므로 2주 안에 벡터 검색까지 가능하다고 판단(지원). 단, 주 데이터는 MySQL 하나로 두고 PostgreSQL에는 글 id와 임베딩만 저장해 일정이 밀리면 기능째 뺄 수 있게 한다.
+- **결정**: 주 DB는 MySQL(개발 H2). **Redis 사용**: Spring Cache 저장소(인기 글·주제별 글 TTL 5분), 연타 방지 Idempotency-Key 저장(R-09). 정지 회원 토큰 차단·로그아웃 토큰 처리도 R-03 확정 시 Redis 후보. **PostgreSQL + pgvector**: '비슷한 글 추천'(자체 기능) 전용, 2주 안에 도전(도전 과제).
+- **이유**: 개발에 AI를 쓰므로 2주 안에 벡터 검색까지 가능하다고 판단(지원). 단, 주 데이터는 MySQL 하나로 두고 PostgreSQL에는 글 id와 임베딩만 저장해 일정이 밀리면 기능째 뺄 수 있게 한다.
 - **로컬 개발**: Redis와 PostgreSQL(pgvector)은 docker compose로 띄운다. Redis가 없을 때 테스트는 embedded/Testcontainers 또는 ConcurrentMap 캐시로 대체.
-- **Open**: 임베딩 생성 방법(외부 임베딩 API 또는 로컬 모델), 임베딩 갱신 시점(발행·수정 시 비동기).
+- **미결정**: 임베딩 생성 방법(외부 임베딩 API 또는 로컬 모델), 임베딩 갱신 시점(발행·수정 시 비동기).
 
 ## R-03 인증 — 일부 미결정
 
-- **Decision**: JWT Access Token, `Authorization: Bearer`. 비밀번호 bcrypt. 토큰 없음 401, 권한 없음 403, 남의 비공개 404.
-- **Open** (원 문서 10장, 인증 학습 후 확정): 서브도메인 간 로그인 공유(상위 도메인 HttpOnly 쿠키 등), 로그인 유지(Refresh Token), 로그아웃 시 토큰 처리, 정지 회원의 기존 토큰 차단(요청마다 상태 확인 등), 쿠키 사용 시 SameSite + CSRF 토큰.
-- **Note**: spec V3 규칙 "여러 블로그를 오가도 로그인 유지"를 지키려면 서브도메인 간 공유 방식이 반드시 정해져야 한다. localStorage + Bearer는 출처(origin)별이라 서브도메인마다 따로 저장됨.
+- **결정**: JWT Access Token, `Authorization: Bearer`. 비밀번호 bcrypt. 토큰 없음 401, 권한 없음 403, 남의 비공개 404.
+- **미결정** (원 문서 10장, 인증 학습 후 확정): 서브도메인 간 로그인 공유(상위 도메인 HttpOnly 쿠키 등), 로그인 유지(Refresh Token), 로그아웃 시 토큰 처리, 정지 회원의 기존 토큰 차단(요청마다 상태 확인 등), 쿠키 사용 시 SameSite + CSRF 토큰.
+- **참고**: spec V3 규칙 "여러 블로그를 오가도 로그인 유지"를 지키려면 서브도메인 간 공유 방식이 반드시 정해져야 한다. localStorage + Bearer는 출처(origin)별이라 서브도메인마다 따로 저장됨.
 
 ## R-04 블로그 주소 해석 (4.2, 6장 ①)
 
-- **Decision**: 정규식 `^[a-z0-9][a-z0-9-]{2,30}[a-z0-9]$`, 예약어(www, api, admin, static, mail, login 등) 거절. 요청 Host에서 서브도메인을 읽어 블로그 조회. `blog.com`, `www.blog.com`은 플랫폼 화면.
+- **결정**: 정규식 `^[a-z0-9][a-z0-9-]{2,30}[a-z0-9]$`, 예약어(www, api, admin, static, mail, login 등) 거절. 요청 Host에서 서브도메인을 읽어 블로그 조회. `blog.com`, `www.blog.com`은 플랫폼 화면.
 - 화면 주소는 서버가 먼저 확인(없으면 404, 이사했으면 301, 다른 블로그 소속 글이면 301)한 뒤 `index.html`을 준다. 리다이렉트를 서버가 하는 이유는 검색엔진도 따라가게 하기 위함.
 - `/api/**`는 같은 출처의 상대 경로라 CORS 설정이 필요 없다.
 
 ## R-05 에디터와 XSS (7.4, 4.5)
 
-- **Decision**: Tiptap(React, MIT), 본문 HTML 저장. 저장 전 서버에서 OWASP Java HTML Sanitizer로 허용 목록 정화(문단 제목, 굵게·기울임, 목록, 인용, 코드 블록, http/https 링크, 자체 업로드 경로 이미지). script·이벤트 속성·style 제거. 출력 시 DOMPurify로 한 번 더. 본문 외 입력은 React 자동 이스케이프만, `dangerouslySetInnerHTML`은 DOMPurify를 거친 본문에만. CSP로 인라인 스크립트 차단. 목록 요약은 jsoup으로 태그 제거.
-- **Alternatives**: 마크다운(예전 선택) → WYSIWYG로 변경. Lucy XSS Filter·ESAPI는 쓰지 않음.
+- **결정**: Tiptap(React, MIT), 본문 HTML 저장. 저장 전 서버에서 OWASP Java HTML Sanitizer로 허용 목록 정화(문단 제목, 굵게·기울임, 목록, 인용, 코드 블록, http/https 링크, 자체 업로드 경로 이미지). script·이벤트 속성·style 제거. 출력 시 DOMPurify로 한 번 더. 본문 외 입력은 React 자동 이스케이프만, `dangerouslySetInnerHTML`은 DOMPurify를 거친 본문에만. CSP로 인라인 스크립트 차단. 목록 요약은 jsoup으로 태그 제거.
+- **대안**: 마크다운(예전 선택) → WYSIWYG로 변경. Lucy XSS Filter·ESAPI는 쓰지 않음.
 
 ## R-06 페이지네이션 (4.4)
 
-- **Decision**: 기본 offset(`?page=0&size=10`, 응답 content/page/size/totalElements/totalPages). 홈 최신 글·구독 피드는 커서 `(published_at, id)` 이후. size 1~50 보정, 음수 page는 0, 마지막 초과는 빈 content. '최신순' = published_at 내림차순, 같으면 id 내림차순. 화면 번호는 10개씩 묶음.
+- **결정**: 기본 offset(`?page=0&size=10`, 응답 content/page/size/totalElements/totalPages). 홈 최신 글·구독 피드는 커서 `(published_at, id)` 이후. size 1~50 보정, 음수 page는 0, 마지막 초과는 빈 content. '최신순' = published_at 내림차순, 같으면 id 내림차순. 화면 번호는 10개씩 묶음.
 
 | 목록 | 방식 | 크기 | 정렬 |
 | --- | --- | --- | --- |
@@ -49,7 +51,7 @@
 
 ## R-07 계정·소셜 연동 (4.6)
 
-- **Decision**: 처음 가입한 방식이 기본 수단. 묶는 길은 "로그인 상태에서 마이페이지 소셜 연동" 하나뿐이고, 더할 수 있는 것은 소셜뿐. 이메일이 같다고 합치지 않고 충돌하면 거절.
+- **결정**: 처음 가입한 방식이 기본 수단. 묶는 길은 "로그인 상태에서 마이페이지 소셜 연동" 하나뿐이고, 더할 수 있는 것은 소셜뿐. 이메일이 같다고 합치지 않고 충돌하면 거절.
 - 소셜 신규 가입: 닉네임 확인 후 member(email·password NULL) + social_account를 한 트랜잭션. 제공사 이메일은 저장하지 않음.
 - 연동 거절: 이미 다른 회원에 연결된 소셜 계정, 같은 제공사 중복. 해제 후 로그인 수단이 남지 않으면 거절.
 - 모든 로그인 경로에서 member.status 먼저 확인(SUSPENDED → 사유·기한 안내, WITHDRAWN → 없는 계정).
@@ -69,7 +71,7 @@
 
 - spec FR-025, FR-048, FR-055, FR-058, NFR-003 요구. 원 문서: "버튼 비활성화 + 서버 측 중복 방지(10장)".
 - **후보**: (a) 클라이언트가 만든 Idempotency-Key 헤더를 짧은 TTL로 저장, (b) 공감·구독은 DB UNIQUE 제약(member_id, post_id / member_id, blog_id)으로 충분, 발행·댓글은 (a).
-- **Decision**: 공감·구독은 DB UNIQUE 제약 + PUT/DELETE 멱등 API, 발행·댓글은 클라이언트가 만든 `Idempotency-Key`를 Redis에 짧은 TTL로 저장해 같은 키의 두 번째 요청은 첫 결과를 돌려준다. 버튼 비활성화는 보조.
+- **결정**: 공감·구독은 DB UNIQUE 제약 + PUT/DELETE 멱등 API, 발행·댓글은 클라이언트가 만든 `Idempotency-Key`를 Redis에 짧은 TTL로 저장해 같은 키의 두 번째 요청은 첫 결과를 돌려준다. 버튼 비활성화는 보조.
 
 ## R-10 홈 섹션 API (5.10)
 

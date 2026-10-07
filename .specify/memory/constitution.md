@@ -1,18 +1,20 @@
 <!--
-Sync Impact Report
-- Version: (none) → 1.0.0
+동기화 영향 보고 (Sync Impact Report)
+- 버전: (none) → 1.0.0
 - 최초 제정. 원본: docs/1팀 블로그 통합 기능명세서.md v0.2 (2026-10-05)
 - 추가된 원칙: I~VII 전체
 - 후속 작업: 각자 저장소에서 /speckit.plan 실행 시 Constitution Check에 이 문서의 원칙을 사용
 -->
 
-# 티스토리형 블로그 Constitution (1팀 공통)
+# 티스토리형 블로그 헌법 (Constitution, 1팀 공통)
+
+> **이 문서는?** 1팀 세 서비스가 절대 어기면 안 되는 원칙이다. 다른 모든 문서보다 우선하고, 구현 계획의 헌법 점검이 이 원칙을 하나씩 확인한다. 전체 문서 안내는 [README](../../README.md)에 있다.
 
 지원, 민주, 서현 세 사람은 각자 다른 언어·프레임워크로 각자의 블로그 서비스를 만든다. 이 헌법은 세 서비스가 모두 "티스토리 같은 블로그"가 되도록 지켜야 할 변하지 않는 원칙을 정한다. 모든 spec, plan, tasks는 이 원칙을 어기면 안 된다.
 
-## Core Principles
+## 핵심 원칙 (Core Principles)
 
-### I. What은 함께, How는 각자 (NON-NEGOTIABLE)
+### I. What은 함께, How는 각자 (타협 불가)
 
 - 공통 명세(spec.md)에는 **서비스 밖에서 사용자로서 확인할 수 있는 동작**만 적는다.
 - 언어, 프레임워크, DB, 인증 구현, 화면 구성, 디자인, 문구, 구현 수치는 각자의 plan.md에 둔다.
@@ -21,7 +23,7 @@ Sync Impact Report
   - **선택**: spec.md의 "선택 항목(Variation Points)" 중 하나를 고르고, 고른 방식을 plan.md에 밝힌다.
   - **자율**: 각자 정하며 spec.md에 적지 않는다.
 
-**Rationale**: 세 서비스를 같은 체크리스트로 테스트·비교하려면 관찰 가능한 동작은 같아야 하고, 구현 자유는 보장돼야 한다.
+**이유**: 세 서비스를 같은 체크리스트로 테스트·비교하려면 관찰 가능한 동작은 같아야 하고, 구현 자유는 보장돼야 한다.
 
 ### II. 비공개는 존재 자체를 숨긴다
 
@@ -29,7 +31,7 @@ Sync Impact Report
 - 볼 수 없는 글은 목록, 카테고리·태그, 검색, 홈, 인기 글, 피드, 사이드바, 이전·다음 글, **글 개수**에서 모두 빠진다.
 - 목록과 개수는 항상 "보는 사람이 볼 수 있는 글"만 센다.
 
-**Rationale**: 글이 있다는 사실만으로도 정보가 샌다.
+**이유**: 글이 있다는 사실만으로도 정보가 샌다.
 
 ### III. 공유된 주소는 깨지지 않는다
 
@@ -37,7 +39,7 @@ Sync Impact Report
 - 글 주소는 처음 발행할 때 정해지고, 수정해도 바뀌지 않는다.
 - 블로그 이사로 옮긴 글은 옛 주소에서 새 주소로 연결된다.
 
-**Rationale**: 이미 공유된 링크가 깨지거나 남의 블로그로 연결되면 안 된다.
+**이유**: 이미 공유된 링크가 깨지거나 남의 블로그로 연결되면 안 된다.
 
 ### IV. 권한은 서버가 지킨다
 
@@ -79,15 +81,15 @@ Sync Impact Report
 ## 개발 워크플로
 
 1. 공통 명세 변경은 `specs/001-tistory-blog/spec.md`에서 한다. 선택 항목을 바꾸면 해당 FR과 "선택 항목" 표를 함께 고친다.
-2. 미결정 사항(`[NEEDS CLARIFICATION]`)은 세 사람이 합의한 뒤 `/speckit.clarify` 결과로 spec.md의 Clarifications에 옮긴다.
+2. 미결정 사항(`[NEEDS CLARIFICATION]`)은 세 사람이 합의한 뒤 `/speckit.clarify` 결과로 spec.md의 명확화(Clarifications)에 옮긴다.
 3. 각자 저장소에서 `/speckit.plan`을 실행할 때, 고른 선택 항목 8개와 자율 값(업로드 상한, 로그인 유지 기간, 인기 글 기준 등)을 plan.md에 표로 밝힌다.
-4. plan.md의 Constitution Check는 이 문서의 원칙 I~VII을 하나씩 확인한다.
-5. 서로의 서비스는 spec.md의 Acceptance Scenarios와 Success Criteria로 교차 테스트한다.
+4. plan.md의 헌법 점검(Constitution Check)은 이 문서의 원칙 I~VII을 하나씩 확인한다.
+5. 서로의 서비스는 spec.md의 수용 시나리오와 성공 기준로 교차 테스트한다.
 
-## Governance
+## 운영 규칙 (Governance)
 
-- 이 헌법은 다른 모든 문서보다 우선한다. 개인 plan이 원칙과 다르면 그 이유를 plan.md의 Complexity Tracking에 적는다.
-- 개정은 세 사람 모두의 동의가 필요하고, 상단 Sync Impact Report와 버전을 함께 고친다.
+- 이 헌법은 다른 모든 문서보다 우선한다. 개인 plan이 원칙과 다르면 그 이유를 plan.md의 복잡도 기록(Complexity Tracking)에 적는다.
+- 개정은 세 사람 모두의 동의가 필요하고, 상단 동기화 영향 보고 (Sync Impact Report)와 버전을 함께 고친다.
 - 버전 규칙: 원칙 삭제·재정의는 MAJOR, 원칙·절 추가나 실질적 확장은 MINOR, 문구 정리는 PATCH.
 
-**Version**: 1.0.0 | **Ratified**: 2026-10-05 | **Last Amended**: 2026-10-07
+**버전**: 1.0.0 | **제정일**: 2026-10-05 | **최종 개정일**: 2026-10-07
