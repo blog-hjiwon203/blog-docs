@@ -19,7 +19,7 @@
 ## R-03 인증 (기능 명세 Q6, 1주차 시작 전에 정함)
 
 - **정해진 것**: JWT, 비밀번호 bcrypt. 로그인이 필요한 행동에 로그인 안 함 401, 권한 없음 403, 볼 수 없는 글·블로그 404(401보다 먼저).
-- **문제** ([원본 검토](./review.md) 3): 원본 3장은 Access Token을 `Authorization: Bearer` 헤더로 보낸다. 토큰을 브라우저 저장소(localStorage)에 두면 출처(origin)마다 따로라서, `blog.com`에서 로그인해도 `myblog.blog.com/manage`에서는 로그아웃 상태다. 이건 P0 한 바퀴(로그인 → 내 블로그에서 글쓰기)를 막는다.
+- **문제** ([지원이 확인할 것](./review.md) 3): 원본 3장은 Access Token을 `Authorization: Bearer` 헤더로 보낸다. 토큰을 브라우저 저장소(localStorage)에 두면 출처(origin)마다 따로라서, `blog.com`에서 로그인해도 `myblog.blog.com/manage`에서는 로그아웃 상태다. 이건 P0 한 바퀴(로그인 → 내 블로그에서 글쓰기)를 막는다.
 - **추천안**: 로그인하면 서버가 `Domain=.blog.com; HttpOnly; Secure; SameSite=Lax` 쿠키로 토큰을 준다. 모든 블로그 주소가 같은 쿠키를 보내므로 공유가 저절로 된다(AUTH-03 일부). 쿠키를 쓰므로 상태를 바꾸는 요청에는 CSRF 대책(SameSite=Lax + 사용자 지정 헤더 확인 또는 CSRF 토큰)을 함께 둔다(원본 4.5 ③). 로그인 유지는 만료가 긴 Refresh Token 쿠키, 로그아웃은 쿠키 삭제 + Redis에 남은 토큰 무효화, 정지 회원은 요청마다 회원 상태를 확인(짧은 캐시)한다.
 - **대안**: (a) 블로그 주소로 넘어갈 때마다 플랫폼 주소에서 토큰을 다시 받아 오는 방식(SSO 리다이렉트): 쿠키를 피할 수 있지만 화면 이동마다 왕복이 생기고 만들기 어렵다. (b) 모든 화면을 `blog.com` 한 출처에 두기: 서브도메인 선택(원본 7.3)과 맞지 않는다.
 - **로컬 개발**: `localhost`는 하위 도메인 쿠키 공유가 브라우저마다 다르므로 `blog.test` 같은 이름을 hosts에 넣어 `myblog.blog.test`로 확인한다(빠른 시작).
