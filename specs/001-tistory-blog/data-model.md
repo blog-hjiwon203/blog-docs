@@ -2,11 +2,11 @@
 
 > **이 문서는?** 지원 서비스의 테이블·컬럼·제약과 글 가시성 판단 순서다. 기능 명세의 핵심 엔티티를 실제 저장 구조로 옮긴 것이다. 전체 문서 안내는 [README](../../README.md)에 있다.
 
-원본 ERD 탭은 예전 ID 기준이라, 이 문서는 원본 본문(4~6장)과 기능 명세 핵심 개체에서 다시 뽑았다. 지금 기능 코드 기준이다([지원이 확인할 것](./review.md) 16). 2026-10-08에 Crowfoot ERD(문서 버전 62)와 맞췄다. 컬럼 타입·인덱스·DDL 전체는 [ERD](./erd/README.md)와 [schema.sql](./erd/schema.sql)에 있고, 둘이 다르면 Crowfoot ERD가 맞다.
+원본 ERD 탭은 예전 ID 기준이라, 이 문서는 원본 본문(4~6장)과 기능 명세 핵심 개체에서 다시 뽑았다. 지금 기능 코드 기준이다([지원이 확인할 것](./review.md) 16). 2026-10-08에 Crowfoot ERD(문서 버전 65)와 맞췄다. 컬럼 타입·인덱스·DDL 전체는 [ERD](./erd/README.md)와 [schema.sql](./erd/schema.sql)에 있고, 둘이 다르면 Crowfoot ERD가 맞다.
 
 공통 규칙(아래 표에서는 생략):
 
-- 모든 테이블에 `id`(PK, bigint, 자동 증가). 연결 테이블 `post_tag`만 (post_id, tag_id) 복합 키.
+- 모든 테이블에 `id`(PK, bigint, 자동 증가). 연결 테이블 `post_tag`만 (post_id, tag_id) 복합 키. 논리명은 `<테이블 논리명> ID`(예: 회원 ID), 그 키를 그대로 가리키는 외래 키도 같은 이름(member_id = 회원 ID). 역할이 있는 외래 키는 역할 이름(받는 회원, 차단된 회원 ID 등).
 - `created_at`은 정렬·기간 집계·화면 표시에 쓰는 테이블에만 둔다. `tag`, `post_tag`, `category`, `blog_visit`, `blog_banned_word`에는 없다. 고칠 수 있는 테이블에는 `updated_at`.
 - 열거값은 VARCHAR + CHECK(JPA `EnumType.STRING`). 화면 안내 문구는 DB가 아니라 Java enum 필드에 둔다.
 - 참/거짓 컬럼은 `is_` 접두사(`is_primary`, `is_restricted`, `is_blinded` 등). Java 필드는 접두사 없이(`restricted`) 두고 `@Column(name = "is_restricted")`로 잇는다.
