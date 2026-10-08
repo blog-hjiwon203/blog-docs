@@ -1,4 +1,4 @@
--- Crowfoot 문서 665 버전 69 (2026-10-08)에서 내보낸 MySQL DDL. 직접 고치지 말고 Crowfoot을 고친 뒤 다시 내보낸다.
+-- Crowfoot 문서 665 버전 74 (2026-10-08)에서 내보낸 MySQL DDL. 직접 고치지 말고 Crowfoot을 고친 뒤 다시 내보낸다.
 -- https://crowfoot.java21.net/workspaces/49/models/665
 
 CREATE TABLE member (
@@ -78,10 +78,12 @@ CREATE TABLE blog (
     updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6) COMMENT '수정 일시',
     primary_owner_id BIGINT GENERATED ALWAYS AS (CASE WHEN is_primary = 1 AND deleted_at IS NULL THEN member_id END) STORED COMMENT '대표 블로그 주인(유니크용)-----회원당 대표 블로그 하나를 DB에서 보장하는 계산 컬럼',
     total_visitor_count BIGINT NOT NULL DEFAULT 0 COMMENT '누적 방문자-----매일 새벽 전날 방문자 수를 더한다. 오늘 방문자는 포함하지 않는다',
+    accent_color VARCHAR(10) NOT NULL DEFAULT 'BLUE' COMMENT '포인트 색-----스킨의 포인트 색. 정해 둔 6색만',
     PRIMARY KEY (id),
     CONSTRAINT uk_blog_address UNIQUE (address),
     CONSTRAINT uk_blog_primary_owner_id UNIQUE (primary_owner_id),
-    CONSTRAINT ck_blog_list_layout CHECK (list_layout IN ('LIST', 'THUMBNAIL'))
+    CONSTRAINT ck_blog_list_layout CHECK (list_layout IN ('LIST', 'THUMBNAIL')),
+    CONSTRAINT ck_blog_accent_color CHECK (accent_color IN ('BLUE', 'GREEN', 'ORANGE', 'PINK', 'PURPLE', 'GRAY'))
 ) COMMENT='블로그-----주소는 삭제돼도 행이 남아 영구 예약';
 CREATE TABLE category (
     id BIGINT NOT NULL AUTO_INCREMENT COMMENT '카테고리 ID',
@@ -304,9 +306,9 @@ CREATE TABLE blog_sidebar_module (
     updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6) COMMENT '수정 일시',
     PRIMARY KEY (id),
     CONSTRAINT uk_blog_sidebar_module_blog_id_module_type UNIQUE (blog_id, module_type),
-    CONSTRAINT ck_blog_sidebar_module_module_type CHECK (module_type IN ('PROFILE', 'CATEGORY', 'TAG', 'RECENT_POST', 'RECENT_COMMENT')),
+    CONSTRAINT ck_blog_sidebar_module_module_type CHECK (module_type IN ('PROFILE', 'CATEGORY', 'TAG', 'RECENT_POST', 'RECENT_COMMENT', 'VISITOR', 'POPULAR_POST', 'SUBSCRIBE')),
     CONSTRAINT ck_blog_sidebar_module_profile_visible CHECK (module_type <> 'PROFILE' OR is_visible = 1)
-) COMMENT='사이드바 모듈-----블로그 사이드바의 모듈 순서와 표시 여부. 블로그를 만들 때 기본 5개 행을 함께 만든다. 모듈별 개수는 고정(최근 글·댓글 5개)';
+) COMMENT='사이드바 모듈-----블로그 사이드바의 모듈 순서와 표시 여부. 블로그를 만들 때 8개 행을 함께 만든다(VISITOR·POPULAR_POST·SUBSCRIBE는 숨김). 모듈별 개수는 고정(최근 글·댓글·인기 글 5개)';
 
 ALTER TABLE social_account ADD CONSTRAINT fk_social_account_member FOREIGN KEY (member_id) REFERENCES member (id);
 ALTER TABLE password_reset_token ADD CONSTRAINT fk_password_reset_token_member FOREIGN KEY (member_id) REFERENCES member (id);

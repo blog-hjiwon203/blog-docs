@@ -214,10 +214,10 @@ description: "지원 서비스 구현 작업 (2주 일정 기준)"
 - [ ] T084 [US13] `blog_blocked_member`, `blog_banned_word` 엔티티와 관리 API(차단 시 기존 구독 삭제, 금칙어 100개), 댓글·방명록 작성과 구독에 차단·금칙어 검사 연결 in `manage/` (MNG-04)
 - [ ] T085 [P] [US13] 화면: 관리 홈 통계, 통계 그래프·유입 경로, 차단 회원·금칙어 관리, 댓글 관리에서 바로 차단 in `frontend/src/pages/manage/` (MNG-03, MNG-04)
 
-### 백로그: 사이드바 모듈 순서·표시 (2026-10-08 지원 결정)
+### 백로그: 사이드바 모듈과 포인트 색 (2026-10-08 지원 결정)
 
-- [ ] T086 [US10] `blog_sidebar_module` 엔티티, 블로그 개설 시 기본 5개 행 생성과 기존 블로그 채우기, 사이드바 API를 모듈 순서·표시 여부대로 내려 주기, 모듈 조회·전체 교체 API(PROFILE 숨김·중복·누락 400) in `blog/` (BLOG-04, BLOG-05)
-- [ ] T087 [P] [US10] 화면: 블로그 꾸미기에서 사이드바 모듈 끌어서 순서 바꾸기와 보이기·숨기기 in `frontend/src/pages/manage/` (BLOG-05)
+- [ ] T086 [US10] `blog_sidebar_module` 엔티티, 블로그 개설 시 8개 행 생성(새 3종은 숨김)과 기존 블로그 채우기, 사이드바 API를 모듈 순서·표시 여부대로 내려 주기, 방문자 수·인기 글 5·구독 모듈 데이터, 모듈 조회·전체 교체 API(PROFILE 숨김·중복·누락 400), `blog.accent_color` 저장 in `blog/` (BLOG-04, BLOG-05)
+- [ ] T087 [P] [US10] 화면: 블로그 꾸미기에서 사이드바 모듈 끌어서 순서 바꾸기와 보이기·숨기기, 포인트 색 6색 고르기(스킨 CSS 변수 하나로 적용) in `frontend/src/pages/manage/` (BLOG-05)
 
 ## 의존 관계와 실행 순서
 
