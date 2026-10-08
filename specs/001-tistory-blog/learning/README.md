@@ -15,6 +15,7 @@
 | 3 | [로그인·주소·권한 판단 장치](./step-03.md) | JWT 쿠키 인증, 서브도메인 해석, 글 가시성, 연타 방지, 프론트 라우터 |
 | 4 | [가입과 블로그 개설](./step-04.md) | 이메일 인증, 가입·로그인·로그아웃, 블로그 개설·정보, 블로그 메인 글 목록, 사이드바, 첫 화면들 |
 | 5 | [글쓰기](./step-05.md) | 카테고리 관리, 글 발행·수정·삭제·공개 범위, Tiptap 에디터 |
+| 6 | [읽기·댓글·권한 (P0 완성)](./step-06.md) | 글 상세·이전·다음 글, 홈 최신 글, 댓글, 오류 화면, 관리자 영역 보호, 권한 시험 |
 
 ## 개념 문서
 
@@ -39,6 +40,7 @@
 | [08 페이지네이션](./concepts/08-pagination.md) | offset과 keyset(커서), 정렬 안정성, 인덱스, Spring Data `Pageable` |
 | [09 비밀번호 해시와 bcrypt](./concepts/09-password-hashing.md) | 해시와 암호화, salt, cost, bcrypt 구조와 72바이트 제한 |
 | [22 입력 검증과 JSON 바인딩](./concepts/22-bean-validation.md) | Jackson 3 바인딩, Bean Validation, `@Valid`와 상태 코드 순서, 기본형 칸 누락 |
+| [29 댓글 설계](./concepts/29-comments-design.md) | 글에 딸린 데이터의 권한, 보는 사람마다 다른 댓글, 댓글 수, 연타 두 겹 |
 | [27 소프트 삭제와 일괄 수정](./concepts/27-soft-delete-bulk-update.md) | 소프트 삭제, 딸린 데이터 처리, 변경 감지, `@Modifying`, 수정 시각 지키기 |
 | [23 트랜잭션과 동시성](./concepts/23-transactions-locking.md) | `@Transactional`, 경쟁 조건, 비관적 잠금(`FOR UPDATE`), UNIQUE 제약, 동시성 테스트 |
 

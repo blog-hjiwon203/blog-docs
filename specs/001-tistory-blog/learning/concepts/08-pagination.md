@@ -1,6 +1,6 @@
 # 페이지네이션: 페이지 번호와 커서
 
-> 관련 스텝: [스텝 2](../step-02.md)(T012 `PageQuery`, `PageResponse`, `CursorResponse`, `TimeIdCursor`), [스텝 4](../step-04.md)(블로그 메인 글 목록 `GET /api/posts`, 화면의 페이지 번호 묶음)
+> 관련 스텝: [스텝 2](../step-02.md)(T012 `PageQuery`, `PageResponse`, `CursorResponse`, `TimeIdCursor`), [스텝 4](../step-04.md)(블로그 메인 글 목록 `GET /api/posts`, 화면의 페이지 번호 묶음), [스텝 6](../step-06.md)(홈 최신 글 `GET /api/home/latest`, 댓글 더보기, 이전·다음 글)
 > 기준 버전: Spring Data JPA 4(Spring Boot 4.1.1), MySQL 8.4
 
 ## 1. 이 문서로 배우는 것
@@ -317,9 +317,9 @@ public record TimeIdCursor(LocalDateTime time, long id) {
 - `withoutPadding()`: base64 끝의 `=`를 빼서 URL에 그대로 넣기 쉽게 한다. 디코더는 패딩이 없어도 읽는다.
 - `Long.parseLong`이 던지는 `NumberFormatException`은 `IllegalArgumentException`의 하위 클래스라서 같은 `catch`에 잡힌다.
 
-### 5.5 커서를 쓰는 쿼리 모양 (스텝 6에서 만들 홈 최신 글 예시)
+### 5.5 커서를 쓰는 쿼리 모양 (스텝 6에서 실제로 만듦)
 
-아직 코드에 없다. 위 도구들이 어떻게 맞물리는지 보여 주는 예다.
+스텝 2 때 적어 둔 예시다. 스텝 6에서 이 모양 그대로 홈 최신 글을 만들었다(5.8). 위 도구들이 어떻게 맞물리는지 보여 준다.
 
 ```java
 TimeIdCursor after = TimeIdCursor.decode(cursor);                 // 처음이면 null
@@ -461,6 +461,132 @@ export default function Pagination({ page, totalPages, href }: {
 
 배운 점: 문서가 여러 개면 서로 어긋나기 쉽다. 프론트와 백엔드가 함께 보는 **API 명세를 기준**으로 삼고, 어긋남을 찾으면 구현하기 전에 정리한다.
 
+### 5.8 (스텝 6) 커서를 실제로 쓴 곳: 홈 최신 글
+
+`src/main/java/com/nhnacademy/blog/home/application/HomeService.java`
+
+```java
+public static final int LATEST_SIZE = 20;
+
+private static final Sort LATEST = Sort.by(Sort.Order.desc("publishedAt"), Sort.Order.desc("id"));
+
+@Transactional(readOnly = true)
+public List<Post> latest(Long viewerId, TimeIdCursor cursor) {
+    Specification<Post> condition = PostSpecifications.visibleTo(viewerId, LocalDateTime.now(clock));
+    if (cursor != null) {
+        condition = condition.and(after(cursor));
+    }
+    return postRepository.findBy(condition,
+            query -> query.sortBy(LATEST).project("blog", "category").limit(LATEST_SIZE + 1).all());
+}
+
+/** 최신순에서 커서 뒤: 더 먼저 발행됐거나, 같은 시각이면 id가 더 작은 글. */
+private static Specification<Post> after(TimeIdCursor cursor) {
+    return (root, query, cb) -> cb.or(
+            cb.lessThan(root.get("publishedAt"), cursor.time()),
+            cb.and(cb.equal(root.get("publishedAt"), cursor.time()), cb.lessThan(root.get("id"), cursor.id())));
+}
+```
+
+- `visibleTo(viewerId, ...)`: 모든 블로그에서 보는 사람이 볼 수 있는 글만. 홈에서는 내 블로그의 비공개 글도 나오지 않는다(주인 예외는 "자기 블로그 화면"에서만, [16](./16-authorization-visibility.md)).
+- `after(cursor)`: 4.3의 tie-break 조건 그대로다. `published_at < T OR (published_at = T AND id < I)`.
+- `findBy(..., query -> ...limit(21).all())`: 페이지(`Page`)가 아니라 목록만 받는다. 개수 쿼리(COUNT)가 없다. 21개를 읽어 하나 더 있으면 다음 묶음이 있다(4.5).
+- `project("blog", "category")`: 목록 한 줄에 블로그 이름·카테고리 이름이 나가므로 함께 읽는다. 응답 변환은 트랜잭션 밖(컨트롤러)이라, 함께 읽지 않으면 지연 로딩이 실패한다([24](./24-layered-architecture-dto.md)). 테스트가 응답의 `blog.address`를 확인해 실제로 읽혔는지 검증한다.
+
+`src/main/java/com/nhnacademy/blog/home/presentation/HomeController.java`
+
+```java
+@GetMapping("/api/home/latest")
+public CursorResponse<PostSummaryResponse> latest(@RequestParam(required = false) String cursor) {
+    List<Post> posts = homeService.latest(LoginMembers.currentId(), TimeIdCursor.decode(cursor));
+    CursorResponse<Post> page = CursorResponse.of(posts, HomeService.LATEST_SIZE,
+            last -> new TimeIdCursor(last.getPublishedAt(), last.getId()).encode());
+    return new CursorResponse<>(
+            page.content().stream().map(post -> PostSummaryResponse.of(post, post.getBlog())).toList(),
+            page.nextCursor());
+}
+```
+
+- 커서는 **엔티티(Post)** 기준으로 먼저 자르고 만든다. 응답 DTO에는 `publishedAt`이 `OffsetDateTime`으로 바뀌어 있어, 엔티티의 `LocalDateTime`으로 커서를 만드는 편이 정확하다. 자른 뒤에 DTO로 바꾼다.
+- `TimeIdCursor.decode`는 형식이 틀리면 400(`fieldErrors[0].field = "cursor"`)이다. 테스트 `lastPageHasNoNextCursor`가 `%%망가진`으로 확인한다.
+
+**중복·누락이 없는지 확인한 테스트** `src/test/.../home/HomeLatestIntegrationTest.java`의 `onlyVisiblePostsLatestFirstTwentyAtATimeWithoutDuplicatesOrGaps`:
+
+1. 두 블로그에 공개 글 25개(1분 간격), 비공개·숨김·이용 제한 블로그 글을 더 넣는다. 다른 테스트의 글과 섞이지 않게 2099년 같은 먼 미래 시각을 쓴다.
+2. 첫 요청: 20개가 정확히 최신 20개이고, 비공개·숨김 글이 없다.
+3. **더보기 전에 새 글을 하나 더 발행한다.**
+4. 받은 `nextCursor`로 다음 요청: 나머지 5개가 정확히 이어진다. 새 글은 커서보다 "앞"이라 끼어들지 않는다.
+
+offset 방식이었다면 3번에서 모든 글이 한 칸씩 밀려, 4번의 첫 글이 2번의 마지막 글과 겹쳤을 것이다(4.2).
+
+### 5.9 (스텝 6) 오름차순 커서: 댓글 더보기
+
+댓글은 **작성순**(오래된 것부터)이라 방향이 반대다. `CommentService.list`:
+
+```java
+private static final Sort WRITTEN_ORDER = Sort.by(Sort.Order.asc("createdAt"), Sort.Order.asc("id"));
+...
+condition = condition.and((root, query, cb) -> cb.or(
+        cb.greaterThan(root.get("createdAt"), cursor.time()),
+        cb.and(cb.equal(root.get("createdAt"), cursor.time()), cb.greaterThan(root.get("id"), cursor.id()))));
+```
+
+- 정렬이 ASC면 커서 뒤는 `>`, DESC면 `<`. 같은 `TimeIdCursor`(시각, id)를 그대로 쓴다.
+- 응답은 `{ content, nextCursor, totalCount }`다. 댓글은 머리에 "댓글 22"처럼 전체 수를 보여야 해서, 홈과 달리 COUNT 한 번(`countByPostIdAndDeletedAtIsNull`)을 더 한다. 자세한 건 [29](./29-comments-design.md).
+- 테스트 `CommentIntegrationTest.listIsInWrittenOrderTwentyAtATime`: 22개 → 첫 묶음 20개(댓글 0~19), 커서로 2개(20, 21), 그 뒤 `nextCursor` 없음.
+
+### 5.10 (스텝 6) 커서 조건으로 이웃 하나: 이전·다음 글
+
+글 상세의 이전·다음 글(T057, POST-10)도 같은 비교식이다. "커서 뒤 20개" 대신 "이 글 바로 앞·뒤 1개"를 찾는다. `PostReadService.neighbor`:
+
+```java
+Specification<Post> side = (root, query, cb) -> newer
+        ? cb.or(cb.greaterThan(root.get("publishedAt"), publishedAt),
+                cb.and(cb.equal(root.get("publishedAt"), publishedAt), cb.greaterThan(root.get("id"), post.getId())))
+        : cb.or(cb.lessThan(root.get("publishedAt"), publishedAt),
+                cb.and(cb.equal(root.get("publishedAt"), publishedAt), cb.lessThan(root.get("id"), post.getId())));
+Sort order = newer
+        ? Sort.by(Sort.Order.asc("publishedAt"), Sort.Order.asc("id"))
+        : Sort.by(Sort.Order.desc("publishedAt"), Sort.Order.desc("id"));
+return postRepository.findBy(PostSpecifications.listedIn(blog, viewerId, LocalDateTime.now(clock)).and(side),
+                query -> query.sortBy(order).limit(1).all())
+```
+
+- 다음 글(newer): 이 글보다 뒤(`>`)인 것 중 **가장 가까운** 것 → 오름차순으로 정렬해 첫 번째.
+- 이전 글: 이 글보다 앞(`<`)인 것 중 가장 가까운 것 → 내림차순으로 정렬해 첫 번째.
+- `listedIn(...)`과 함께 걸어서, 보는 사람이 볼 수 없는 글은 **건너뛰고** 그다음 글이 이웃이 된다. 블로그 목록과 같은 조건이라 목록에서 보이는 순서와 이전·다음이 일치한다.
+- 발행 시각이 같아도 id로 순서가 정해진다.
+
+테스트 `PostDetailIntegrationTest`:
+
+| 테스트 | 확인 |
+| --- | --- |
+| `prevAndNextSkipPostsTheViewerCannotSee` | 공개(1일), 비공개(2일), 공개(3일): 비회원에게 3일 글의 이전은 1일 글(비공개 건너뜀), 주인에게는 1일 글의 다음이 비공개 글. 다른 블로그 글은 이웃이 아님 |
+| `samePublishTimeIsOrderedById` | 같은 발행 시각 두 글: id 작은 글의 다음이 id 큰 글, 반대도 |
+
+### 5.11 (스텝 6) 화면의 "더보기"
+
+`frontend/src/pages/home/HomePage.tsx`
+
+```tsx
+async function load(cursor: string | null) {
+  try {
+    const page = await api<CursorResponse<PostSummary>>(
+      `/api/home/latest${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''}`, { allowAnonymous: true })
+    setPosts((previous) => (cursor ? [...previous, ...page.content] : page.content))
+    setNextCursor(page.nextCursor)
+```
+
+```tsx
+{nextCursor && <button className="btn" type="button" style={{ justifySelf: 'center' }}
+                       onClick={() => load(nextCursor)}>더보기</button>}
+```
+
+- 받은 `nextCursor`를 해석하지 않고 그대로 돌려보낸다(4.6). base64라 URL에 넣을 때 `encodeURIComponent`로 감싼다.
+- 더보기 결과는 기존 목록 **뒤에 붙인다**(`[...previous, ...page.content]`). 페이지 번호 방식처럼 갈아 끼우지 않는다.
+- `nextCursor`가 `null`이면 버튼을 숨긴다. 끝이다.
+- 댓글(`Comments.tsx`의 `loadMore`)도 같은 모양이다.
+
 ## 6. 자주 하는 실수와 함정
 
 | 실수 | 결과 |
@@ -474,6 +600,9 @@ export default function Pagination({ page, totalPages, href }: {
 | 목록 개수를 셀 때 가시성 조건을 빼먹음 | "글 57개"인데 실제로 보이는 건 50개(볼 수 없는 글 개수가 샘) — 개수 쿼리도 같은 Specification으로 |
 | 인덱스와 정렬 방향·컬럼 순서가 다름 | 인덱스를 써도 따로 정렬(filesort), 느려짐 |
 | 커서를 서버가 믿고 그대로 SQL에 넣음 | 형식 오류가 500으로 — 디코드 실패는 400으로 |
+| 오름차순 목록(댓글)에 내림차순 커서 조건(`<`)을 씀 | 다음 묶음이 비거나 앞쪽이 다시 나옴 — 정렬 방향과 비교 방향을 맞춘다 |
+| 커서를 응답 DTO의 시각으로 만듦 | 시간대·정밀도가 바뀐 값으로 비교해 경계 글이 빠질 수 있음 — 엔티티 값으로 만든다 |
+| 더보기 결과로 목록을 갈아 끼움 | 앞서 본 글이 사라짐 — 뒤에 붙인다 |
 
 ## 7. 직접 해 보기
 
@@ -507,7 +636,15 @@ export default function Pagination({ page, totalPages, href }: {
    ```
    `PostQueryService.LATEST`에서 `Sort.Order.desc("id")`를 지우고 다시 돌려 보자. 같은 발행 시각인 두 글(sameTime, posts[11])의 순서가 보장되지 않아 테스트가 실패하거나 우연히 통과한다. "우연히 통과"도 문제라는 점이 tie-break가 필요한 이유다. 되돌린다.
 
-6. **0부터/1부터 실수 체험**
+6. **(스텝 6) 더보기 중 새 글이 끼어들지 않는 것 보기**
+   ```bash
+   ./mvnw test -Dtest='HomeLatestIntegrationTest,PostDetailIntegrationTest#prevAndNextSkipPostsTheViewerCannotSee'
+   ```
+   `HomeService.after`에서 `cb.and(cb.equal(...), cb.lessThan(root.get("id"), ...))` 부분을 지우고(`published_at < T`만 남김) 다시 돌린다. 같은 시각 글이 없는 이 테스트는 통과할 수 있다. `samePublishTimeIsOrderedById`처럼 같은 시각 글을 여러 개 만들어 홈 더보기를 시험하는 테스트를 직접 써 보면 왜 실패하는지 보인다(함정 표 2번째 줄). 되돌린다.
+
+   화면: `npm run dev` 뒤 홈(`blog.test:5173`)에서 개발자 도구 Network 탭을 열고 "더보기"를 누른다. 두 번째 요청 주소에 `?cursor=...`가 붙고, 응답 `nextCursor`가 `null`이 되면 버튼이 사라진다.
+
+7. **0부터/1부터 실수 체험**
    - `PageQuery.toPageable`의 `page - 1`을 `page`로 바꾸고 `PageQueryTest`를 돌린다. 어떤 테스트가 왜 실패하는지 본다. 되돌린다.
 
 ## 8. 확인 문제
@@ -541,6 +678,15 @@ export default function Pagination({ page, totalPages, href }: {
 
 10. (스텝 4) 총 25쪽, 지금 15쪽일 때 화면의 페이지 번호와 이전·다음 버튼이 가리키는 쪽은?
    <details><summary>답</summary>번호는 11~20, 이전은 10쪽(이전 묶음의 마지막), 다음은 21쪽(다음 묶음의 첫 쪽)이다(<code>pageGroup(15, 25)</code>).</details>
+
+11. (스텝 6) 홈 최신 글을 더보기하는 사이에 새 글이 올라와도 다음 묶음이 겹치지 않는 이유는?
+   <details><summary>답</summary>다음 묶음을 "몇 번째부터"(offset)가 아니라 "마지막으로 받은 글 (발행 시각, id) 뒤"(커서)로 찾기 때문이다. 새 글은 그 위치보다 앞이라 다음 묶음에 끼어들지 않는다.</details>
+
+12. (스텝 6) 댓글 더보기의 커서 조건이 홈과 달리 `>`인 이유는?
+   <details><summary>답</summary>댓글은 작성순(오래된 것부터, ASC)이고 홈은 최신순(DESC)이다. 정렬 방향이 반대라 "커서 뒤"를 나타내는 비교도 반대다.</details>
+
+13. (스텝 6) 이전 글을 찾을 때 `published_at < T`인 글을 내림차순으로 정렬해 하나만 가져오는 이유는?
+   <details><summary>답</summary>이 글보다 앞선 글 중 가장 가까운(바로 앞) 글이 이전 글이기 때문이다. 내림차순 첫 번째가 가장 가깝다. 같은 시각이면 id로 비교하는 조건도 함께 건다.</details>
 
 ## 9. 더 읽을거리
 

@@ -1,6 +1,6 @@
 # 16. 인가와 가시성 판단: 누가 무엇을 볼 수 있나
 
-> 관련 스텝: [스텝 3](../step-03.md) (T011, T050), [스텝 4](../step-04.md) (블로그 화면 목록·글 수·사이드바, 블로그 수정), [스텝 5](../step-05.md) (글 수정·삭제·공개 범위, 카테고리 API의 판단 순서) · 관련 개념: [22-bean-validation](./22-bean-validation.md), [12-spring-security-filter-chain](./12-spring-security-filter-chain.md), [15-subdomain-host-routing](./15-subdomain-host-routing.md), [06-jpa-entity-mapping](./06-jpa-entity-mapping.md), [08-pagination](./08-pagination.md), [18-spa-server-routing](./18-spa-server-routing.md)
+> 관련 스텝: [스텝 3](../step-03.md) (T011, T050), [스텝 4](../step-04.md) (블로그 화면 목록·글 수·사이드바, 블로그 수정), [스텝 5](../step-05.md) (글 수정·삭제·공개 범위, 카테고리 API의 판단 순서), [스텝 6](../step-06.md) (글 상세·댓글의 읽기 판단, 권한 통합 테스트, 관리자 영역) · 관련 개념: [29-comments-design](./29-comments-design.md), [22-bean-validation](./22-bean-validation.md), [12-spring-security-filter-chain](./12-spring-security-filter-chain.md), [15-subdomain-host-routing](./15-subdomain-host-routing.md), [06-jpa-entity-mapping](./06-jpa-entity-mapping.md), [08-pagination](./08-pagination.md), [18-spa-server-routing](./18-spa-server-routing.md)
 
 ## 1. 이 문서로 배우는 것
 
@@ -609,6 +609,65 @@ public void rename(@CurrentBlog Blog blog, @AuthenticationPrincipal LoginMember 
 
 카테고리 쪽은 `CategoryIntegrationTest.onlyOwnerChangesCategories`(401/403), `categoryOfAnotherBlogIs404`.
 
+### 5.9 (스텝 6) 읽기용 판단: readable, 그리고 권한 표 전체를 직접 요청으로
+
+스텝 6에서 글 상세(`GET /api/posts/{id}`)와 댓글 API가 생기면서, 같은 `PostVisibilityPolicy` 결과를 **읽기** 쪽 상태 코드로 바꾸는 곳이 하나 더 생겼다.
+
+`src/main/java/com/nhnacademy/blog/post/application/PostReadService.java`
+
+```java
+public Post readable(Blog blog, Long postId, Long viewerId) {
+    return switch (postVisibilityPolicy.decide(postId, blog, viewerId)) {
+        case PostAccess.Owner owner -> owner.post();
+        case PostAccess.Visible visible -> visible.post();
+        case PostAccess.SubscribersOnly subscribersOnly -> throw new BusinessException(ErrorCode.SUBSCRIBERS_ONLY,
+                Map.of("blogId", blog.getId(), "blogName", blog.getName(), "blogAddress", blog.getAddress()));
+        case PostAccess.NotFound notFound -> throw new BusinessException(ErrorCode.NOT_FOUND);
+        case PostAccess.MovedTo movedTo -> throw new BusinessException(ErrorCode.NOT_FOUND);
+    };
+}
+```
+
+- `Owner`, `Visible`: 읽을 수 있다. 글을 돌려준다.
+- `SubscribersOnly`: 403 `SUBSCRIBERS_ONLY`. `detail`에는 블로그 번호·이름·주소만 담고 **제목·본문은 담지 않는다**(Q4). 화면은 이것으로 "○○을 구독하면 읽을 수 있어요"를 그린다. 구독자 공개 글은 "구독만 안 한" 경우라 존재를 숨기지 않기로 한 예외다(3.5 표).
+- `NotFound`, `MovedTo`: 404. 블로그 주소 API라 다른 블로그 글 번호도 301이 아니라 404다(5.8과 같은 이유).
+
+**쓰기용 `findOwned`(5.8)와 나란히 보기**
+
+| 판단 결과 | `readable` (글 상세, 댓글 보기·쓰기) | `findOwned` (수정·삭제·편집용 조회) |
+| --- | --- | --- |
+| `Owner` | 글 | 글 |
+| `Visible` | 글 | 비회원 401, 회원 403 |
+| `SubscribersOnly` | 403 `SUBSCRIBERS_ONLY` (제목·본문 없이) | 비회원 401, 회원 403 |
+| `NotFound` | 404 | 404 |
+| `MovedTo` | 404 | 404 |
+
+두 메서드 모두 같은 정책의 결과를 받아 **용도에 맞게 상태 코드만 다르게** 고른다. 판단 규칙(누가 무엇을 볼 수 있나)은 여전히 `PostVisibilityPolicy` 한 곳에 있다.
+
+**댓글은 글의 판단을 물려받는다.** 댓글 목록·쓰기·지우기는 모두 먼저 `readable`로 글을 확인한다. 그래서 남의 비공개 글에는 댓글 목록도 404, 비회원이 거기에 댓글을 쓰려 해도 401이 아니라 404다(대상을 먼저 찾고 → 로그인 → 권한 순서, 6번 실수 5). 자세한 설계는 [29](./29-comments-design.md).
+
+**권한 표 전체를 직접 요청으로 (T052).** quickstart의 "권한·가시성" 표를 화면 없이 요청으로만 확인하는 테스트를 따로 두었다. `src/test/.../security/AccessControlIntegrationTest.java`
+
+| 테스트 | quickstart 표의 줄 | 기대 |
+| --- | --- | --- |
+| `memberBCannotEditOrDeleteAsPostsOrManageAsBlog` | B로 A의 글 `PUT` | 403 (삭제·편집용 조회도 403) |
+| `privatePostIs404ForOthersOnApiAndScreen` | A의 비공개 글을 B·비회원이 주소로 열기 | API·화면 주소 모두 404, 블로그 글 수에서도 빠짐 |
+| `postNumberOnAnotherBlogAddressRedirectsOnlyWhenVisible` | `beta.blog.test/{A글}` | 볼 수 있으면 화면 301(`Location`이 alpha 주소), 아니면 404. API는 늘 404 |
+| `adminAreaIsForAdminsOnly` | B로 `GET /api/admin/dashboard` | 비회원 401, 일반 회원 403, 관리자는 통과(아직 API가 없어 404) |
+| `unexpectedErrorShowsNoInternals` | 500 응답 | 내부 정보(SQL, 예외 이름, 스택) 없음 |
+
+각 기능 테스트(`PostWriteIntegrationTest` 등)에도 비슷한 확인이 흩어져 있지만, 이 클래스는 "헌법 원칙 IV: 화면을 거치지 않은 요청에도 서버가 같은 결과를 낸다"를 한곳에서 보여 주는 목록 역할이다.
+
+**관리자 영역: 서버가 막고, 화면은 안내한다.** `/api/admin/**`은 `SecurityConfig`에서 막는다.
+
+```java
+.authorizeHttpRequests(auth -> auth
+        .requestMatchers("/api/admin/**").hasRole("ADMIN")
+        .anyRequest().permitAll())
+```
+
+비회원은 401, 로그인한 일반 회원은 403, 역할이 `ADMIN`인 회원만 컨트롤러까지 간다(12번 문서의 필터 체인). 화면 쪽 `frontend/src/pages/admin/AdminPage.tsx`는 `GET /api/me`의 `role`을 보고 비회원은 로그인으로 보내고, 일반 회원에게는 403 화면을 그린다. 이 화면 검사는 **안내용**이다. JS는 사용자 브라우저에서 고칠 수 있으므로, 화면 검사를 뚫어도 서버의 `hasRole("ADMIN")`이 막는다. 위 `adminAreaIsForAdminsOnly`가 바로 그 서버 쪽을 확인한다.
+
 ## 6. 자주 하는 실수와 함정
 
 1. **판단을 복사해서 쓰기**: 컨트롤러에 `if (post.isPrivate())`를 직접 쓰기 시작하면 규칙이 흩어진다. 항상 정책에 묻는다.
@@ -625,6 +684,9 @@ public void rename(@CurrentBlog Blog blog, @AuthenticationPrincipal LoginMember 
 12. **(스텝 4) 주인 검사가 있는 API에 `@Valid`**: 남의 블로그에 틀린 값을 보내면 403 대신 400이 나간다.
 13. **(스텝 5) 주인 검사를 글 조회보다 먼저 하기**: `requireOwner(blog, member)`를 먼저 하면 남의 블로그 글은 언제나 403이라, 볼 수 없는 글에도 403을 줘 존재를 드러낸다. 글을 먼저 판단(`findOwned`)하고 그 결과로 401·403을 정한다.
 14. **(스텝 5) `MovedTo`를 301로 답하기**: API는 Host 블로그의 글만 다룬다. 다른 블로그 글로 보내는 301은 화면 주소 단계(`SpaForwardController`)에서만 한다.
+15. **(스텝 6) 구독자 공개 안내에 제목·본문을 담기**: "구독하면 읽을 수 있다"는 안내에 제목을 넣으면 구독하지 않은 사람에게 내용 일부가 샌다. `detail`에는 블로그 정보만.
+16. **(스텝 6) 댓글 API에서 글 판단을 건너뛰기**: 댓글 번호나 글 번호만 보고 처리하면, 볼 수 없는 글의 댓글을 읽거나 쓸 수 있게 된다. 댓글은 늘 글의 `readable`을 먼저 거친다.
+17. **(스텝 6) 관리자 화면 검사만 믿기**: 화면의 `role` 검사는 안내다. 서버의 `/api/admin/**` 보호가 빠지면 누구나 관리 API를 부를 수 있다.
 
 ## 7. 직접 해 보기
 
@@ -678,6 +740,14 @@ IntelliJ에서 테스트 메서드 이름을 보면 표의 결과와 1:1로 대�
 
 그다음 `PostManageController.edit`의 첫 줄 앞에 `blogOwnerGuard.requireOwner(blog, member);`를 넣고 다시 돌린다. 기대: 남의 비공개 글 수정이 404가 아니라 403이 되어 실패한다. "주인 검사를 먼저 하면 존재가 드러난다"를 눈으로 확인하고 되돌린다.
 
+**실습 9. (스텝 6) 권한 표 전체를 한 번에**
+
+```bash
+./mvnw test -Dtest='AccessControlIntegrationTest,PostDetailIntegrationTest,CommentIntegrationTest'
+```
+
+그다음 `PostReadService.readable`에서 `SubscribersOnly`일 때도 글을 돌려주게 고쳐 보려고 하면 그대로는 고칠 수 없다. `PostAccess.SubscribersOnly`는 `record SubscribersOnly(Blog blog)`라 **글(`Post`)을 들고 있지 않기** 때문이다. 결과 타입을 설계할 때 "구독 안내에는 제목·본문을 주지 않는다"는 규칙을 아예 데이터 모양으로 박아 둔 것이다(4.1). 억지로 글을 다시 읽어 돌려주게 바꾸면 `PostDetailIntegrationTest#subscribersOnlyPostShowsNoticeWithoutContent`가 실패해 제목이 새는 것을 잡는다. 되돌린다.
+
 ## 8. 확인 문제
 
 1. 인증과 인가의 차이를 이 프로젝트 예로 설명하라.
@@ -719,9 +789,19 @@ IntelliJ에서 테스트 메서드 이름을 보면 표의 결과와 1:1로 대�
 13. (스텝 5) 숨긴 글에 빈 제목으로 수정을 보내면 400과 403 중 무엇이 나가나? 그 순서를 만드는 코드는?
 <details><summary>답</summary>403 <code>POST_BLINDED</code>다. 컨트롤러가 <code>postService.findEditable</code>(숨김 확인)을 먼저 부르고, 그 뒤에 <code>requestValidator.validate</code>(입력 검증)를 부른다.</details>
 
+14. (스텝 6) 구독하지 않은 회원이 구독자 공개 글 상세를 열면 무엇을 받고, 그 응답에 없는 것은?
+<details><summary>답</summary>403 <code>SUBSCRIBERS_ONLY</code>와 <code>detail</code>(블로그 번호·이름·주소)을 받는다. 글의 제목과 본문은 응답에 없다. 화면은 블로그 이름으로 구독 안내를 그린다.</details>
+
+15. (스텝 6) 같은 `PostAccess.Visible`이 글 상세에서는 "통과"인데 글 수정에서는 403인 이유는?
+<details><summary>답</summary>판단 결과는 같아도 용도가 다르다. 상세(<code>readable</code>)는 볼 수 있으면 보여 주면 되고, 수정(<code>findOwned</code>)은 주인이어야 한다. 그래서 같은 정책 결과를 받아 읽기용·쓰기용 메서드가 각자 상태 코드를 고른다.</details>
+
+16. (스텝 6) 화면의 <code>AdminPage</code>가 일반 회원에게 403 화면을 그리는데, 서버 <code>SecurityConfig</code>의 <code>/api/admin/**</code> 보호를 빼도 되나?
+<details><summary>답</summary>안 된다. 화면 검사는 사용자 브라우저에서 돌아 고칠 수 있고, 관리 API는 화면 없이 직접 부를 수 있다. 권한은 서버가 지키고(헌법 IV) 화면은 안내만 한다. <code>adminAreaIsForAdminsOnly</code> 테스트가 서버 쪽을 확인한다.</details>
+
 ## 9. 더 읽을거리
 
 - data-model.md "글 가시성 판단", rest-api.md "상태 코드 순서"
+- quickstart.md "권한·가시성" 표 (T052 테스트의 기준)
 - OWASP, "Insecure Direct Object Reference(IDOR)"와 Broken Access Control (OWASP Top 10 A01)
 - MDN Web Docs, HTTP 상태 코드 401, 403, 404
 - Spring Data JPA 레퍼런스, "Specifications"
