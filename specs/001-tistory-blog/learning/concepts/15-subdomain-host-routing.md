@@ -135,22 +135,48 @@ address=/blog.test/127.0.0.1
 
 dnsmasq 설정에 이 한 줄을 두면 `blog.test`와 그 아래 모든 이름(`alpha.blog.test`, `아무거나.blog.test`)을 127.0.0.1로 답한다. 3.3의 `*.blog.com A ...` 레코드와 같은 일을 내 컴퓨터 안에서 하는 셈이다.
 
-그런데 운영체제는 평소에 통신사·공유기 DNS에 묻지, 내 컴퓨터의 dnsmasq에 묻지 않는다. macOS는 **`/etc/resolver/{끝 이름}` 파일**로 "이 끝 이름은 이 DNS 서버에 물어라"를 정할 수 있다.
+그런데 운영체제는 평소에 통신사·공유기 DNS에 묻지, 내 컴퓨터의 dnsmasq에 묻지 않는다. macOS는 **`/etc/resolver/{도메인}` 파일**로 "이 도메인과 그 아래 이름은 이 DNS 서버에 물어라"를 정할 수 있다. 파일 이름이 곧 도메인이다.
 
 ```
-/etc/resolver/test 의 내용:
+/etc/resolver/blog.test 의 내용:
 nameserver 127.0.0.1
 ```
 
-파일 이름이 `test`라서 `.test`로 끝나는 이름만 127.0.0.1(dnsmasq)에 묻는다. `naver.com` 같은 나머지는 원래 DNS로 가므로 다른 인터넷 사용에는 영향이 없다.
+**판단은 두 단계로 나뉜다.**
+
+| 단계 | 누가 | 무엇을 보고 | 범위 |
+| --- | --- | --- | --- |
+| ① 누구에게 물을지 | macOS | `/etc/resolver/` 파일 이름 | `blog.test`면 `*.blog.test`만 dnsmasq로, 나머지(`naver.com` 등)는 원래 DNS |
+| ② 뭐라고 답할지 | dnsmasq | `address=/blog.test/127.0.0.1` 규칙 | 규칙에 맞는 이름은 127.0.0.1, 안 맞으면 원래 DNS에 대신 물음 |
+
+와일드카드 역할은 ② dnsmasq 규칙이 하고, ①은 "이 질문을 dnsmasq에 넘길지"만 정한다.
 
 ```
 "xyz.blog.test의 IP는?"
   → /etc/hosts에 없음
-  → 끝이 .test → /etc/resolver/test → 127.0.0.1의 dnsmasq에 물음
-  → dnsmasq: address=/blog.test/127.0.0.1 규칙에 맞음 → 127.0.0.1
+  → ① 끝이 blog.test → /etc/resolver/blog.test → 127.0.0.1의 dnsmasq에 물음
+  → ② dnsmasq: address=/blog.test/127.0.0.1 규칙에 맞음 → 127.0.0.1
   → 브라우저가 127.0.0.1:8080에 연결, Host: xyz.blog.test로 요청 → BlogHostResolver(5.1)
 ```
+
+파일 이름을 `test`로 하면(`/etc/resolver/test`) ①이 `.test`로 끝나는 이름을 **전부** dnsmasq로 보낸다. 다른 프로젝트에서 `myapp.test`를 쓸 때 dnsmasq 규칙만 한 줄 더하면 되는 대신, 이 프로젝트에 필요한 것보다 범위가 넓다. 규칙이 없는 `foo.test`는 ②에서 원래 DNS로 넘어가 결국 "없음"이 되므로 어느 쪽이든 동작은 같다. 이 문서는 범위가 좁은 `blog.test`를 쓴다.
+
+**dnsmasq는 내 컴퓨터에서 온 질문만 받게 한다.** dnsmasq는 기본으로 모든 네트워크 연결(와이파이 등)에서 질문을 받는다. 같은 와이파이의 다른 기기가 내 dnsmasq에 DNS를 물을 수 있다는 뜻이다. 필요 없으니 닫는다.
+
+```
+listen-address=127.0.0.1    # 내 컴퓨터 자신으로 온 질문만
+bind-interfaces             # 그 주소에만 붙어서 다른 연결에서는 듣지 않음
+```
+
+**dnsmasq와 블로그 서버는 별개 프로그램이다.** dnsmasq는 `brew services`로 켜 두면 컴퓨터를 켤 때 자동으로 켜지고, Spring 서버를 켜든 끄든 계속 돈다. 그래서 브라우저 오류로 어디가 꺼졌는지 알 수 있다.
+
+| 상태 | 브라우저 오류 | 어디서 실패했나 |
+| --- | --- | --- |
+| dnsmasq 꺼짐, hosts에도 없음 | `DNS_PROBE_FINISHED_NXDOMAIN` | 이름 찾기(DNS) |
+| dnsmasq 켜짐, Spring 서버 꺼짐 | `ERR_CONNECTION_REFUSED` | 127.0.0.1:8080에 받는 프로그램이 없음 |
+| 서버 켜짐, Docker(MySQL) 꺼짐 | 서버가 뜨지 않음 | 서버가 DB에 연결 못 함 |
+
+개발이 끝난 뒤 dnsmasq를 꼭 되돌릴 필요는 없다. `*.blog.test`에만 영향이 있고 가볍다. 다른 프로그램(일부 VPN, 다른 DNS 도구)이 53번 포트를 써야 해서 부딪히거나, 다시 쓸 일이 없을 때 7장의 되돌리기를 한다.
 
 `.test`는 실제 인터넷에서 쓰지 않기로 예약된 끝 이름이라(RFC 2606) 진짜 사이트와 겹칠 걱정이 없다.
 
@@ -534,11 +560,12 @@ server: {
 7. **테넌트 조건 빠뜨리기**: 블로그 API에서 글을 찾을 때 `postRepository.findById(id)`만 쓰면 다른 블로그의 글이 나온다. `@CurrentBlog`로 받은 블로그와 글의 소속을 꼭 비교한다(가시성 판단 ②).
 8. **Vite 프록시에 `changeOrigin: true`**: 위 5.6. 백엔드가 블로그를 못 찾는다.
 9. **운영에서 리버스 프록시 뒤에 둘 때 Host가 바뀜**: 프록시가 원래 Host를 넘기도록 설정해야 한다.
-10. **dnsmasq만 켜고 `/etc/resolver/test`를 안 만듦**: macOS가 dnsmasq에 묻지 않아 여전히 NXDOMAIN이다.
+10. **dnsmasq만 켜고 `/etc/resolver/blog.test`를 안 만듦**: macOS가 dnsmasq에 묻지 않아 여전히 NXDOMAIN이다.
 11. **`dig`·`nslookup`으로 확인**: 이 둘은 macOS의 `/etc/resolver`를 거치지 않고 DNS 서버에 바로 물어서, 설정이 맞아도 "없음"이 나올 수 있다. `ping`이나 `dscacheutil -q host -a name xyz.blog.test`로 확인한다.
 12. **설정을 바꿨는데 그대로**: 운영체제가 예전 답을 기억(캐시)하고 있다. `sudo dscacheutil -flushcache; sudo killall -HUP mDNSResponder`로 비우고, 브라우저는 새로 연다.
 13. **dnsmasq를 쓰면서 hosts에 옛 줄을 남김**: hosts가 먼저라 그 이름은 hosts 값을 쓴다. 지금은 둘 다 127.0.0.1이라 문제없지만, 헷갈리지 않게 지운다.
 14. **와일드카드 레코드만 두고 인증서는 `blog.com`용 하나만**: 블로그 주소에서 HTTPS 오류가 난다. `*.blog.com` 인증서가 따로 필요하다.
+15. **dnsmasq를 모든 네트워크에 열어 둠**: 기본 설정은 와이파이 등 모든 연결에서 질문을 받는다. `listen-address=127.0.0.1`과 `bind-interfaces`로 내 컴퓨터만 받게 한다.
 
 ## 7. 직접 해 보기
 
@@ -587,16 +614,18 @@ curl -s -o /dev/null -w "%{http_code}\n" -H "Host: localhost" localhost:8080/   
 # ── 1. dnsmasq 설치와 규칙 ─────────────────────────────
 brew install dnsmasq
 echo 'address=/blog.test/127.0.0.1' >> "$(brew --prefix)/etc/dnsmasq.conf"
-grep 'blog.test' "$(brew --prefix)/etc/dnsmasq.conf"      # 규칙이 들어갔는지
+printf 'listen-address=127.0.0.1\nbind-interfaces\n' >> "$(brew --prefix)/etc/dnsmasq.conf"   # 내 컴퓨터만
+grep -E 'blog.test|listen-address|bind-interfaces' "$(brew --prefix)/etc/dnsmasq.conf"   # 세 줄이 보이면 됨
 
 # ── 2. dnsmasq 켜기 (53번 포트를 쓰므로 sudo, 컴퓨터를 켤 때 자동 시작) ──
 sudo brew services start dnsmasq
 sudo brew services list | grep dnsmasq                  # started 이면 성공
 
-# ── 3. .test 이름은 dnsmasq에 묻게 하기 ───────────────
+# ── 3. *.blog.test 이름은 dnsmasq에 묻게 하기 ─────────
 sudo mkdir -p /etc/resolver
-echo 'nameserver 127.0.0.1' | sudo tee /etc/resolver/test
-scutil --dns | grep -A3 'domain   : test'               # resolver 등록 확인
+echo 'nameserver 127.0.0.1' | sudo tee /etc/resolver/blog.test
+scutil --dns | grep -A3 'domain   : blog.test'          # resolver 등록 확인
+# 예전에 /etc/resolver/test로 만들었다면 둘 중 하나만 남긴다: sudo rm /etc/resolver/test
 
 # ── 4. 기존 /etc/hosts의 blog.test 줄 되돌리기 ─────────
 sudo cp /etc/hosts /etc/hosts.backup-$(date +%Y%m%d)    # 혹시 몰라 백업
@@ -611,14 +640,14 @@ ping -c 1 xyz-anything.blog.test                       # 처음 보는 이름도
 dscacheutil -q host -a name myfirst.blog.test          # ip_address: 127.0.0.1
 ```
 
-브라우저는 완전히 껐다 켜거나 시크릿 창으로 `http://{아무 블로그}.blog.test:8080`을 연다.
+브라우저는 완전히 껐다 켜거나 시크릿 창으로 `http://{아무 블로그}.blog.test:8080`을 연다. `ERR_CONNECTION_REFUSED`가 나오면 DNS는 된 것이고 Spring 서버가 꺼져 있는 것이다(3.5 표).
 
 **되돌리기 (dnsmasq를 그만 쓰고 hosts로 돌아갈 때)**
 
 ```bash
 sudo brew services stop dnsmasq
-sudo rm /etc/resolver/test
-sudo sed -i '' '/address=\/blog.test\//d' "$(brew --prefix)/etc/dnsmasq.conf"
+sudo rm -f /etc/resolver/blog.test /etc/resolver/test
+sudo sed -i '' -e '/address=\/blog.test\//d' -e '/^listen-address=127.0.0.1$/d' -e '/^bind-interfaces$/d' "$(brew --prefix)/etc/dnsmasq.conf"
 sudo cp /etc/hosts.backup-YYYYMMDD /etc/hosts           # 4단계에서 만든 백업 날짜로
 sudo dscacheutil -flushcache; sudo killall -HUP mDNSResponder
 # brew uninstall dnsmasq                                # 아예 지우려면
@@ -654,10 +683,16 @@ sudo dscacheutil -flushcache; sudo killall -HUP mDNSResponder
 <details><summary>답</summary>이름을 IP로 바꾸는 단계(DNS)에서 실패해 요청이 서버에 닿지도 않았기 때문이다. 서버의 Host 해석(BlogHostResolver)은 그다음 단계라 이 오류와 관계없다.</details>
 
 10. dnsmasq를 설치하고 규칙을 넣었는데도 `alpha.blog.test`가 열리지 않는다. 무엇을 빠뜨렸을 가능성이 큰가?
-<details><summary>답</summary><code>/etc/resolver/test</code>(내용 <code>nameserver 127.0.0.1</code>)를 만들지 않아 macOS가 <code>.test</code> 이름을 dnsmasq에 묻지 않는 경우다. 또는 dnsmasq가 켜지지 않았거나(<code>sudo brew services list</code>), 예전 답이 캐시에 남아 있는 경우다.</details>
+<details><summary>답</summary><code>/etc/resolver/blog.test</code>(내용 <code>nameserver 127.0.0.1</code>)를 만들지 않아 macOS가 <code>*.blog.test</code> 이름을 dnsmasq에 묻지 않는 경우다. 또는 dnsmasq가 켜지지 않았거나(<code>sudo brew services list</code>), 예전 답이 캐시에 남아 있는 경우다.</details>
 
 11. 실제 배포에서 블로그 1만 개를 HTTPS로 열려면 DNS와 인증서에 각각 무엇이 필요한가?
 <details><summary>답</summary>DNS에는 <code>*</code> A 레코드 한 줄(플랫폼용 <code>@</code> 포함), 인증서는 <code>*.blog.com</code> 와일드카드 인증서 하나다. Let's Encrypt라면 DNS-01 방식(TXT 레코드로 소유 증명)으로 받는다.</details>
+
+12. `/etc/resolver/blog.test`와 dnsmasq의 `address=/blog.test/127.0.0.1`은 각각 무엇을 정하나?
+<details><summary>답</summary><code>/etc/resolver/blog.test</code>는 macOS가 어떤 이름을 dnsmasq에 물을지(<code>*.blog.test</code>만)를 정하고, dnsmasq 규칙은 물어 온 이름에 뭐라고 답할지(127.0.0.1)를 정한다. 와일드카드 답은 dnsmasq 규칙이 한다.</details>
+
+13. dnsmasq를 켜 둔 채 Spring 서버를 끄고 블로그 주소를 열면 어떤 오류가 나고, NXDOMAIN과 무엇이 다른가?
+<details><summary>답</summary><code>ERR_CONNECTION_REFUSED</code>다. 이름은 127.0.0.1로 찾았지만 8080번에서 받는 프로그램이 없다는 뜻이다. NXDOMAIN은 이름 찾기 자체가 실패한 것이다.</details>
 
 ## 9. 더 읽을거리
 
