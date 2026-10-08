@@ -33,7 +33,11 @@
 ## 기술 규칙
 
 - Java 21, Spring Boot 4.1(pom.xml 기준), Maven(`./mvnw`). 3.x 예제를 그대로 쓰지 않는다(스타터 이름, Flyway 스타터, Jackson 3 등이 다르다).
-- 기본 패키지 `com.nhnacademy.blog`, 아래는 기능 단위 패키지(plan.md 구조).
+- 기본 패키지 `com.nhnacademy.blog`, 아래는 기능 단위 패키지(plan.md 구조). 기능 패키지 안은 세 계층으로 나눈다(2026-10-08 지원 결정).
+  - `domain/`: 엔티티, enum, Repository
+  - `application/`: Service
+  - `presentation/`: Controller, 요청·응답 DTO는 `presentation/dto/`
+  - 의존은 presentation → application → domain 한 방향. 여러 기능이 같이 쓰는 것은 `global/`(config, entity, error, security, web).
 - DB는 MySQL 8. 개발은 `docker compose up -d`, 테스트는 Testcontainers. H2는 쓰지 않는다(schema.sql이 H2에서 안 돌아감).
 - 테이블은 Flyway가 만든다. `V1__init.sql`은 `../blog-docs/specs/001-tistory-blog/erd/schema.sql`을 그대로 복사한 것이고, 이미 적용된 마이그레이션 파일은 고치지 않는다. JPA는 `ddl-auto=validate`.
 - 엔티티는 schema.sql의 컬럼·제약에 맞춘다. 참/거짓 컬럼 `is_x`는 필드 `x` + `@Column(name = "is_x")`, 열거값은 `EnumType.STRING`.
