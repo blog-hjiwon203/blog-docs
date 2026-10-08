@@ -160,6 +160,8 @@ MNG-03의 인기 글 순위는 테이블을 따로 두지 않고 누적은 `post
 
 목록용 조건은 ④를 쿼리 조건으로 바꾼 것이다. 주인이 자기 블로그를 볼 때만 ④를 건너뛴다.
 
+블로그 화면(메인 글 목록, 카테고리별 목록, 글 수, 사이드바 최근 글·최근 댓글)에서 주인이 보는 글은 **삭제되지 않은 발행 글 전부**다. 비공개·구독자 공개·숨긴 글은 들어가고, 임시저장·예약 글은 빠진다(관리 화면의 글 관리에서 본다). 발행 순서로 정렬하는 목록이라 발행 시각이 없는 글을 넣지 않는다(2026-10-08 지원 결정, 코드 `PostSpecifications.listedIn`).
+
 ## 탈퇴 처리 (AUTH-06, Q1)
 
 한 트랜잭션으로: member.status=WITHDRAWN, withdrawn_at, email·password_hash 비우기, social_account 삭제 → 그 회원의 blog.deleted_at, post.deleted_at, comment·guestbook.deleted_at 기록 → 그 회원의 post_like, subscription, post_bookmark 삭제(공감 수·구독자 수 갱신). 블로그 주소는 행이 남아 영구 예약된다.

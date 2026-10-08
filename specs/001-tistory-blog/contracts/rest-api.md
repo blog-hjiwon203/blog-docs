@@ -244,7 +244,7 @@
 | POST | /api/auth/email-verifications | P | 누구나 | `{ email }` → 202. 인증 코드 메일 발송. 이메일 가입 회원 중 중복이면 409 `EMAIL_TAKEN`, 1분 안에 다시 요청하면 429 | OWN-01 |
 | POST | /api/auth/email-verifications/verify | P | 누구나 | `{ email, code }` → 200. 화면 단계 확인용(코드를 쓰지는 않음) | OWN-01 |
 | GET | /api/auth/nickname-availability?nickname= | P | 누구나 | `{ available }`. 형식 오류면 400 | AUTH-01 |
-| POST | /api/auth/signup | P | 누구나 | `{ email, code, password, nickname }` → 201 `Me` + 로그인 쿠키. 서버가 코드를 다시 확인하고 `verified_at`을 남긴다 | AUTH-01, OWN-01 |
+| POST | /api/auth/signup | P | 누구나 | `{ email, code, password, nickname }` → 201 `Me` + 로그인 쿠키. 서버가 코드를 다시 확인하고 `verified_at`을 남긴다. 비밀번호는 8자 이상 영문+숫자, 72바이트 이하(아니면 400 `VALIDATION_FAILED`, `field: password`) | AUTH-01, OWN-01 |
 | POST | /api/auth/login | P | 누구나 | `{ email, password, rememberMe }` → 200 `Me` + 쿠키. 실패 401 `LOGIN_FAILED`, 정지 403 `MEMBER_SUSPENDED` | AUTH-01, AUTH-03, ADMIN-02 |
 | POST | /api/auth/logout | \* | 회원 | 204. 쿠키 삭제 + 토큰 무효화. 모든 블로그 주소에서 로그아웃 | AUTH-02 |
 | POST | /api/auth/token/refresh | \* | 누구나 | Refresh 쿠키로 Access 쿠키 재발급. 정지·탈퇴면 401 | AUTH-03 |
@@ -327,7 +327,7 @@
 
 | 메서드 | 경로 | Host | 권한 | 설명 | ID |
 | --- | --- | --- | --- | --- | --- |
-| GET | /api/posts?page=&size=&categoryId=&tag= | B | 누구나 | 블로그 글 목록 10, 최신순. `categoryId`면 하위 카테고리 글 포함, `categoryId=0`은 미분류 | BLOG-03, CAT-02, TAG-02 |
+| GET | /api/posts?page=&size=&categoryId=&tag= | B | 누구나 | 블로그 글 목록 10, 최신순. `categoryId`면 하위 카테고리 글 포함, `categoryId=0`은 미분류. 주인에게는 비공개·숨긴 글을 포함한 발행 글 전부(임시저장·예약 제외) | BLOG-03, CAT-02, TAG-02 |
 | GET | /api/posts/{id} | B | 누구나 | `PostDetail`. 볼 수 없으면 404, 구독자 공개를 구독 안 한 사람이 열면 403 `SUBSCRIBERS_ONLY` | POST-04, POST-10, POST-12 |
 | POST | /api/posts | B | 주인 | [글 저장 본문](#글-저장-본문) → 201 `{ id, status, url }`. `Idempotency-Key` 필수 | POST-01, POST-08, POST-13 |
 | GET | /api/manage/posts/{id} | B | 주인 | 편집용. 본문 + 임시저장·예약·숨김 상태와 `blind` 사유 | POST-02, POST-08 |
