@@ -4,15 +4,45 @@ description: "지원 서비스 구현 작업 (2주 일정 기준)"
 
 # 작업 목록 (Tasks): 티스토리형 블로그 (지원)
 
-> **이 문서는?** 지원의 2주 작업 목록이다. 구현 계획을 실제로 할 일(T001~T073)로 쪼개 주차와 순서, 의존 관계를 붙였다. `/speckit-implement`가 이 순서대로 구현한다. 전체 문서 안내는 [README](../../README.md)에 있다.
+> **이 문서는?** 지원의 2주 작업 목록이다. 구현 계획을 실제로 할 일(T001~T073)로 쪼개 주차와 순서, 의존 관계를 붙였다. 실제 구현은 아래 [구현 스텝과 검토 포인트](#구현-스텝과-검토-포인트)대로 한 스텝씩 하고, 스텝마다 지원이 확인한 뒤 넘어간다. 전체 문서 안내는 [README](../../README.md)에 있다.
 
-**입력**: `specs/001-tistory-blog/` 의 spec.md, plan.md, research.md, data-model.md, contracts/rest-api.md
+**입력**: `specs/001-tistory-blog/` 의 spec.md, plan.md, research.md, data-model.md, contracts/rest-api.md, erd/schema.sql(테이블의 기준), mockups/(화면의 기준)
 
 **선행 문서**: plan.md, spec.md
 
 **테스트**: spec의 핵심 규칙(가시성 404, 권한, 연타, 주소 불변)은 MockMvc 통합 테스트로 남긴다. 나머지는 2주차 후반 "테스트 보강"에서.
 
 **일정 표시**: `[W1]` 1주차, `[W2a]` 2주차 전반, `[W2b]` 2주차 후반 (원본 7장). 표시 없는 단계는 2주 범위 밖.
+
+## 구현 스텝과 검토 포인트
+
+아래 "N단계"는 유저 스토리별 묶음이고, 실제로 만드는 순서는 이 표의 **스텝**이다. 한 스텝은 브랜치·PR 하나 크기로, 끝나면 앱이 뜨고 테스트가 통과하는 상태여야 한다.
+
+**Claude Code CLI에 시키는 법**: `/speckit-implement 스텝 3만 진행하고 멈춰` 처럼 스텝 번호를 준다. Claude Code는 그 스텝의 작업만 하고, 끝난 작업은 `[X]`로 바꾸고, 아래 "끝났을 때 보여 줄 것"을 정리한 뒤 멈춘다. 지원이 "확인할 것"을 보고 PR을 병합하면 다음 스텝을 시킨다.
+
+**모든 스텝에 공통으로 끝났을 때 보여 줄 것**: `./mvnw test` 결과, 바뀐 파일 목록, 만든 API 목록(contracts/rest-api.md와 다른 점이 있으면 그 이유), 미룬 것.
+
+| 스텝 | 주차 | 작업 | 확인할 것 (지원) |
+| --- | --- | --- | --- |
+| 1 프로젝트 뼈대 | W1 | T001~T004, T016a | `docker compose up -d` 후 `./mvnw spring-boot:run`이 뜨고 MySQL에 테이블 26개가 생김(Flyway), `npm run dev` 화면이 뜨고 `/api` 프록시가 됨, `./mvnw test` 통과 |
+| 2 공통 기반 | W1 | T005, T006, T012, T013, T014 | 일부러 낸 400·404·500 응답 모양이 COM-02대로인지(500에 스택 없음), ADMIN 계정이 들어갔는지, 정화 테스트에서 `<script>`·`onerror`가 빠지는지 |
+| 3 인증 틀·주소 해석·가시성 | W1 | T007~T011, T015, T016, T050 | `alpha.blog.test:8080`이 블로그로, `blog.test:8080`이 플랫폼으로 해석되는지(R-04), 가시성 판단 단위 테스트(볼 수 없는 글 404가 401보다 먼저), Idempotency-Key 같은 키 두 번에 같은 응답 |
+| 4 가입·블로그 개설 (US1) | W1 | T017~T027 | quickstart "P0 한 바퀴" 1~2, 블로그 주소 사이 로그인 유지, 6번째 블로그 거절. 화면은 목업 signup·login·blog-create·blog-main과 비교 |
+| 5 글쓰기 (US2 글·카테고리) | W1 | T028~T035, T040 | quickstart 3 중 이미지·태그를 뺀 부분, 수정 후 주소·순서 불변, 카테고리 삭제 시 미분류. 목업 manage-write·manage-categories |
+| 6 읽기·댓글·권한 (US3 일부, US4) | W1 | T041~T045, T051, T052 | **1주차 시연**: quickstart "P0 한 바퀴" 1~6(공감 제외), "권한·가시성" 표 전부 |
+| 7 이미지·태그·공감·검색·답글 | W2a | T036~T039, T046~T049, T069 | quickstart 3 전체(이미지·태그), 공감 연타 1개, 블로그 검색, 답글 있는 댓글 삭제 표시 |
+| 8 조회수·인기 글 | W2a | T053, T054, T063 | 같은 사람 5분 안 재조회는 조회수 그대로, 홈 인기 글(캐시 5분), 사이드바 태그 목록 |
+| 9 회원정보·주제·하위 카테고리·내 글 관리 | W2b | T055, T056, T060, T064, T067 | 회원정보 수정, 주제별 글 탭, 하위 카테고리 트리와 상위 합산, 내 글 관리 필터·일괄 변경. 목업 mypage·manage-posts·home |
+| 10 비슷한 글 추천 (도전, 빼도 됨) | W2b | T069a~T069d | 시작 전에 임베딩 방법(R-02 미결정)을 정한다. 볼 수 없는 글이 추천에 안 나오는지 |
+| 11 마무리 | W2b | T070~T073 | quickstart 전 항목, 360px 화면, 글 링크 공유 미리보기 |
+
+- 스텝 1의 T016a는 Redis뿐 아니라 개발용 MySQL도 같은 `docker-compose.yml`에 넣는다(R-02).
+- T050(`BlogOwnerGuard`)은 6단계에 적혀 있지만 블로그 수정(T023)이 먼저 쓰므로 스텝 3에서 만든다.
+- 엔티티를 만드는 작업(T005, T021, T028, T038, T043 등)은 `erd/schema.sql`의 컬럼·제약에 맞춘다. 테이블은 스텝 1에서 Flyway로 한 번에 다 만들어 두고, 엔티티는 스텝마다 필요한 것만 쓴다.
+- 스텝 안에서 명세와 다르게 해야 할 것이 생기면 구현을 멈추고 지원에게 묻는다. 명세를 바꾸기로 하면 이 저장소(blog-docs)의 문서를 먼저 고친다.
+- 백로그(T057~T059, T060a~T062, T065, T066, T068, T074~T087)는 스텝 11 이후 지원이 고른 순서대로 스텝 12부터 붙인다.
+
+---
 
 ## 형식: `[ID] [P?] [스토리] [주차] 설명 (기능 코드)`
 
@@ -24,9 +54,9 @@ description: "지원 서비스 구현 작업 (2주 일정 기준)"
 
 ## 1단계: 프로젝트 준비 (Setup)
 
-- [ ] T001 [W1] Gradle Spring Boot 프로젝트 생성 (Web, Security, Data JPA, Validation, Cache, H2, MySQL 드라이버) in `backend/build.gradle`
+- [ ] T001 [W1] Maven Spring Boot 프로젝트 생성, Maven Wrapper 포함 (Web, Security, Data JPA, Validation, Cache, Data Redis, Flyway(flyway-mysql), MySQL 드라이버, Testcontainers MySQL) in `backend/pom.xml`
 - [ ] T002 [P] [W1] Vite + React + TypeScript 프로젝트, `/api` → 8080 프록시 in `frontend/vite.config.ts`
-- [ ] T003 [P] [W1] `application.yml` 프로필 분리(dev: H2 MySQL 모드 파일 저장, prod: MySQL), `TZ=Asia/Seoul` in `backend/src/main/resources/`
+- [ ] T003 [P] [W1] `application.yml` 프로필 분리(dev: docker compose MySQL, prod: MySQL), `jpa.hibernate.ddl-auto=validate`, `TZ=Asia/Seoul`, `erd/schema.sql`을 `db/migration/V1__init.sql`로 복사 in `backend/src/main/resources/` (R-02)
 - [ ] T004 [P] [W1] 프론트 빌드 결과를 `backend/src/main/resources/static`으로 복사하는 빌드 스크립트
 
 ---
@@ -43,11 +73,11 @@ description: "지원 서비스 구현 작업 (2주 일정 기준)"
 - [ ] T010 [W1] 화면 주소 처리: `/api/**` 외 요청은 블로그·글 확인 후 `index.html` 포워드, 301은 서버가 직접 in `global/config/SpaForwardController.java` (6장 ①)
 - [ ] T011 [W1] 가시성 판단 `PostVisibilityPolicy` (data-model 글 가시성 판단, 볼 수 없는 글은 401보다 먼저 404)와 목록용 공통 조건(Specification/QueryDSL) in `global/visibility/` (COM-01, POST-04)
 - [ ] T012 [W1] 페이지 요청 보정(size 1~50, page 음수→0)과 페이지·커서 응답 DTO in `global/web/` (R-06)
-- [ ] T013 [P] [W1] `data.sql`에 ADMIN 초기 계정 in `backend/src/main/resources/` (ADMIN-01)
+- [ ] T013 [P] [W1] ADMIN 초기 계정(ERD의 "data.sql")을 Flyway `V2__admin_account.sql`로 넣기 in `backend/src/main/resources/db/migration/` (ADMIN-01)
 - [ ] T014 [P] [W1] XSS: OWASP HTML Sanitizer 허용 목록 `HtmlSanitizer`, jsoup 요약 `SummaryExtractor`, CSP 헤더 in `global/security/` (R-05, 기능 명세 공통 규칙 보안)
 - [ ] T015 [P] [W1] 프론트 라우터: 플랫폼 도메인 / 블로그 서브도메인 분기, API 클라이언트(쿠키 자동 전송 + CSRF 헤더, 401 → 플랫폼 로그인 후 원래 주소 복귀) in `frontend/src/app/`, `frontend/src/api/`
 - [ ] T016 [W1] 연타 방지: `Idempotency-Key` 인터셉터, 키·첫 응답을 Redis에 짧은 TTL로 저장 in `global/web/` (R-09, POST-01, CMT-01)
-- [ ] T016a [P] [W1] Redis 연결 설정, Spring Cache 저장소를 Redis로, 로컬 `docker-compose.yml`(Redis) in `global/config/`, 저장소 루트 (R-02)
+- [ ] T016a [P] [W1] Redis 연결 설정, Spring Cache 저장소를 Redis로, 로컬 `docker-compose.yml`(MySQL 8, Redis) in `global/config/`, 저장소 루트 (R-02)
 
 **중간 점검**: 인증·권한·Host 해석·가시성 판단이 준비됨
 
@@ -231,7 +261,7 @@ description: "지원 서비스 구현 작업 (2주 일정 기준)"
 
 ## 구현 전략
 
-1. **1주차**: 1~6단계 중 [W1] 전부 → P0 한 바퀴 시연 (quickstart 1~6, 권한 표)
-2. **2주차 전반**: 이미지, 공감, 답글, 태그·검색, 조회수·인기 글
-3. **2주차 후반**: 회원정보, 내 글 관리, 주제, 하위 카테고리, (도전) 비슷한 글 추천, 테스트·문서
-4. 각 중간 점검에서 spec 수용 시나리오로 확인하고 커밋 메시지에 기능 코드를 쓴다 (constitution VII)
+1. **1주차**: 스텝 1~6 ([W1] 전부) → P0 한 바퀴 시연 (quickstart 1~6, 권한 표)
+2. **2주차 전반**: 스텝 7~8. 이미지, 공감, 답글, 태그·검색, 조회수·인기 글
+3. **2주차 후반**: 스텝 9~11. 회원정보, 내 글 관리, 주제, 하위 카테고리, (도전) 비슷한 글 추천, 테스트·문서
+4. 스텝이 끝날 때마다 위 표의 "확인할 것"으로 지원이 확인하고 PR을 병합한다. 커밋 메시지에 기능 코드를 쓴다 (constitution VII)

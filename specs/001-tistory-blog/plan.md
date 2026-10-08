@@ -12,13 +12,13 @@
 
 ## 기술 맥락 (Technical Context)
 
-**언어/버전**: Java 17+ (Spring Boot 3.x), TypeScript/JavaScript (React 18) — 버전은 [research.md R-01](./research.md) 기본값
+**언어/버전**: Java 17+ (Spring Boot 3.x, **Maven**, Maven Wrapper `mvnw` 포함), TypeScript/JavaScript (React 18) — 버전은 [research.md R-01](./research.md) 기본값
 
-**주요 의존성**: Spring Boot (Web, Security, Data JPA, Validation, Cache, Data Redis), JWT 라이브러리, OWASP Java HTML Sanitizer, jsoup / React, React Router, Vite, Tiptap, DOMPurify
+**주요 의존성**: Spring Boot (Web, Security, Data JPA, Validation, Cache, Data Redis), Flyway, JWT 라이브러리, OWASP Java HTML Sanitizer, jsoup / React, React Router, Vite, Tiptap, DOMPurify
 
-**저장소**: 주 DB는 개발 H2(MySQL 호환 모드, 파일 저장) / 운영 MySQL. Redis는 캐시(@Cacheable, TTL 5분)와 연타 방지 키 저장. PostgreSQL + pgvector는 비슷한 글 추천(OWN-06) 전용으로 2주 안에 도전(도전 과제, R-02). 이미지는 서버 로컬 `./uploads/`(UUID 파일명), DB에는 경로·원본 파일명·크기만.
+**저장소**: 주 DB는 MySQL 8 (개발은 docker compose의 MySQL, 운영 MySQL). 테이블은 Flyway가 [erd/schema.sql](./erd/schema.sql)로 만들고 JPA는 `ddl-auto=validate`로 엔티티가 스키마와 맞는지만 확인한다 (R-02). Redis는 캐시(@Cacheable, TTL 5분)와 연타 방지 키 저장. PostgreSQL + pgvector는 비슷한 글 추천(OWN-06) 전용으로 2주 안에 도전(도전 과제, R-02). 이미지는 서버 로컬 `./uploads/`(UUID 파일명), DB에는 경로·원본 파일명·크기만.
 
-**테스트**: JUnit 5 + Spring Boot Test + MockMvc(백엔드), Vitest(프론트, 최소) — 원본에 없어 기본값으로 둠 (R-01)
+**테스트**: JUnit 5 + Spring Boot Test + MockMvc(백엔드, DB는 Testcontainers MySQL), Vitest(프론트, 최소) — 원본에 없어 기본값으로 둠 (R-01). 실행은 `./mvnw test`
 
 **대상 플랫폼**: Linux 서버 1대, 와일드카드 도메인 `*.blog.com` → 같은 서버. 로컬은 hosts에 넣은 `myblog.blog.test:8080` (쿠키 공유 확인용, R-03)
 
@@ -102,8 +102,11 @@ specs/001-tistory-blog/
 ### 소스 코드 (저장소 루트)
 
 ```text
+docker-compose.yml          # 개발용 MySQL 8, Redis (도전 과제 때 PostgreSQL + pgvector 추가)
+
 backend/
-├── build.gradle
+├── pom.xml
+├── mvnw, .mvn/
 └── src/
     ├── main/java/com/blog/
     │   ├── global/          # config(Security, Cache, Web), error(공통 오류 응답), host(서브도메인 해석), visibility(가시성 판단)
@@ -124,7 +127,7 @@ backend/
     │   ├── admin/           # 서비스 관리
     │   ├── image/
     │   └── recommend/       # 비슷한 글 추천 (PostgreSQL + pgvector, 도전 과제)
-    ├── main/resources/      # application.yml, data.sql(ADMIN 초기 계정), static/(React 빌드 결과)
+    ├── main/resources/      # application.yml, db/migration/(V1__init.sql = erd/schema.sql, 이후 V2…), ADMIN 초기 계정(Flyway 데이터 마이그레이션), static/(React 빌드 결과)
     └── test/java/com/blog/
 
 frontend/
@@ -137,6 +140,12 @@ frontend/
 ```
 
 **구조 결정**: 웹 애플리케이션 구조. 빌드 시 `frontend/dist`를 `backend/src/main/resources/static`으로 복사해 jar 하나로 배포한다. 백엔드는 기능(도메인) 단위 패키지.
+
+**스키마 관리**: Crowfoot ERD → `erd/schema.sql` → `backend/src/main/resources/db/migration/V1__init.sql`로 복사. 스키마를 바꿀 때는 Crowfoot을 고치고 변경분만 `V2__….sql`처럼 새 파일로 더한다(이미 적용된 V1은 고치지 않는다). 엔티티는 테이블에 맞춰 쓰고, 맞지 않으면 앱이 뜰 때 validate가 실패한다.
+
+## 구현 순서와 검토
+
+구현은 [tasks.md의 "구현 스텝과 검토 포인트"](./tasks.md#구현-스텝과-검토-포인트) 순서대로 한 스텝씩 한다. 한 스텝 = 브랜치·PR 하나이고, 스텝이 끝나면 Claude Code가 멈추고 지원이 확인한 뒤 다음 스텝으로 넘어간다.
 
 ## 복잡도 기록 (Complexity Tracking)
 

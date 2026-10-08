@@ -82,7 +82,7 @@
 2. 처음 한 번은 기능 폴더를 알려 준다: `SPECIFY_FEATURE_DIRECTORY=specs/001-tistory-blog` 환경 변수를 주거나, 첫 스킬을 실행할 때 폴더를 말해 준다. (`.specify/feature.json`은 Spec Kit 기본 설정상 git에서 빠진다.)
 3. [지원이 확인할 것](specs/001-tistory-blog/review.md)의 B(Claude가 정한 것)를 확인한다. 미결정 질문은 없어서 `/speckit-clarify`는 새 질문이 생길 때만 쓴다
 4. `/speckit-analyze`: 기능 명세·구현 계획·작업 목록이 서로 맞는지 점검
-5. `/speckit-implement`: 작업 목록 순서대로 구현
+5. `/speckit-implement 스텝 1만 진행하고 멈춰`: [작업 목록의 구현 스텝](specs/001-tistory-blog/tasks.md#구현-스텝과-검토-포인트)을 하나씩 구현한다. 스텝마다 "확인할 것"을 보고 PR을 병합한 뒤 다음 스텝을 시킨다. 빌드는 Maven(`./mvnw`), 개발 DB·Redis는 `docker compose up -d`
 6. 다 만들면 기능 명세의 수용 시나리오와 빠른 시작으로 확인한다
 
 ## 폴더 구성
