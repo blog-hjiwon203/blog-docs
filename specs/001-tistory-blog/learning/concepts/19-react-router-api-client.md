@@ -1,6 +1,6 @@
 # 19. React 화면 나누기와 API 클라이언트
 
-> 관련 스텝: [스텝 3](../step-03.md) (T015), [스텝 1](../step-01.md) (T002) · 관련 개념: [15-subdomain-host-routing](./15-subdomain-host-routing.md), [18-spa-server-routing](./18-spa-server-routing.md), [13-csrf-samesite-cors](./13-csrf-samesite-cors.md), [17-idempotency-redis](./17-idempotency-redis.md), [07-spring-mvc-exception-handling](./07-spring-mvc-exception-handling.md)
+> 관련 스텝: [스텝 3](../step-03.md) (T015), [스텝 1](../step-01.md) (T002), [스텝 4](../step-04.md) (화면 라우트 추가, 본문 없는 2xx 처리) · 관련 개념: [25-react-forms-data](./25-react-forms-data.md), [21-signup-login](./21-signup-login.md), [15-subdomain-host-routing](./15-subdomain-host-routing.md), [18-spa-server-routing](./18-spa-server-routing.md), [13-csrf-samesite-cors](./13-csrf-samesite-cors.md), [17-idempotency-redis](./17-idempotency-redis.md), [07-spring-mvc-exception-handling](./07-spring-mvc-exception-handling.md)
 
 ## 1. 이 문서로 배우는 것
 
@@ -9,7 +9,7 @@
 - 왜 React Router 8이 아니라 7을 쓰나
 - 주소(플랫폼/블로그)에 따라 다른 라우트 묶음을 그리는 방법(`host.ts`, `App.tsx`)
 - `fetch` API 기초: Promise, `async`/`await`, `Response.ok`, `json()`, `credentials`
-- 이 프로젝트의 `api()` 함수를 한 줄씩: 헤더, `ApiError`, 204, 401이면 로그인 후 원래 주소로, `allowAnonymous`
+- 이 프로젝트의 `api()` 함수를 한 줄씩: 헤더, `ApiError`, 본문 없는 성공(202·204), 401이면 로그인 후 원래 주소로, `allowAnonymous`
 - 연타 방지 키(`crypto.randomUUID`)와 그 함정
 - TypeScript 기초: `type`/`interface`, 유니온 타입, `unknown`과 타입 단언, 제네릭
 - Vitest로 테스트하기(`vi.fn`, `vi.stubGlobal`), oxlint, 빌드에서 테스트 타입 오류가 났던 사건
@@ -37,7 +37,7 @@
 React 화면은 **컴포넌트**(화면 조각을 돌려주는 함수)의 조합이다.
 
 ```tsx
-// frontend/src/pages/blog/BlogMainPage.tsx
+// frontend/src/pages/blog/BlogMainPage.tsx (스텝 3 때의 자리 화면. 스텝 4에서 진짜 화면으로 바뀌었다)
 export default function BlogMainPage({ address }: { address: string }) {
   return (
     <main>
@@ -155,14 +155,14 @@ export type Host = { kind: 'platform' } | { kind: 'blog'; address: string }
 1. 서버(SpaForwardController)가 index.html을 줌 ([18])
 2. 브라우저가 /assets/index-해시.js 실행 → main.tsx → <App />
 3. App: parseHost("alpha.blog.test") → { kind: 'blog', address: 'alpha' }
-        → <BrowserRouter><BlogRoutes address="alpha" /></BrowserRouter>
+        → <BrowserRouter><BlogRoutes /></BrowserRouter>   (스텝 3에서는 address="alpha"를 넘겼다. 5.2)
 4. BlogRoutes: 지금 경로 /manage/posts
         /             안 맞음
         /:postId      한 칸만 받으므로 안 맞음 (두 칸이라)
         /manage/*     맞음 → <ManagePage />
-5. ManagePage가 데이터를 위해 api('/api/manage/...') 호출 (스텝 4 이후)
-        → 401이면 http://blog.test:8080/login?redirect=http%3A%2F%2Falpha.blog.test%3A8080%2Fmanage%2Fposts 로 이동
-6. 로그인 화면(스텝 4)이 로그인 성공 후 redirect 주소로 돌려보냄
+5. ManagePage가 api('/api/me'), api('/api/blog')를 부름 (스텝 4)
+        → 비회원이면 http://blog.test:8080/login?redirect=http%3A%2F%2Falpha.blog.test%3A8080%2Fmanage%2Fposts 로 이동
+6. 로그인 화면이 로그인 성공 후 redirect 주소로 돌려보냄 (우리 주소인지 safeRedirect로 확인, [21](./21-signup-login.md))
 ```
 
 ## 5. 이 프로젝트에서는
@@ -218,14 +218,16 @@ export default function App() {
   const host = parseHost(window.location.hostname)
   return (
     <BrowserRouter>
-      {host.kind === 'platform' ? <PlatformRoutes /> : <BlogRoutes address={host.address} />}
+      {host.kind === 'platform' ? <PlatformRoutes /> : <BlogRoutes />}
     </BrowserRouter>
   )
 }
 ```
 
 - `window.location.hostname`은 포트를 뺀 호스트 이름(`alpha.blog.test`).
-- `조건 ? A : B`로 두 라우트 묶음 중 하나를 그린다. `host.kind === 'platform'`이 거짓인 쪽에서는 TypeScript가 `host`를 `{ kind: 'blog'; address }`로 좁혀서 `host.address`를 허용한다.
+- `조건 ? A : B`로 두 라우트 묶음 중 하나를 그린다.
+- 스텝 3에서는 `<BlogRoutes address={host.address} />`로 주소를 넘겼다. `host.kind === 'platform'`이 거짓인 쪽이라 TypeScript가 `host`를 `{ kind: 'blog'; address }`로 좁혀 `host.address`를 허용했다(3.4).
+- **스텝 4에서 address를 넘기지 않게 바꾼 이유**: 블로그 화면이 그리는 내용(이름, 글, 사이드바)은 모두 서버 API(`/api/blog`, `/api/posts`, `/api/blog/sidebar`)가 **요청 Host**로 블로그를 찾아 준다([15](./15-subdomain-host-routing.md)). 화면이 주소를 들고 다닐 필요가 없고, 들고 다니면 서버가 찾은 블로그와 다른 값을 쓸 위험만 생긴다. 블로그 정보를 읽는 일은 훅 `useBlog()`가 맡는다([25](./25-react-forms-data.md)).
 
 `frontend/src/app/routes.tsx`
 
@@ -235,15 +237,19 @@ export function PlatformRoutes() {
     <Routes>
       <Route path="/" element={<HomePage />} />
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/signup" element={<SignupPage />} />
+      <Route path="/blogs/new" element={<BlogCreatePage />} />
       <Route path="*" element={<NotFoundPage />} />
     </Routes>
   )
 }
 
-export function BlogRoutes({ address }: { address: string }) {
+/** 블로그 주소({address}.blog.com)의 화면. 블로그는 Host로 정하므로 주소를 따로 넘기지 않는다 */
+export function BlogRoutes() {
   return (
     <Routes>
-      <Route path="/" element={<BlogMainPage address={address} />} />
+      <Route path="/" element={<BlogMainPage />} />
+      <Route path="/category/:categoryId" element={<BlogMainPage />} />
       <Route path="/:postId" element={<PostPage />} />
       <Route path="/manage/*" element={<ManagePage />} />
       <Route path="*" element={<NotFoundPage />} />
@@ -251,6 +257,19 @@ export function BlogRoutes({ address }: { address: string }) {
   )
 }
 ```
+
+스텝 4에서 더한 라우트:
+
+| 주소 | 화면 | 쪽 |
+| --- | --- | --- |
+| `blog.com/signup` | 회원가입 | 플랫폼 |
+| `blog.com/blogs/new` | 블로그 개설 | 플랫폼 |
+| `{주소}.blog.com/category/:categoryId` | 블로그 메인과 같은 화면, 그 카테고리 글만(`0`은 미분류) | 블로그 |
+| `{주소}.blog.com/manage/*` 안의 `""`(관리 홈), `settings` | 관리 홈, 블로그 설정 | 블로그 (중첩 라우팅) |
+
+- 같은 컴포넌트(`BlogMainPage`)를 두 경로에 걸고, 화면 안에서 `useParams()`의 `categoryId`가 있는지로 전체/카테고리를 나눈다.
+- `/category/5`는 두 칸이라 한 칸만 받는 `/:postId`와 겹치지 않는다.
+- `/manage/*` 안의 중첩 `<Routes>`는 `ManagePage.tsx`에 있다(`<Route index ...>`, `<Route path="settings" ...>`). 화면 구성은 [25](./25-react-forms-data.md).
 
 - 마지막 `path="*"`는 어디에도 안 맞을 때의 404 화면이다. 서버가 404 상태로 index.html을 줬을 때도([18](./18-spa-server-routing.md)) 결국 이 화면이 그려진다.
 - `/manage/*`의 `*`는 스텝 4부터 관리 화면 안에 `<Routes>`를 하나 더 두는 **중첩 라우팅**을 위한 자리다.
@@ -339,7 +358,9 @@ export async function api<T>(path: string, options: RequestOptions = {}): Promis
   })
 
   if (response.ok) {
-    return (response.status === 204 ? undefined : await response.json()) as T   // (6)
+    // 202·204처럼 본문이 없는 성공도 있다
+    const text = await response.text()
+    return (text ? JSON.parse(text) : undefined) as T                       // (6)
   }
 
   const error = new ApiError(response.status, await readError(response))  // (7)
@@ -355,7 +376,7 @@ export async function api<T>(path: string, options: RequestOptions = {}): Promis
 3. 본문이 있을 때만 JSON이라고 알린다.
 4. 연타 방지 대상(글 발행, 댓글·방명록 작성)이면 키를 싣는다([17](./17-idempotency-redis.md)).
 5. 같은 출처라 쿠키가 실린다(위 3.3).
-6. 성공. 204면 본문이 없으니 `json()`을 부르지 않는다. `as T`는 "부른 쪽이 말한 타입이라고 믿겠다"는 단언이다. 실행 중에 모양을 검사하지는 않으므로, 서버와 프론트의 응답 모양을 rest-api.md로 맞춰 둔다.
+6. 성공. 본문을 먼저 **글자로** 읽고(`text()`), 비었으면 `undefined`, 있으면 `JSON.parse`. 스텝 3에서는 `response.status === 204`일 때만 `json()`을 건너뛰었는데, 스텝 4의 이메일 인증 요청(`202 Accepted`)과 코드 확인(`200`, 본문 없음)은 204가 아닌데도 본문이 없어 `json()`이 실패했을 것이다. 상태 코드로 맞히지 말고 **본문이 실제로 있는지**로 판단하도록 바꿨다. 테스트 `client.test.ts`의 '본문 없는 200·202도 성공이다'가 이것을 확인한다. `as T`는 "부른 쪽이 말한 타입이라고 믿겠다"는 단언이다. 실행 중에 모양을 검사하지는 않으므로, 서버와 프론트의 응답 모양을 rest-api.md로 맞춰 둔다.
 7. 실패. 본문을 COM-02로 읽어 `ApiError`를 만든다.
 8. 401이면 로그인 화면으로 보낸다. 그래도 `throw`는 한다. 이동하는 짧은 사이에 부른 쪽 코드가 "성공한 것처럼" 진행하지 않게 하려는 것이다.
 
@@ -524,8 +545,8 @@ const error = (await api('/api/posts').catch((e: unknown) => e)) as ApiError
 ## 6. 자주 하는 실수와 함정
 
 1. **fetch가 404·500에서 예외를 낼 거라 기대하기**: 내지 않는다. `response.ok`를 본다(`api()`가 대신 함).
-2. **204에 `json()` 부르기**: 오류. `api()`는 204를 처리한다. **그런데 201·202 등 다른 2xx에 본문이 없으면 여전히 `json()`이 실패한다.** rest-api.md에는 `POST /api/auth/email-verifications → 202`처럼 본문 없이 끝날 수 있는 응답이 있으므로, 스텝 4에서 이 API를 붙일 때 `api()`가 빈 본문을 처리하도록(예: `Content-Length`가 0이거나 본문이 비면 `undefined`) 고쳐야 한다.
-3. **`redirect` 값을 그대로 이동**: 오픈 리다이렉트. 우리 도메인인지 확인한다.
+2. **본문 없는 응답에 `json()` 부르기**: 오류. 204만 특별 취급하면 202·200처럼 본문 없이 끝나는 다른 성공에서 깨진다. (스텝 4에서 해결: `api()`가 `text()`로 읽고 빈 문자열이면 `undefined`, 5.3 (6). 스텝 3 노트의 "남은 문제" 202 항목이 이것이다.)
+3. **`redirect` 값을 그대로 이동**: 오픈 리다이렉트. 우리 도메인인지 확인한다. (스텝 4의 로그인 화면은 `safeRedirect()`로 확인한다, [21](./21-signup-login.md).)
 4. **`encodeURIComponent` 빼먹기**: 돌아올 주소의 쿼리가 깨진다.
 5. **재시도마다 새 연타 방지 키**: 중복 방지가 안 된다.
 6. **`crypto.randomUUID`를 http 개발 주소에서 부르기**: `TypeError`(5.4).
@@ -541,7 +562,7 @@ const error = (await api('/api/posts').catch((e: unknown) => e)) as ApiError
 
 ```bash
 cd frontend
-npm test          # 11개 통과
+npm test          # 스텝 4 기준 17개 통과(client, host, pageGroup)
 npm run build     # tsc -b && vite build
 npm run lint
 ```
@@ -572,7 +593,7 @@ typeof crypto.randomUUID   // localhost: 'function', blog.test: 'undefined'
 
 **실습 5. 라우트 확인**
 
-`npm run dev` 후 `http://localhost:5173/login?redirect=http%3A%2F%2Falpha.blog.test%3A8080%2F`을 열면 로그인 자리 화면에 "로그인 뒤 돌아갈 주소: http://alpha.blog.test:8080/"이 디코딩되어 보인다. `http://localhost:5173/없는주소`는 404 화면이다.
+`npm run dev` 후 `http://localhost:5173/login`, `/signup`, `/blogs/new`(비회원이면 로그인 화면으로 간다)를 차례로 열어 본다. `http://localhost:5173/없는주소`는 404 화면이다. (스텝 3에서는 로그인 자리 화면이 `redirect` 값을 그대로 보여 줬는데, 스텝 4의 진짜 로그인 화면은 보여 주지 않고 로그인 뒤 그 주소로 이동한다.)
 
 **실습 6. 경로 순위**
 
@@ -603,6 +624,12 @@ typeof crypto.randomUUID   // localhost: 'function', blog.test: 'undefined'
 
 8. 로그인 화면이 `redirect` 값을 확인 없이 이동하면 어떤 취약점이 되나?
 <details><summary>답</summary>오픈 리다이렉트다. 공격자가 <code>?redirect=https://evil.example</code> 링크를 퍼뜨리면, 진짜 로그인 뒤 피싱 사이트로 보내져 사용자가 속기 쉽다.</details>
+
+9. (스텝 4) `api()`가 성공 응답을 `response.status === 204`로 나누지 않고 `text()`로 읽어 빈 문자열인지 보는 이유는?
+<details><summary>답</summary>본문이 없는 성공은 204만이 아니다. 이메일 인증 요청은 202, 코드 확인은 본문 없는 200이다. 상태 코드로 나누면 이런 응답에서 <code>json()</code>이 실패한다. 본문이 실제로 있는지로 판단하면 어떤 2xx든 처리된다.</details>
+
+10. (스텝 4) `BlogRoutes`가 더는 `address` prop을 받지 않는다. 블로그 화면은 어느 블로그인지 어떻게 아나?
+<details><summary>답</summary>화면이 <code>/api/blog</code>, <code>/api/posts</code>, <code>/api/blog/sidebar</code>를 부르면 서버가 요청 Host(<code>alpha.blog.test</code>)로 블로그를 찾아 준다(<code>@CurrentBlog</code>). 화면은 주소를 들고 다닐 필요가 없다.</details>
 
 ## 9. 더 읽을거리
 
