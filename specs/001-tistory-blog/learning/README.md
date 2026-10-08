@@ -16,6 +16,7 @@
 | 4 | [가입과 블로그 개설](./step-04.md) | 이메일 인증, 가입·로그인·로그아웃, 블로그 개설·정보, 블로그 메인 글 목록, 사이드바, 첫 화면들 |
 | 5 | [글쓰기](./step-05.md) | 카테고리 관리, 글 발행·수정·삭제·공개 범위, Tiptap 에디터 |
 | 6 | [읽기·댓글·권한 (P0 완성)](./step-06.md) | 글 상세·이전·다음 글, 홈 최신 글, 댓글, 오류 화면, 관리자 영역 보호, 권한 시험 |
+| 7 | [이미지·태그·공감·검색·답글](./step-07.md) | 사진 올리기와 썸네일, 태그와 태그별 목록, 공감, 블로그 안 검색, 답글, 동시성 버그 두 개 |
 
 ## 개념 문서
 
@@ -40,9 +41,13 @@
 | [08 페이지네이션](./concepts/08-pagination.md) | offset과 keyset(커서), 정렬 안정성, 인덱스, Spring Data `Pageable` |
 | [09 비밀번호 해시와 bcrypt](./concepts/09-password-hashing.md) | 해시와 암호화, salt, cost, bcrypt 구조와 72바이트 제한 |
 | [22 입력 검증과 JSON 바인딩](./concepts/22-bean-validation.md) | Jackson 3 바인딩, Bean Validation, `@Valid`와 상태 코드 순서, 기본형 칸 누락 |
-| [29 댓글 설계](./concepts/29-comments-design.md) | 글에 딸린 데이터의 권한, 보는 사람마다 다른 댓글, 댓글 수, 연타 두 겹 |
+| [29 댓글 설계](./concepts/29-comments-design.md) | 글에 딸린 데이터의 권한, 보는 사람마다 다른 댓글, 댓글 수, 연타 두 겹, 답글 한 단계 |
+| [31 태그와 다대다 관계](./concepts/31-tags-many-to-many.md) | `@ManyToMany`와 조인 테이블, 이름 정리 규칙, 태그별 목록, 태그 입력 칸 |
+| [32 블로그 안 검색: LIKE와 비정규화 칸](./concepts/32-search-like.md) | 글자만 담은 칸과 마이그레이션, LIKE 이스케이프, EXISTS 서브쿼리, 인덱스 한계, 검색어를 주소에 |
 | [27 소프트 삭제와 일괄 수정](./concepts/27-soft-delete-bulk-update.md) | 소프트 삭제, 딸린 데이터 처리, 변경 감지, `@Modifying`, 수정 시각 지키기 |
 | [23 트랜잭션과 동시성](./concepts/23-transactions-locking.md) | `@Transactional`, 경쟁 조건, 비관적 잠금(`FOR UPDATE`), UNIQUE 제약, 동시성 테스트 |
+| [33 격리 수준, 스냅샷, 데드락](./concepts/33-isolation-deadlock.md) | 격리 수준과 MVCC, 일관된 읽기와 잠금 읽기, 외래 키 공유 잠금과 데드락, 공감 버튼에서 겪은 두 버그 |
+| [30 이미지 업로드와 처리](./concepts/30-image-upload.md) | multipart, 크기 제한, 매직 넘버, Thumbnailator·EXIF, WebP 플러그인, `/uploads` 내보내기와 캐시, 목록 썸네일 |
 
 ### 3부. 보안
 
@@ -67,7 +72,7 @@
 | [28 Thymeleaf에서 React로](./concepts/28-thymeleaf-to-react.md) | 서버 렌더링과 클라이언트 렌더링, 같은 화면 두 가지 구현, 빌드가 하는 일, 개발 서버와 빌드 스크립트 (Thymeleaf를 알면 React 문서보다 먼저) |
 | [19 React Router와 API 클라이언트](./concepts/19-react-router-api-client.md) | React 기초, React Router 7, fetch, TypeScript, Vitest |
 | [24 계층 구조와 DTO](./concepts/24-layered-architecture-dto.md) | presentation/application/domain, 엔티티 대신 DTO, `open-in-view`와 지연 로딩 |
-| [25 React 폼과 데이터 불러오기](./concepts/25-react-forms-data.md) | 제어 컴포넌트, 폼 제출과 칸별 오류, `useEffect`와 커스텀 훅, 중첩 라우트 |
+| [25 React 폼과 데이터 불러오기](./concepts/25-react-forms-data.md) | 제어 컴포넌트, 폼 제출과 칸별 오류, `useEffect`와 커스텀 훅, 중첩 라우트, 낙관적 갱신, key, `FormData` |
 | [26 WYSIWYG 에디터와 Tiptap](./concepts/26-wysiwyg-editor-tiptap.md) | ProseMirror와 Tiptap, 허용 서식 맞추기, 이중 정화, 에디터 상태 |
 
 ## 공부하는 법

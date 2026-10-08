@@ -1,6 +1,6 @@
 # 29. 댓글 설계: 글에 딸린 데이터
 
-> 관련 스텝: [스텝 6](../step-06.md) (T044, T045) · 관련 개념: [08-pagination](./08-pagination.md), [16-authorization-visibility](./16-authorization-visibility.md), [17-idempotency-redis](./17-idempotency-redis.md), [22-bean-validation](./22-bean-validation.md), [24-layered-architecture-dto](./24-layered-architecture-dto.md), [25-react-forms-data](./25-react-forms-data.md), [27-soft-delete-bulk-update](./27-soft-delete-bulk-update.md), [28-thymeleaf-to-react](./28-thymeleaf-to-react.md)
+> 관련 스텝: [스텝 6](../step-06.md) (T044, T045), [스텝 7](../step-07.md) (T069 답글) · 관련 개념: [33-isolation-deadlock](./33-isolation-deadlock.md), [08-pagination](./08-pagination.md), [16-authorization-visibility](./16-authorization-visibility.md), [17-idempotency-redis](./17-idempotency-redis.md), [22-bean-validation](./22-bean-validation.md), [24-layered-architecture-dto](./24-layered-architecture-dto.md), [25-react-forms-data](./25-react-forms-data.md), [27-soft-delete-bulk-update](./27-soft-delete-bulk-update.md), [28-thymeleaf-to-react](./28-thymeleaf-to-react.md)
 
 ## 1. 이 문서로 배우는 것
 
@@ -12,6 +12,7 @@
 - 작성순 커서 더보기와 전체 개수(`totalCount`)
 - 댓글 20개의 작성자 정보를 쿼리 한두 번으로 읽기(N+1 피하기)
 - 연타 방지 두 겹: 서버의 `Idempotency-Key`와 화면의 `inFlight` ref — 실제로 있었던 "서버엔 하나, 화면엔 둘" 버그
+- (스텝 7) 답글 한 단계: 자기 참조 외래 키(`parent_id`), 답글의 답글 막기, 답글이 남은 댓글을 지우면 "삭제된 댓글입니다" 자리 남기기, 부모 묶음 + 답글 한 번에 읽기
 
 **먼저 알면 좋은 것**: 글 가시성 판단([16](./16-authorization-visibility.md)), 커서 페이지네이션([08](./08-pagination.md)), Idempotency-Key([17](./17-idempotency-redis.md)), React의 `useState`·`useRef`([25](./25-react-forms-data.md), Thymeleaf와 비교는 [28](./28-thymeleaf-to-react.md)).
 
@@ -227,7 +228,7 @@ public record CommentRequest(
 ```
 
 - `@NotBlank`: `null`, 빈 문자열, 공백만은 거절. 저장할 때는 `content.trim()`으로 앞뒤 공백을 지운다.
-- `@Null`: 값이 있으면 실패. 답글(CMT-05)은 스텝 7이라 지금은 `parentId`를 보내면 400이다. 받아 놓고 조용히 무시하면 사용자는 답글이 달린 줄 안다.
+- `@Null`: 값이 있으면 실패. 답글(CMT-05)은 스텝 7이라 스텝 6에서는 `parentId`를 보내면 400이었다. 받아 놓고 조용히 무시하면 사용자는 답글이 달린 줄 안다. **스텝 7에서 `@Null`을 지우고 답글을 열었다(5.11).**
 - `@AssertFalse`: `false`이거나 `null`이면 통과, `true`면 실패. 비밀댓글 쓰기(CMT-06)는 백로그다. `Boolean`(참조형)이라 안 보내도 된다([22](./22-bean-validation.md)의 기본형 함정).
 - 비밀댓글을 쓰는 기능은 없지만 **보여 주는 규칙**(5.4)은 미리 만들었다. 컬럼(`is_secret`)이 있고, 나중에 쓰기만 열면 되게.
 
@@ -507,6 +508,205 @@ Thymeleaf 폼이었다면? 폼 제출은 페이지 이동이라 두 번 눌러�
 | `authorAndBlogOwnerCanDeleteOthersCannot` | 비회원 401, 남 403, `canDelete` 표시, 작성자·주인 204, 두 번째 404, 수 0 |
 | `commentOfAnotherBlogIs404OnThisAddress` | 다른 블로그 글의 댓글을 이 주소로 지우면 404, 댓글은 그대로 |
 
+### 5.11 (스텝 7) 답글 한 단계
+
+명세 CMT-05: 댓글에 답글을 달 수 있고 **한 단계까지만**이다. 답글이 있는 댓글을 지우면 답글은 남기고 그 자리에 "삭제된 댓글입니다"를 보여 준다.
+
+#### 표: 자기 자신을 가리키는 외래 키
+
+`comment` 테이블에는 처음부터(V1) `parent_id` 칸이 있었다. 같은 `comment` 테이블의 다른 행을 가리키는 외래 키다(자기 참조). 최상위 댓글은 `parent_id`가 `NULL`이고, 답글은 부모 댓글의 id를 가진다.
+
+```
+id | post_id | parent_id | content
+ 1 |      10 |      NULL | B의 댓글          ← 최상위
+ 2 |      10 |         1 | A의 답글          ← 1의 답글
+ 3 |      10 |      NULL | C의 댓글          ← 최상위
+```
+
+엔티티는 `src/main/java/com/nhnacademy/blog/comment/domain/Comment.java`에 이미 있었다.
+
+```java
+@ManyToOne(fetch = FetchType.LAZY)
+@JoinColumn(name = "parent_id")
+private Comment parent;
+...
+public static Comment reply(Comment parent, Member member, String content, boolean secret) {
+    return new Comment(parent.getPost(), member, parent, content, secret);
+}
+```
+
+- `@ManyToOne`의 대상이 자기 클래스(`Comment`)다. JPA에서 자기 참조는 다른 연관과 똑같이 쓴다([06](./06-jpa-entity-mapping.md)).
+- `reply`는 글을 따로 받지 않고 **부모의 글**을 쓴다. 답글이 부모와 다른 글에 붙는 일이 구조상 생기지 않는다.
+
+"몇 단계까지"는 표가 정하지 않는다. `parent_id`만 있으면 답글의 답글의 답글도 저장할 수 있다. 한 단계 규칙은 서버 코드가 지킨다.
+
+#### 쓰기: 부모가 될 수 있는 댓글인가
+
+요청 DTO에서 `parentId`의 `@Null`을 지웠다(5.3). 서비스의 `write`가 `parentId`를 받으면 `parentOf`로 부모를 찾는다.
+
+```java
+Comment comment = commentRepository.save(parentId == null
+        ? Comment.write(post, author, content.trim(), false)
+        : Comment.reply(parentOf(post, parentId), author, content.trim(), false));
+...
+private Comment parentOf(Post post, Long parentId) {
+    Comment parent = commentRepository.findById(parentId)
+            .filter(found -> found.getPost().getId().equals(post.getId()) && !found.isDeleted())
+            .orElseThrow(() -> BusinessException.invalidField("parentId", "답글을 달 댓글을 찾을 수 없습니다."));
+    if (parent.getParent() != null) {
+        throw BusinessException.invalidField("parentId", "답글에는 답글을 달 수 없습니다.");
+    }
+    return parent;
+}
+```
+
+줄별로:
+
+- `findById(parentId)`: 부모 후보를 읽는다. 없으면 빈 `Optional`.
+- `.filter(... post.getId() ... && !found.isDeleted())`: **주소의 글과 같은 글**의 댓글이고 지우지 않은 것만 통과한다. 이 검사가 없으면 `POST /api/posts/10/comments`에 다른 글(심지어 볼 수 없는 비공개 글)의 댓글 id를 넣어 그 글에 답글을 붙일 수 있다. 존재를 숨기는 원칙과 맞추려고 "다른 글의 댓글"과 "없는 댓글"은 같은 메시지다.
+- `orElseThrow(... invalidField("parentId", ...))`: 400 `VALIDATION_FAILED`에 `fieldErrors[0].field = "parentId"`. 글 자체는 볼 수 있는 상태라(앞에서 `writablePost` 통과) 404가 아니라 "보낸 값이 틀렸다"는 400이다.
+- `parent.getParent() != null`: 부모가 이미 답글이면 거절한다. 이것이 "한 단계"를 지키는 한 줄이다.
+- 상태 코드 순서는 그대로다: 글 404 → 비회원 401 → 댓글 막힘 403 → 입력 400(부모 검사 포함).
+
+화면도 답글에는 "답글" 버튼을 그리지 않는다. 그래도 API를 직접 부르면 서버가 막는다(화면 검사는 안내용).
+
+#### 지우기: 답글이 있으면 자리를 남긴다
+
+지우기 코드(`delete`)는 스텝 6과 거의 같다. 소프트 삭제라 행은 남고 `deleted_at`만 찍힌다. 그래서 답글의 `parent_id`가 가리키는 부모 행도 그대로 있다. 다른 것은 **목록을 읽는 쪽**이다.
+
+#### 목록: 부모 묶음과 답글을 따로, 한 번씩
+
+```java
+Specification<Comment> condition = (root, query, cb) -> {
+    Subquery<Long> liveReply = query.subquery(Long.class);
+    Root<Comment> reply = liveReply.from(Comment.class);
+    liveReply.select(reply.get("id")).where(
+            cb.equal(reply.get("parent"), root),
+            cb.isNull(reply.get("deletedAt")));
+    return cb.and(
+            cb.equal(root.get("post").get("id"), post.getId()),
+            cb.isNull(root.get("parent")),
+            cb.or(cb.isNull(root.get("deletedAt")), cb.exists(liveReply)));
+};
+```
+
+이 조건이 만드는 SQL을 풀어 쓰면 대략 이렇다.
+
+```sql
+SELECT c.* FROM comment c
+WHERE c.post_id = 10
+  AND c.parent_id IS NULL                                   -- 최상위 댓글만
+  AND (c.deleted_at IS NULL                                 -- 지우지 않았거나
+       OR EXISTS (SELECT r.id FROM comment r                -- 지웠어도 살아 있는 답글이 있으면
+                  WHERE r.parent_id = c.id AND r.deleted_at IS NULL))
+ORDER BY c.created_at, c.id
+LIMIT 21
+```
+
+- `query.subquery(...)`와 `cb.exists(...)`: Criteria API로 상관 서브쿼리(바깥 행 `c`를 안에서 참조)를 만든다. `reply.get("parent")`와 `root`를 같다고 놓은 것이 `r.parent_id = c.id`다.
+- **커서와 20개 묶음은 최상위 댓글 기준**이다. 답글까지 섞어 20개로 자르면 부모는 1쪽, 답글은 2쪽에 갈라질 수 있다.
+
+답글은 두 번째 쿼리로 한 번에 읽는다.
+
+```java
+List<Comment> replies = parents.isEmpty() ? List.of() : commentRepository.findBy(
+        (root, query, cb) -> cb.and(
+                root.get("parent").in(parents),
+                cb.isNull(root.get("deletedAt"))),
+        query -> query.sortBy(WRITTEN_ORDER).project("member").all());
+```
+
+- `root.get("parent").in(parents)`: `WHERE parent_id IN (1, 3, ...)`. 부모마다 답글을 따로 읽으면 N+1이다([06](./06-jpa-entity-mapping.md)).
+- `project("member")`: 작성자를 함께 읽는다(5.7과 같은 방법).
+- 답글은 개수 제한 없이 모두 붙인다. 한 단계라 한 댓글의 답글 수가 아주 많아지는 경우는 드물다고 보고 단순하게 갔다.
+
+그다음 `Collectors.groupingBy(reply -> reply.getParent().getId(), LinkedHashMap::new, ...)`로 부모 id별로 묶고, 부모의 `CommentView`에 `withReplies(...)`로 붙인다. `LinkedHashMap`과 `toList()`는 넣은 순서를 지켜 작성순이 유지된다.
+
+`totalCount`는 `countByPostIdAndDeletedAtIsNull`로 **지우지 않은 댓글과 답글 모두**를 센다. 글의 `comment_count`와 같은 기준이다(지울 때 −1, 답글을 쓸 때도 +1). "삭제된 댓글입니다" 자리는 세지 않는다.
+
+#### 보여 주기: DELETED 상태
+
+```java
+if (comment.isDeleted()) {
+    // 답글이 남아 자리만 있는 부모. 누구에게나 내용·작성자 없이, 다시 지울 것도 없다
+    return new CommentView(comment, CommentView.State.DELETED, null, false, null, List.of());
+}
+```
+
+- 지운 댓글이 목록에 나오는 경우는 "답글이 남은 부모"뿐이다(위 조건). 내용·작성자는 비밀댓글처럼 서버가 `null`로 보낸다(5.4와 같은 원칙). 지운 내용을 화면에서 가리는 것이 아니라 아예 보내지 않는다.
+- `canDelete`는 `false`. 이미 지운 것을 또 지울 수 없다.
+
+응답은 이런 모양이다.
+
+```json
+{ "id": 1, "parentId": null, "state": "DELETED", "content": null, "author": null,
+  "replies": [ { "id": 2, "parentId": 1, "state": "NORMAL", "content": "A의 답글", ... } ] }
+```
+
+#### 화면: Comments.tsx와 commentList.ts
+
+`frontend/src/components/Comments.tsx`는 최상위 댓글을 그리고 그 아래 `comment.replies`를 `isReply`로 들여 그린다. Thymeleaf라면 `th:each` 안에 `th:each`를 한 번 더 쓴 것과 같다([28](./28-thymeleaf-to-react.md)).
+
+새 답글을 붙일 때는 부모를 찾아 그 `replies`에만 더한다. 이미 있는 id면 붙이지 않는 연타 대비(5.8)도 답글에 똑같이 했다.
+
+```tsx
+const parent = comments.find((comment) => comment.id === created.parentId)
+if (!parent || parent.replies.some((reply) => reply.id === created.id)) {
+  return
+}
+setComments(comments.map((comment) => (comment.id === created.parentId
+  ? { ...comment, replies: [...comment.replies, created] } : comment)))
+```
+
+- `map`으로 **새 배열**을 만들고, 바뀌는 부모만 `{ ...comment, replies: [...] }`로 새 객체를 만든다. React는 state가 새 값이어야 다시 그린다. 기존 배열에 `push`하면 같은 배열이라 화면이 안 바뀔 수 있다([25](./25-react-forms-data.md)).
+
+지운 뒤의 목록 규칙은 서버의 목록 규칙과 같아야 한다(새로고침했을 때 화면이 달라지면 안 됨). 규칙이 조금 복잡해서 화면 코드와 떼어 `commentList.ts`의 순수 함수로 만들고 Vitest로 확인했다.
+
+```ts
+export function afterDelete(comments: Comment[], target: Comment): Comment[] {
+  if (target.parentId === null) {
+    return comments.flatMap((comment) => {
+      if (comment.id !== target.id) {
+        return [comment]
+      }
+      return comment.replies.length > 0
+        ? [{ ...comment, state: 'DELETED' as const, content: null, author: null,
+          viewer: { canEdit: false, canDelete: false } }]
+        : []
+    })
+  }
+  return comments.flatMap((comment) => {
+    if (comment.id !== target.parentId) {
+      return [comment]
+    }
+    const replies = comment.replies.filter((reply) => reply.id !== target.id)
+    return comment.state === 'DELETED' && replies.length === 0 ? [] : [{ ...comment, replies }]
+  })
+}
+```
+
+- `flatMap`은 원소마다 배열을 돌려받아 이어 붙인다. `[]`를 돌려주면 빠지고, `[x]`면 남는다. "빼거나 바꾸거나 그대로"를 한 번에 표현하기 좋다.
+- 최상위 댓글을 지우면: 답글이 있으면 DELETED 자리로 바꾸고, 없으면 뺀다.
+- 답글을 지우면: 그 부모에서 답글만 빼고, 부모가 DELETED 자리인데 마지막 답글이 사라졌으면 자리도 뺀다. 서버 목록 조건의 `EXISTS(살아 있는 답글)`과 같은 규칙이다.
+
+`frontend/src/components/commentList.test.ts`의 네 테스트가 이 네 경우를 하나씩 확인한다.
+
+#### 테스트
+
+`src/test/java/com/nhnacademy/blog/comment/ReplyIntegrationTest.java`
+
+| 테스트 | 확인하는 것 |
+| --- | --- |
+| `repliesAreNestedUnderParentInWrittenOrder` | 답글은 목록 최상위에 따로 나오지 않고 부모의 `replies`에 작성순으로 |
+| `replyOfReplyAndForeignParentAreRejected` | 답글의 답글, 다른 글의 댓글, 지운 댓글을 부모로 주면 400 `parentId` |
+| `deletedParentWithRepliesStaysAsPlaceholder` | 답글 있는 부모를 지우면 DELETED 자리(내용·작성자 null), 답글까지 지우면 자리도 사라짐 |
+
+`src/test/java/com/nhnacademy/blog/reaction/CountConsistencyIntegrationTest.java`의 `commentCountMatchesRowsAfterRepliesAndDeletes`는 댓글·답글을 쓰고 지운 뒤 `comment_count`가 지우지 않은 행 수와 같은지 본다.
+
+#### 동시성: 글 행을 먼저 잠근다
+
+스텝 7에서 공감을 만들다가, 같은 글에 댓글 INSERT와 댓글 수 UPDATE가 동시에 몰리면 데드락이 날 수 있다는 것을 알았다. `write`와 `delete`도 공감처럼 `postRepository.lockById(...)`로 글 행을 먼저 잠근다. 왜 그런지는 [33 격리 수준, 스냅샷, 데드락](./33-isolation-deadlock.md)에서 자세히 다룬다.
+
 ## 6. 자주 하는 실수와 함정
 
 1. **댓글 API에서 글 가시성을 따로 짜기**: 글 상세와 규칙이 어긋나면 비공개 글의 댓글이 새거나, 볼 수 있는 글에 댓글을 못 쓴다. 같은 판단 코드를 부른다.
@@ -520,6 +720,10 @@ Thymeleaf 폼이었다면? 폼 제출은 페이지 이동이라 두 번 눌러�
 9. **관리자에게 삭제 권한 주기**: 헌법 원칙 V 위반. 관리자는 숨김(되돌릴 수 있음)만.
 10. **버튼 `disabled`만으로 연타를 막았다고 생각**: state는 다음 그리기에서 반영된다. 즉시 막으려면 ref.
 11. **같은 응답을 두 번 붙임**: 서버가 같은 키에 같은 응답을 주는 것은 정상이다. 화면이 id로 중복을 거른다.
+12. **(답글) 부모가 같은 글인지 안 봄**: 주소의 글과 다른 글(비공개 글 포함)의 댓글에 답글을 붙일 수 있다. `parentOf`가 같은 글인지 확인한다.
+13. **(답글) 답글을 지운 부모를 그냥 목록에서 뺌**: 답글이 고아가 되어 사라지거나, 누구에게 단 답글인지 모르게 된다. 살아 있는 답글이 있으면 DELETED 자리로 남긴다.
+14. **(답글) 답글까지 섞어 20개로 자르기**: 부모와 답글이 다른 쪽에 갈라진다. 묶음은 최상위 기준, 답글은 부모에 모두 붙인다.
+15. **(답글) 화면의 지운 뒤 규칙과 서버의 목록 규칙이 다름**: 새로고침하면 화면이 바뀐다. 같은 규칙을 순수 함수로 떼어 테스트했다.
 
 ## 7. 직접 해 보기
 
@@ -568,6 +772,21 @@ docker exec blog-mysql mysql -ublog -pblog blog -e "UPDATE comment SET is_secret
 
 비회원·다른 회원·블로그 주인·작성자로 `GET /api/posts/{id}/comments`를 불러 `state`와 `content`를 비교한다.
 
+**실습 7. (스텝 7) 답글과 삭제 자리**
+
+```bash
+./mvnw test -Dtest='ReplyIntegrationTest' && (cd frontend && npx vitest run commentList)
+```
+
+브라우저에서: B로 댓글 → A로 그 댓글에 "답글" → B로 자기 댓글 삭제 → "삭제된 댓글입니다" 아래에 A의 답글이 남는지 본다. A가 답글도 지우면 자리째 사라진다. 새로고침해도 같은지 확인한다.
+
+curl로 답글의 답글을 시도해 400과 `fieldErrors[0].field == "parentId"`를 확인한다.
+
+```bash
+curl -s $R $H -b jar -H "Idempotency-Key: $(uuidgen)" -X POST myblog.blog.test:8080/api/posts/12/comments \
+  -d '{"content":"답글의 답글","parentId":{답글 id}}'
+```
+
 ## 8. 확인 문제
 
 1. 댓글 API가 글 상세와 같은 `PostReadService.readable`을 부르는 이유는?
@@ -596,6 +815,15 @@ docker exec blog-mysql mysql -ublog -pblog blog -e "UPDATE comment SET is_secret
 
 9. 댓글 20개를 보여 줄 때 작성자 대표 블로그 주소를 쿼리 한 번으로 읽는 방법은?
 <details><summary>답</summary>작성자 id를 모아 <code>PrimaryBlogAddresses.of(ids)</code>로 <code>where member_id in (...)</code> 한 번에 읽고, 맵에서 꺼내 쓴다. 작성자마다 찾으면 N+1이다.</details>
+
+10. (스텝 7) "한 단계 답글"은 테이블 구조가 아니라 어디서 지키나? 왜 그렇게 해도 되나?
+<details><summary>답</summary><code>parent_id</code> 칸은 몇 단계든 저장할 수 있다. 서비스의 <code>parentOf</code>가 부모의 <code>parent</code>가 있으면(이미 답글이면) 400으로 막는다. 댓글은 이 서비스로만 저장되므로 한 곳에서 지키면 된다.</details>
+
+11. (스텝 7) 답글이 있는 댓글을 지우면 응답 JSON에서 그 댓글은 어떻게 보이나? 왜 내용을 보내지 않나?
+<details><summary>답</summary><code>state: "DELETED"</code>, <code>content</code>·<code>author</code>는 <code>null</code>, <code>replies</code>에 살아 있는 답글. 지운 내용은 더 이상 보여 줄 수 없는 데이터라, 화면에서 가리지 않고 서버가 보내지 않는다.</details>
+
+12. (스텝 7) 목록을 최상위 댓글 20개 + 그 답글 전부로 읽을 때 쿼리는 몇 번이고, 왜 그렇게 나눴나?
+<details><summary>답</summary>부모 21개(다음 묶음 확인용 1개 포함) 한 번, 그 부모들의 답글을 <code>parent_id IN (...)</code>으로 한 번(작성자 주소는 따로 한 번). 답글까지 섞어 자르면 부모와 답글이 쪽 사이로 갈라지고, 부모마다 답글을 읽으면 N+1이 된다.</details>
 
 ## 9. 더 읽을거리
 
