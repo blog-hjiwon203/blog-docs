@@ -1,6 +1,6 @@
 # 25. React 폼과 데이터 불러오기
 
-> 관련 스텝: [스텝 4](../step-04.md) (T026), [스텝 5](../step-05.md) (T035 글쓰기·수정, 카테고리 관리), [스텝 6](../step-06.md) (T045 홈·글 상세·댓글, T051 오류 화면·관리자 영역) · 관련 개념: [28-thymeleaf-to-react](./28-thymeleaf-to-react.md), [29-comments-design](./29-comments-design.md), [19-react-router-api-client](./19-react-router-api-client.md), [14-xss-sanitize-csp](./14-xss-sanitize-csp.md), [16-authorization-visibility](./16-authorization-visibility.md), [18-spa-server-routing](./18-spa-server-routing.md), [15-subdomain-host-routing](./15-subdomain-host-routing.md)
+> 관련 스텝: [스텝 4](../step-04.md) (T026), [스텝 5](../step-05.md) (T035 글쓰기·수정, 카테고리 관리), [스텝 6](../step-06.md) (T045 홈·글 상세·댓글, T051 오류 화면·관리자 영역), [스텝 7](../step-07.md) (T048 공감·검색, T037 사진 올리기) · 관련 개념: [30-image-upload](./30-image-upload.md), [31-tags-many-to-many](./31-tags-many-to-many.md), [32-search-like](./32-search-like.md), [28-thymeleaf-to-react](./28-thymeleaf-to-react.md), [29-comments-design](./29-comments-design.md), [19-react-router-api-client](./19-react-router-api-client.md), [14-xss-sanitize-csp](./14-xss-sanitize-csp.md), [16-authorization-visibility](./16-authorization-visibility.md), [18-spa-server-routing](./18-spa-server-routing.md), [15-subdomain-host-routing](./15-subdomain-host-routing.md)
 
 ## 1. 이 문서로 배우는 것
 
@@ -19,6 +19,10 @@
 - 페이지 번호 묶음 계산(`pageGroup`)과 Vitest, macOS 파일 이름 대소문자 문제
 - (스텝 6) 댓글 목록·더보기·쓰기·지우기, `useRef`로 연타를 즉시 막기, 상태 갱신 함수 안에서 부모 콜백을 부르지 않기
 - (스텝 6) 판별 유니온으로 화면 상태 나누기(불러오는 중·성공·404·구독 안내·오류)와 오류 화면
+- (스텝 7) 낙관적 갱신(누르자마자 화면부터 바꾸고 서버 값으로 맞추기)과 실패 시 되돌리기 — 공감 버튼
+- (스텝 7) `key`의 진짜 역할: 같은 부모 아래 형제의 `key`가 겹치면 생긴 "공감 버튼 두 개" 버그
+- (스텝 7) 검색어를 주소(`?q=&page=`)에 두기: `useSearchParams`로 공유·새로고침·뒤로 가기에 강한 화면
+- (스텝 7) 파일 올리기: `FormData`와 `fetch`, `Content-Type`을 직접 쓰지 않는 이유
 
 **먼저 알면 좋은 것**: [19](./19-react-router-api-client.md)의 컴포넌트·JSX·props, `api()` 래퍼와 `ApiError`, `async`/`await`.
 
@@ -752,6 +756,168 @@ if (error instanceof ApiError && error.code === 'SUBSCRIBERS_ONLY') {
 
 홈은 플랫폼 주소(`blog.test`)이고 글은 각 블로그 주소(`alpha.blog.test`)에 있다. 다른 호스트라 React Router의 `<Link>`(같은 호스트 안 이동)를 쓸 수 없고, 보통 링크로 페이지를 새로 연다(5.3의 `navigate`와 `window.location.assign`의 차이와 같은 이유).
 
+### 5.12 (스텝 7) 공감 버튼, 검색, 파일 올리기
+
+**Thymeleaf에 빗대 보기.**
+
+| 하는 일 | Thymeleaf | 이 프로젝트 (React) |
+| --- | --- | --- |
+| 공감 누르기 | `<form method="post" action="/posts/9/like">` → 서버 저장 → 글 페이지로 redirect, 새 숫자가 그려진 페이지를 통째로 다시 받음 | 누르는 순간 화면의 하트와 숫자부터 바꾸고, `PUT /api/posts/9/like` 응답의 실제 값으로 맞춤 |
+| 검색 | `<form method="get" action="/search"><input name="q">` → 주소가 `/search?q=...`가 되고 컨트롤러가 `@RequestParam q`로 받음 | `navigate('/search?q=...')`로 주소만 바꾸고, 검색 화면이 `useSearchParams()`로 `q`를 읽어 API를 부름 |
+| 사진 올리기 | `<form method="post" enctype="multipart/form-data"><input type="file" name="file">` | `FormData`에 파일을 담아 `fetch`로 보냄, 페이지는 그대로 |
+
+**공감 버튼: 낙관적 갱신** (`frontend/src/components/LikeButton.tsx`)
+
+공감은 누르면 바로 반응해야 하는 버튼이다. 서버 응답을 기다렸다가 하트를 채우면, 느린 네트워크에서는 눌렸는지 모를 정도로 늦다. 그래서 **성공할 것이라고 보고(낙관적으로) 화면부터 바꾸고**, 응답이 오면 서버 값으로 맞추며, 실패하면 되돌린다. 이것을 낙관적 갱신(optimistic update)이라고 한다.
+
+```tsx
+const [liked, setLiked] = useState(initialLiked)
+const [count, setCount] = useState(initialCount)
+const [error, setError] = useState<string | null>(null)
+const inFlight = useRef(false)
+
+async function toggle() {
+  if (me.status !== 'member') {
+    redirectToLogin()
+    return
+  }
+  if (inFlight.current) {
+    return
+  }
+  inFlight.current = true
+  const next = !liked
+  // 먼저 바꿔 보여 주고(낙관적 갱신), 실패하면 되돌린다
+  setLiked(next)
+  setCount(count + (next ? 1 : -1))
+  setError(null)
+  try {
+    const result = await api<{ liked: boolean; likeCount: number }>(`/api/posts/${postId}/like`,
+      { method: next ? 'PUT' : 'DELETE' })
+    setLiked(result.liked)
+    setCount(result.likeCount)
+  } catch (caught) {
+    setLiked(liked)
+    setCount(count)
+    setError(errorMessage(caught))
+  } finally {
+    inFlight.current = false
+  }
+}
+```
+
+줄별로:
+
+- `useState(initialLiked)`: 처음 값은 글 상세 응답의 `viewer.liked`와 `likeCount`다. `useState`의 인자는 **처음 한 번만** 쓰인다. 그래서 다른 글로 넘어갈 때는 `key`로 버튼을 새로 만든다(아래 key 이야기).
+- `me.status !== 'member'`: 비회원이면 요청하지 않고 로그인 화면으로 보낸다. 로그인 뒤 이 글로 돌아온다(spec US3 시나리오 6). 서버도 401로 막는다.
+- `inFlight` ref: 요청이 진행 중이면 다음 클릭을 바로 무시한다. 스텝 6 댓글의 연타 방지와 같은 이유다(state는 다음 그리기에서야 바뀌므로 ref로 즉시).
+- `const next = !liked`: 누른 결과(켜기·끄기)를 정한다. 서버 API가 **토글이 아니라 "켜기 PUT, 끄기 DELETE"**인 것이 중요하다. 같은 요청이 두 번 가도 결과가 같다(멱등, [17](./17-idempotency-redis.md)). "토글" API였다면 재시도나 중복 요청이 상태를 거꾸로 뒤집는다.
+- `setLiked(next); setCount(...)`: 응답 전에 화면부터 바꾼다.
+- `setLiked(result.liked); setCount(result.likeCount)`: 서버가 돌려준 **실제** 값으로 맞춘다. 그 사이 다른 사람이 공감했다면 숫자가 1보다 더 바뀔 수 있다.
+- `catch`에서 `setLiked(liked)`: 이 함수가 시작될 때의 값(클로저에 잡힌 값)으로 되돌린다. 네트워크 오류나 403이면 화면이 거짓말을 하지 않게.
+
+낙관적 갱신은 "서버가 거의 항상 성공하고, 실패해도 되돌리기 쉬운" 동작에만 쓴다. 공감은 딱 맞다. 반대로 결제나 글 발행처럼 실패가 의미 있는 동작은 응답을 기다린다.
+
+> 이 버튼을 만들며 서버 쪽에서도 버그 두 개를 만났다. 같은 글에 동시에 공감이 몰리면 데드락이 났고, 같은 사람이 동시에 여러 번 누르면 늦게 처리된 응답이 옛 공감 수(0)를 돌려줬다. 화면이 "서버 값으로 맞추기" 때문에 그 0을 그대로 보여 줄 뻔했다. [33](./33-isolation-deadlock.md)에서 자세히 다룬다.
+
+**key가 겹치면 생긴 일: 공감 버튼이 두 개** (`frontend/src/pages/post/PostPage.tsx`)
+
+스텝 7 화면을 헤드리스 Chrome으로 확인하다가, 글 상세에 공감 버튼이 **두 개** 그려진 것을 발견했다. 하나를 눌러도 숫자가 안 바뀌었다. 원인은 이 두 줄이었다.
+
+```tsx
+<LikeButton key={post.id} postId={post.id} ... />
+...
+<Comments key={post.id} postId={post.id} ... />
+```
+
+`key`는 React가 "이전 그리기의 어느 자식이 이번 그리기의 어느 자식인가"를 맞추는 이름표다. 보통 `map`으로 만든 목록에서 쓰지만, 고정된 자식에 줘도 같은 규칙이 적용된다. **같은 부모 아래 형제끼리는 `key`가 달라야 한다.** 둘 다 `10`이면 React가 둘을 구분하지 못한다. React 문서는 key가 겹치면 자식이 중복되거나 빠질 수 있다고 경고한다(개발 모드 콘솔에 "Encountered two children with the same key" 경고가 뜬다).
+
+실제로 일어난 순서는 이렇다.
+
+1. 처음 그릴 때는 정상이다.
+2. 댓글을 불러온 `Comments`가 `onCountChange`로 부모의 댓글 수를 바꾼다. `PostPage`의 상태가 바뀌어 `Article`을 다시 그린다.
+3. 다시 그릴 때 key가 같은 두 형제를 맞추다가 꼬여, 공감 버튼 DOM이 하나 더 남았다. 화면 맨 위의 버튼은 React가 더 이상 관리하지 않는 사본이었고, 그걸 누르면 클릭 처리기는 돌지만(요청은 감) 그 사본의 글자는 바뀌지 않았다.
+
+고친 코드:
+
+```tsx
+<LikeButton key={`like-${post.id}`} postId={post.id} me={me} initialLiked={post.viewer.liked}
+            initialCount={post.likeCount} />
+...
+<Comments key={`comments-${post.id}`} postId={post.id} me={me} commentAllowed={post.commentAllowed}
+          onCountChange={onCommentCount} />
+```
+
+여기서 `key`를 준 목적은 목록 구분이 아니라 **"글이 바뀌면 이 컴포넌트를 새로 만들어라"**다. 이전 글 → 다음 글로 넘어가면 `post.id`가 바뀌어 key가 달라지고, React는 이전 버튼을 버리고 새로 만든다. 그래서 `useState(initialLiked)`가 새 글의 값으로 다시 시작한다(스텝 5의 글쓰기·수정 화면 `key`와 같은 기법). 이 목적은 살리면서 형제끼리는 겹치지 않게 접두어를 붙였다.
+
+> Thymeleaf에는 이런 문제가 없다. 매 요청마다 HTML 전체를 새로 만들기 때문이다. React는 이전 화면을 **고쳐서** 새 화면을 만들기 때문에(재조정, reconciliation), 무엇이 무엇인지 맞추는 이름표가 필요하다([28](./28-thymeleaf-to-react.md)).
+
+**검색: 검색어는 주소에** (`frontend/src/components/BlogHeader.tsx`, `frontend/src/pages/search/BlogSearchPage.tsx`)
+
+머리글의 검색 상자는 제출하면 주소만 바꾼다.
+
+```tsx
+function search(event: FormEvent) {
+  event.preventDefault()
+  if (q.trim()) {
+    navigate(`/search?${new URLSearchParams({ q: q.trim() })}`)
+  }
+}
+```
+
+- `preventDefault()`: 브라우저의 기본 폼 제출(페이지 새로 열기)을 막는다(5.2와 같음).
+- `new URLSearchParams({ q })`: 한글·공백·`&` 같은 글자를 주소에 넣을 수 있게 인코딩한다. 직접 `'/search?q=' + q`로 붙이면 검색어에 `&page=3`이 들어 있을 때 주소가 깨진다.
+- 공백만이면 이동하지 않는다. 서버도 400으로 막는다([32](./32-search-like.md)).
+
+검색 결과 화면은 검색어를 **상태가 아니라 주소에서** 읽는다.
+
+```tsx
+const [params] = useSearchParams()
+const q = params.get('q') ?? ''
+const page = Math.max(Number(params.get('page')) || 1, 1)
+...
+useEffect(() => {
+  let active = true
+  if (!q.trim()) {
+    return
+  }
+  const query = new URLSearchParams({ q, page: String(page) })
+  api<PageResponse<PostSummary>>(`/api/search?${query}`, { allowAnonymous: true })
+    .then((found) => { if (active) { setResult(found); setError(null) } })
+    ...
+  return () => { active = false }
+}, [q, page])
+```
+
+- 주소가 곧 화면의 상태라서: 결과 주소를 복사해 남에게 보내면 같은 결과가 보이고, 새로고침해도 검색어가 남고, 뒤로 가기로 이전 검색어로 돌아간다(tasks T048 "검색어 유지, 결과 주소 공유 가능").
+- `[q, page]` 의존성: 페이지 번호를 누르면 주소가 `?q=...&page=2`로 바뀌고, 효과가 다시 돌아 다음 쪽을 부른다.
+- `active` 플래그: "고양"을 검색하고 바로 "고양이"를 검색했을 때 늦게 온 "고양" 응답이 덮어쓰지 않게(5.5).
+- `Number(params.get('page')) || 1`: 주소에 `page=abc`가 와도 `NaN || 1`로 1쪽.
+
+Thymeleaf의 `<form method="get">` + `@RequestParam`과 결과가 같다. 다른 점은 페이지를 새로 받지 않고 주소와 목록만 바뀐다는 것이다.
+
+**파일 올리기: FormData** (`frontend/src/api/client.ts`)
+
+```ts
+export async function uploadFile<T>(path: string, file: File, field = 'file'): Promise<T> {
+  const form = new FormData()
+  form.append(field, file)
+  const response = await fetch(path, {
+    method: 'POST',
+    headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+    credentials: 'same-origin',
+    body: form,
+  })
+  ...
+}
+```
+
+- `FormData`: `<form enctype="multipart/form-data">`가 보내는 본문을 자바스크립트로 만드는 객체다. `append('file', file)`은 `<input type="file" name="file">`과 같다. 서버의 `@RequestPart(name = "file")`이 이 이름으로 받는다.
+- **`Content-Type`을 직접 쓰지 않는다.** 본문이 `FormData`면 브라우저가 `multipart/form-data; boundary=----...`를 알아서 붙인다. boundary는 파트 사이 구분 문자열이라, 직접 `multipart/form-data`만 쓰면 boundary가 빠져 서버가 본문을 못 나눈다. 그래서 JSON용 `api()`와 따로 만들었다(`api()`는 `Content-Type: application/json`을 붙인다).
+- `X-Requested-With`: 다른 API와 같은 CSRF 대비 머리글([13](./13-csrf-samesite-cors.md)).
+- 서버 쪽 처리(크기 제한, 형식 검사, 썸네일)와 에디터 버튼 연결은 [30 이미지 업로드와 처리](./30-image-upload.md)에서 다룬다.
+
+**태그 입력** (`frontend/src/components/editor/TagInput.tsx`)은 한글 조합 중 Enter 처리(`isComposing`)와 붙여 넣은 쉼표 나누기 버그가 있었다. [31 태그와 다대다 관계](./31-tags-many-to-many.md)에서 다룬다.
+
 ## 6. 자주 하는 실수와 함정
 
 1. **폼 안의 버튼에 `type` 안 쓰기**: 기본이 `submit`이라 "코드 받기"를 누를 때 가입이 제출된다. 제출 버튼이 아니면 `type="button"`.
@@ -772,6 +938,11 @@ if (error instanceof ApiError && error.code === 'SUBSCRIBERS_ONLY') {
 16. **(스텝 6) 상태만으로 연타를 막으려 함**: 버튼은 다음 그리기에서야 꺼진다. 그 사이의 두 번째 클릭은 `useRef`로 막는다.
 17. **(스텝 6) `setX(이전값 => ...)` 안에서 다른 일을 함**: 갱신 함수는 계산만 한다. StrictMode에서 두 번 불릴 수 있다.
 18. **(스텝 6) 다른 블로그 주소로 `<Link>`**: 같은 호스트 경로로 해석된다. 다른 호스트는 `<a href>`.
+19. **(스텝 7) 형제 컴포넌트에 같은 `key`**: 다시 그릴 때 자식이 복제되거나 빠진다. 공감 버튼이 두 개 그려졌다. 형제끼리는 key가 달라야 한다.
+20. **(스텝 7) 낙관적 갱신만 하고 서버 값으로 안 맞춤**: 다른 사람의 공감이 반영되지 않고, 실패해도 화면이 거짓말을 한다. 응답 값으로 맞추고 실패하면 되돌린다.
+21. **(스텝 7) 토글 API에 낙관적 갱신**: 재시도·중복 요청이 상태를 뒤집는다. "켜기 PUT, 끄기 DELETE"처럼 결과가 정해진 요청으로.
+22. **(스텝 7) 검색어를 state에만 둠**: 새로고침하면 사라지고 결과 주소를 나눌 수 없다. 주소(`?q=`)에 둔다.
+23. **(스텝 7) `FormData`를 보내며 `Content-Type: multipart/form-data`를 직접 씀**: boundary가 빠져 서버가 못 읽는다. 브라우저에 맡긴다.
 
 ## 7. 직접 해 보기
 
@@ -842,6 +1013,18 @@ cd frontend && npm run dev          # 터미널 2
 
 남의 비공개 글 주소(`http://alpha.blog.test:5173/{비공개 글 번호}`)를 로그아웃한 창에서 열면 404 화면, 일반 회원으로 `http://blog.test:5173/admin`을 열면 403 화면이 나온다.
 
+**실습 (스텝 7) A. key를 다시 겹쳐 보기**
+
+`PostPage.tsx`에서 두 key를 다시 `key={post.id}`로 바꾸고 `npm run dev`로 띄운다. 댓글이 있는 글을 열고 개발자 도구 콘솔의 key 경고와, Elements 탭에서 공감 버튼이 몇 개인지 본다. 되돌린다.
+
+**실습 (스텝 7) B. 낙관적 갱신의 되돌리기 보기**
+
+개발자 도구 Network 탭에서 "Offline"을 켜고 공감을 누른다. 하트가 채워졌다가 오류 문구와 함께 원래대로 돌아오는지 본다. "Slow 3G"로 바꾸고 누르면 응답 전에 이미 바뀌어 있는 것을 볼 수 있다.
+
+**실습 (스텝 7) C. 검색 주소 나누기**
+
+블로그에서 검색한 뒤 주소창의 주소를 시크릿 창에 붙여 넣는다. 같은 결과가 보인다(시크릿 창은 비회원이라 비공개 글은 빠진다). 2쪽으로 간 뒤 뒤로 가기를 눌러 1쪽으로 돌아오는지도 본다.
+
 ## 8. 확인 문제
 
 1. 일반 변수 대신 `useState`를 쓰는 이유는?
@@ -889,11 +1072,28 @@ cd frontend && npm run dev          # 터미널 2
 15. (스텝 6) 글 상세의 화면 상태를 `{ status: ... }` 판별 유니온으로 둔 이점은?
 <details><summary>답</summary><code>post</code>는 <code>'ok'</code>일 때만, <code>blogName</code>은 <code>'subscribersOnly'</code>일 때만 있어서, 상태를 확인하지 않고 글 제목을 그리려 하면 TypeScript가 막는다. 서버 응답(404, 403 SUBSCRIBERS_ONLY, 그 밖의 오류)을 화면 하나씩에 빠짐없이 대응시킬 수 있다.</details>
 
+16. (스텝 7) 공감 버튼이 응답 전에 화면부터 바꾸는데도, 응답이 오면 다시 `setLiked(result.liked)`, `setCount(result.likeCount)`를 하는 이유는?
+<details><summary>답</summary>화면이 바꾼 값은 추측이다. 그 사이 다른 사람이 공감했거나, 서버가 이미 켜져 있던 상태였다면 실제 값이 다르다. 서버가 돌려준 값이 진짜라서 그것으로 맞춘다.</details>
+
+17. (스텝 7) 공감 API가 "토글(누를 때마다 뒤집기)"이 아니라 켜기 PUT·끄기 DELETE인 것이 낙관적 갱신에 왜 중요한가?
+<details><summary>답</summary>요청이 중복되거나 재시도되어도 결과가 같다(멱등). 토글이면 같은 요청이 두 번 가면 켰다가 다시 꺼져서, 화면이 보여 준 상태와 서버 상태가 어긋난다.</details>
+
+18. (스텝 7) `LikeButton`과 `Comments`에 같은 `key={post.id}`를 줬을 때 공감 버튼이 두 개 그려진 이유는? key를 왜 아예 빼지 않고 `like-${post.id}`로 바꿨나?
+<details><summary>답</summary>같은 부모 아래 형제의 key가 같으면 React가 다시 그릴 때 어느 것이 어느 것인지 맞추지 못해 자식이 복제되거나 빠질 수 있다. key를 둔 목적은 글이 바뀌면 컴포넌트를 새로 만들어 <code>useState</code>의 처음 값(새 글의 공감 상태)으로 다시 시작하게 하는 것이라 빼지 않고, 형제끼리 겹치지 않게 접두어를 붙였다.</details>
+
+19. (스텝 7) 검색 결과 화면이 검색어를 `useState`가 아니라 `useSearchParams`로 읽는 이점 세 가지는?
+<details><summary>답</summary>결과 주소를 나누면 같은 결과가 보인다, 새로고침해도 검색어가 남는다, 뒤로 가기·앞으로 가기로 이전 검색·쪽으로 이동한다.</details>
+
+20. (스텝 7) `uploadFile`이 `Content-Type` 머리글을 쓰지 않는 이유는?
+<details><summary>답</summary>본문이 <code>FormData</code>면 브라우저가 파트 구분자(boundary)를 포함한 <code>multipart/form-data; boundary=...</code>를 붙인다. 직접 쓰면 boundary가 없어 서버가 파트를 나누지 못한다.</details>
+
 ## 9. 더 읽을거리
 
 - React 공식 문서 react.dev: "State: A Component's Memory", "Reacting to Input with State", "Synchronizing with Effects", "You Might Not Need an Effect", "Reusing Logic with Custom Hooks"
 - React 공식 문서: "Sharing State Between Components", 폼 요소(`<input>`, `<form>`) 레퍼런스
 - React 공식 문서: "Referencing Values with Refs"(`useRef`), "Queueing a Series of State Updates", `StrictMode`
+- React 공식 문서: "Rendering Lists"(key 규칙), "Preserving and Resetting State"(key로 컴포넌트 새로 만들기)
+- MDN: `FormData`, "Using FormData Objects"
 - React Router 공식 문서: `Routes`/`Route`(중첩·index), `NavLink`, `useParams`, `useSearchParams`, `useNavigate`
 - TypeScript 핸드북: "Narrowing", "Discriminated unions"
 - MDN: `Event.preventDefault()`, `HTMLFormElement` `novalidate`, `URLSearchParams`, `Location.assign()`, History API

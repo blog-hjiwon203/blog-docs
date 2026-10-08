@@ -1,6 +1,6 @@
 # 26. WYSIWYG 에디터와 Tiptap
 
-> 관련 스텝: [스텝 5](../step-05.md) (T035, T035a, T031) · 관련 개념: [14-xss-sanitize-csp](./14-xss-sanitize-csp.md), [17-idempotency-redis](./17-idempotency-redis.md), [19-react-router-api-client](./19-react-router-api-client.md), [25-react-forms-data](./25-react-forms-data.md)
+> 관련 스텝: [스텝 5](../step-05.md) (T035, T035a, T031), [스텝 7](../step-07.md) (T037 이미지) · 관련 개념: [30-image-upload](./30-image-upload.md), [14-xss-sanitize-csp](./14-xss-sanitize-csp.md), [17-idempotency-redis](./17-idempotency-redis.md), [19-react-router-api-client](./19-react-router-api-client.md), [25-react-forms-data](./25-react-forms-data.md)
 
 ## 1. 이 문서로 배우는 것
 
@@ -415,6 +415,41 @@ useEffect(() => {
 
 발행 뒤 서버에 저장된 본문에서는 `target`이 지워지고 `rel="nofollow noopener noreferrer"`가 붙었다(5.6과 같은 정화).
 
+### 5.10 (스텝 7) 이미지 노드와 선택(selection)
+
+스텝 7에서 `Image` 확장을 더했다(`frontend/src/components/editor/Editor.tsx`).
+
+```ts
+// 서버 허용 목록과 같게 src·alt만 쓴다. base64 이미지(data:)는 서버가 지우므로 받지 않는다
+Image.configure({ inline: false, allowBase64: false }),
+```
+
+- `inline: false`: 이미지를 문단 안 글자처럼(inline)이 아니라 문단과 같은 층의 **블록 노드**로 둔다. 저장되는 HTML은 `<p>…</p><img src="…" alt="…"><p>…</p>` 모양이 된다.
+- `allowBase64: false`: `data:image/png;base64,...` 같은 이미지를 노드로 받지 않는다. 서버 허용 목록(`/uploads/...`만, [14](./14-xss-sanitize-csp.md))이 어차피 지우므로, 에디터에서 보였다가 저장 뒤 사라지는 일을 막는다.
+- 4.1의 원칙 그대로다: 에디터가 만들 수 있는 것과 서버가 남기는 것을 맞춘다.
+
+**선택이 노드를 감싸면 다음 삽입이 그 노드를 바꾼다.** ProseMirror의 선택에는 글자 범위를 고르는 `TextSelection` 말고도, 이미지 같은 노드 하나를 통째로 고르는 `NodeSelection`이 있다. 이미지를 넣으면 넣은 이미지가 선택된 상태가 될 수 있고, 그 상태에서 `setImage`(내용 넣기)를 또 부르면 **선택을 새 내용으로 바꾸는** 동작이 되어 방금 넣은 이미지가 사라진다. 글자를 드래그해 고른 채 타자를 치면 고른 글자가 바뀌는 것과 같은 규칙이다.
+
+스텝 7 브라우저 확인에서 사진 두 장을 한 번에 골랐더니 본문에 마지막 한 장만 남은 것이 이것이었다. 고친 코드:
+
+```ts
+for (const file of files) {
+  try {
+    const image = await uploadFile<UploadedImage>('/api/images', file)
+    // 방금 넣은 사진이 선택된 채라 setImage는 그 사진을 바꿔 버린다. 선택의 끝 뒤에 넣어 고른 순서를 지킨다
+    editor.chain().focus().insertContentAt(editor.state.selection.to,
+      { type: 'image', attrs: { src: image.url, alt: file.name } }).run()
+  } catch (error) {
+    setUploadError(`${file.name}: ${errorMessage(error)}`)
+  }
+}
+```
+
+- `editor.state.selection.to`: 지금 선택의 끝 위치(문서 안 숫자 위치). 글자 커서면 커서 자리, 노드 선택이면 그 노드 바로 뒤다.
+- `insertContentAt(위치, 노드)`: 선택을 바꾸지 않고 **그 위치에** 넣는다. 그래서 첫 사진 뒤에 둘째 사진이 붙어 고른 순서가 지켜진다.
+- `{ type: 'image', attrs: {...} }`: HTML 문자열 대신 ProseMirror 노드 모양(JSON)으로 넣었다. 문자열을 파싱할 필요가 없고 속성이 그대로 들어간다.
+- 업로드와 서버 쪽 처리 전체는 [30 이미지 업로드와 처리](./30-image-upload.md)에서 다룬다.
+
 ## 6. 자주 하는 실수와 함정
 
 1. **에디터 버튼과 서버 허용 목록이 어긋남**: 저장 후 서식이 사라진다. 버튼을 더할 때는 `HtmlSanitizer`도 함께 본다.
@@ -428,6 +463,7 @@ useEffect(() => {
 9. **붙여넣은 글을 무조건 마크다운으로 해석**: `snake_case_name`의 `_`나 `2*3*4`의 `*`가 기울임이 되는 식으로 글이 망가진다. 마크다운다운 모양이 있을 때만 해석한다(`looksLikeMarkdown`).
 10. **마크다운 링크는 화면 기호라 안전하다고 생각**: `[누르세요](javascript:...)`도 링크가 될 수 있다. 입력 규칙에서 주소를 검사하고, 서버 정화가 한 번 더 지운다.
 11. **입력 규칙이 저장된 본문에도 동작한다고 생각**: 입력 규칙은 칠 때만 동작한다. 불러오기나 붙여넣기는 따로 처리해야 한다.
+12. **(스텝 7) 여러 이미지를 반복문에서 `setImage`로 넣기**: 방금 넣은 이미지가 선택된 채라 다음 이미지가 그것을 바꾼다. `insertContentAt(selection.to, ...)`으로 선택 뒤에 넣는다.
 
 ## 7. 직접 해 보기
 
@@ -505,6 +541,9 @@ curl -s $R -b jar myblog.blog.test:8080/api/manage/posts/{위에서 받은 id}
 
 10. 마크다운 입력을 더했는데도 서버 코드, DB, API가 바뀌지 않은 이유는?
 <details><summary>답</summary>마크다운은 입력하는 방법일 뿐이고, 에디터가 만드는 결과는 여전히 같은 HTML이기 때문이다. 서버는 지금처럼 HTML을 받아 정화해 저장한다. 마크다운 원문을 따로 저장하지 않기로 했다(spec 2026-10-08 지원 결정).</details>
+
+11. (스텝 7) 사진 두 장을 차례로 `setImage`로 넣었더니 한 장만 남은 이유와 고친 방법은?
+<details><summary>답</summary>첫 사진을 넣은 뒤 그 이미지 노드가 선택(NodeSelection)된 상태였고, 내용 넣기는 선택을 새 내용으로 바꾼다. 그래서 둘째 사진이 첫 사진을 대신했다. 선택을 바꾸지 않는 <code>insertContentAt(editor.state.selection.to, 노드)</code>로 선택의 끝 뒤에 넣었다.</details>
 
 ## 9. 더 읽을거리
 
