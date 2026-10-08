@@ -16,7 +16,7 @@
 
 **주요 의존성**: Spring Boot (Web, Security, Data JPA, Validation, Cache, Data Redis), Flyway, JWT 라이브러리, OWASP Java HTML Sanitizer, jsoup / React, React Router, Vite, Tiptap, DOMPurify
 
-**저장소**: 주 DB는 MySQL 8 (개발은 docker compose의 MySQL, 운영 MySQL). 테이블은 Flyway가 [erd/schema.sql](./erd/schema.sql)로 만들고 JPA는 `ddl-auto=validate`로 엔티티가 스키마와 맞는지만 확인한다 (R-02). Redis는 캐시(@Cacheable, TTL 5분)와 연타 방지 키 저장. PostgreSQL + pgvector는 비슷한 글 추천(OWN-06) 전용으로 2주 안에 도전(도전 과제, R-02). 이미지는 서버 로컬 `./uploads/`(UUID 파일명), DB에는 경로·원본 파일명·크기만.
+**저장소**: 주 DB는 MySQL 8 (개발은 docker compose의 MySQL, 운영 MySQL). 테이블은 Flyway가 [erd/schema.sql](./erd/schema.sql)로 만들고 JPA는 `ddl-auto=validate`로 엔티티가 스키마와 맞는지만 확인한다 (R-02). Redis는 캐시(@Cacheable, TTL 5분)와 연타 방지 키 저장. PostgreSQL + pgvector는 비슷한 글 추천(OWN-06) 전용으로 2주 안에 도전(도전 과제, R-02). 이미지는 서버 로컬 디스크의 업로드 폴더(UUID 파일명)에 두고, DB에는 경로·원본 파일명·크기만. 업로드 폴더는 설정값 `app.upload.dir`이고 개발 기본값은 프로젝트 루트 아래 `/Users/chosun-nhn54/Documents/blog_project/uploads`(git에서 뺌), 운영은 서버 경로로 따로 준다. 화면에서는 `/uploads/{파일명}`으로 연다. ERD·data-model의 `./uploads/`는 이 폴더를 뜻한다.
 
 **테스트**: JUnit 5 + Spring Boot Test + MockMvc(백엔드, DB는 Testcontainers MySQL), Vitest(프론트, 최소) — 원본에 없어 기본값으로 둠 (R-01). 실행은 `./mvnw test`
 
@@ -101,8 +101,11 @@ specs/001-tistory-blog/
 
 ### 소스 코드 (저장소 루트)
 
+코드 저장소는 지원 컴퓨터의 `/Users/chosun-nhn54/Documents/blog_project`에 만든다. 아래 경로는 모두 이 폴더 기준이다.
+
 ```text
 docker-compose.yml          # 개발용 MySQL 8, Redis (도전 과제 때 PostgreSQL + pgvector 추가)
+uploads/                    # 개발용 이미지 저장 폴더 (app.upload.dir, .gitignore)
 
 backend/
 ├── pom.xml
