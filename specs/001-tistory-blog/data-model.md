@@ -2,7 +2,7 @@
 
 > **이 문서는?** 지원 서비스의 테이블·컬럼·제약과 글 가시성 판단 순서다. 기능 명세의 핵심 엔티티를 실제 저장 구조로 옮긴 것이다. 전체 문서 안내는 [README](../../README.md)에 있다.
 
-원본 ERD 탭은 예전 ID 기준이라, 이 문서는 원본 본문(4~6장)과 기능 명세 핵심 개체에서 다시 뽑았다. 지금 기능 코드 기준이다([지원이 확인할 것](./review.md) 16). 2026-10-08에 Crowfoot ERD(문서 버전 65)와 맞췄다. 컬럼 타입·인덱스·DDL 전체는 [ERD](./erd/README.md)와 [schema.sql](./erd/schema.sql)에 있고, 둘이 다르면 Crowfoot ERD가 맞다.
+원본 ERD 탭은 예전 ID 기준이라, 이 문서는 원본 본문(4~6장)과 기능 명세 핵심 개체에서 다시 뽑았다. 지금 기능 코드 기준이다([지원이 확인할 것](./review.md) 16). 2026-10-08에 Crowfoot ERD(문서 버전 74)와 맞췄다. 컬럼 타입·인덱스·DDL 전체는 [ERD](./erd/README.md)와 [schema.sql](./erd/schema.sql)에 있고, 둘이 다르면 Crowfoot ERD가 맞다.
 
 공통 규칙(아래 표에서는 생략):
 
@@ -47,8 +47,20 @@
 | is_restricted | boolean | ADMIN-05. 사유는 `moderation_log`의 최신 RESTRICT_BLOG 행 |
 | skin | varchar | BLOG-05 (P2) |
 | list_layout | enum LIST, THUMBNAIL | BLOG-05 메인 글 목록 형태 |
+| accent_color | enum BLUE, GREEN, ORANGE, PINK, PURPLE, GRAY | BLOG-05 스킨 포인트 색. 기본 BLUE |
 | total_visitor_count | bigint | MNG-03 누적 방문자. 매일 새벽 전날 방문자 수를 더함(오늘 방문자는 미포함) |
 | deleted_at | datetime, NULL | 소프트 삭제. 활성 = deleted_at IS NULL |
+
+**blog_sidebar_module** (BLOG-04, BLOG-05): 블로그 사이드바의 모듈 순서와 표시 여부.
+| 컬럼 | 타입 | 규칙 |
+| --- | --- | --- |
+| blog_id | FK blog | |
+| module_type | enum PROFILE, CATEGORY, TAG, RECENT_POST, RECENT_COMMENT, VISITOR, POPULAR_POST, SUBSCRIBE | UNIQUE(blog_id, module_type) |
+| sort_order | int | 위에서부터 순서 |
+| is_visible | boolean | PROFILE은 항상 1 (CHECK) |
+| updated_at | datetime | |
+
+블로그를 만들 때 8개 행을 같은 트랜잭션에서 넣는다. PROFILE, CATEGORY, TAG, RECENT_POST, RECENT_COMMENT 순으로 보이고, VISITOR·POPULAR_POST·SUBSCRIBE는 숨김으로 뒤에 둔다. 모듈별 개수는 코드 상수(최근 글·댓글·인기 글 5개)다. 새 모듈은 이미 있는 데이터를 읽는다: VISITOR는 오늘 `blog_visit` 수, 어제 `blog_daily_stat`, 누적 `blog.total_visitor_count`. POPULAR_POST는 볼 수 있는 글 중 `post.view_count` 상위 5개. SUBSCRIBE는 구독 버튼과 구독자 수(`subscription`).
 
 ## 글
 

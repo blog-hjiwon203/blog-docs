@@ -210,3 +210,9 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .index-group { display: grid; gap: 10px; }
 .index-group h2 { font-size: 18px; }
 .foot { font-size: 13px; color: var(--ink-2); }
+
+/* 포인트 색 고르기 (BLOG-05). 색 자체가 고를 값이라 테마와 상관없이 고정 색을 쓴다 */
+.swatch { width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--surface); box-shadow: 0 0 0 1px var(--line); display: inline-block; }
+.swatch.on { box-shadow: 0 0 0 2px var(--ink); }
+.box.row { display: flex; }
+.section > .pin, .stack > .pin { justify-self: start; }

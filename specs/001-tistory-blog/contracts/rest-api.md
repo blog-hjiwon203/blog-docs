@@ -8,7 +8,7 @@
 
 초안에서 아래를 고치고 채웠다. 새로 정한 값은 맨 아래 [이 문서에서 채운 값](#이-문서에서-채운-값)에 모았다.
 
-- **빠졌던 기능을 채웠다**: 알림(SUB-04), 예약 발행(POST-13), 대표 이미지(POST-07), 댓글 허용(CMT-07), 카테고리 비공개(CAT-05), 블로그 꾸미기(BLOG-05), 블로그 삭제 경고 수(BLOG-07), 방명록 수정(CMT-04), 소셜 가입의 닉네임 확인 단계(AUTH-01), 소셜 재인증 탈퇴(AUTH-06), 회원 상세(ADMIN-02), 공지 목록·상세(ADMIN-06), 관리 이력 검색 조건(ADMIN-06).
+- **빠졌던 기능을 채웠다**: 사이드바 모듈 순서·표시(BLOG-05, PR #8에서 정한 것), 알림(SUB-04), 예약 발행(POST-13), 대표 이미지(POST-07), 댓글 허용(CMT-07), 카테고리 비공개(CAT-05), 블로그 꾸미기(BLOG-05), 블로그 삭제 경고 수(BLOG-07), 방명록 수정(CMT-04), 소셜 가입의 닉네임 확인 단계(AUTH-01), 소셜 재인증 탈퇴(AUTH-06), 회원 상세(ADMIN-02), 공지 목록·상세(ADMIN-06), 관리 이력 검색 조건(ADMIN-06).
 - **내 정보 경로를 `/api/me/**`로 모았다**: 초안의 `/api/members/me/**`와 `/api/me/bookmarks`가 섞여 있었다.
 - **편집용 글 조회를 따로 두었다**: `GET /api/manage/posts/{id}`. 임시저장·예약·숨긴 글도 주인이 불러와야 해서 읽기용 상세와 나눴다.
 - **이메일 인증을 두 단계로 나눴다**: 코드 확인(`/verify`)으로 화면에서 바로 결과를 보여 주고, 가입 요청에서 서버가 한 번 더 확인한다.
@@ -168,7 +168,7 @@
 {
   "id": 3, "address": "jiwon", "name": "지원의 기록", "description": "개발 공부 기록",
   "profileImageUrl": null, "owner": { "...": "MemberSummary" },
-  "skin": "BASIC", "listLayout": "LIST",
+  "skin": "BASIC", "listLayout": "LIST", "accentColor": "BLUE",
   "postCount": 42, "subscriberCount": 18,
   "viewer": { "isOwner": false, "subscribed": true },
   "restriction": null
@@ -289,14 +289,36 @@
 | GET | /api/blogs/address-availability?address= | P | 회원 | `{ available, reason }`. `reason`: `INVALID`·`RESERVED`·`TAKEN` | BLOG-01 |
 | POST | /api/blogs | P | 회원 | `{ address, name, description? }` → 201 `Blog`. 6번째 409 `BLOG_LIMIT_EXCEEDED`. 첫 블로그는 대표 | BLOG-01 |
 | GET | /api/blog | B | 누구나 | `Blog` | BLOG-03, SUB-03 |
-| PATCH | /api/blog | B | 주인 | `{ name?, description?, profileImageId? }` → `Blog` | BLOG-02 |
-| PUT | /api/blog/appearance | B | 주인 | `{ skin, listLayout }` → 204. `skin`: 미리 만든 2~3종, `listLayout`: `LIST`·`THUMBNAIL` | BLOG-05 |
-| GET | /api/blog/sidebar | B | 누구나 | `{ blog, categories, tags, recentPosts[5], recentComments[5] }`. 카테고리는 [CAT](#cat-카테고리) 트리 모양 | BLOG-04 |
+| PATCH | /api/blog | B | 주인 | `{ name?, description?, profileImageId?, skin?, listLayout?, accentColor? }` → `Blog`. `skin`: 미리 만든 2~3종, `listLayout`: `LIST`·`THUMBNAIL`, `accentColor`: `BLUE`·`GREEN`·`ORANGE`·`PINK`·`PURPLE`·`GRAY` | BLOG-02, BLOG-05 |
+| GET | /api/blog/sidebar | B | 누구나 | 보이는 모듈만 주인이 정한 순서로 `{ modules: [{ type, data }] }`. 아래 [사이드바 응답](#사이드바-응답) | BLOG-04, BLOG-05 |
+| GET | /api/blog/sidebar/modules | B | 주인 | 모듈 8개 전부 `[{ moduleType, isVisible }]` 순서대로(숨긴 것 포함) | BLOG-05 |
+| PUT | /api/blog/sidebar/modules | B | 주인 | `[{ moduleType, isVisible }]` 8개를 원하는 순서로 전체 교체 → 204. 8종이 정확히 한 번씩이 아니거나 `PROFILE`을 숨기면 400 `VALIDATION_FAILED` | BLOG-05 |
 | POST | /api/blog/move-posts | B | 주인 | `{ postIds, targetBlogId }` → `{ movedCount }`. 카테고리는 미분류, 태그는 이름으로 다시 연결 | BLOG-06 |
 | PUT | /api/blog/moved-to | B | 주인 | `{ targetBlogId }` → 204. 연쇄는 최종 블로그로 저장, 순환이면 400 `INVALID_MOVE_TARGET` | BLOG-06 |
 | DELETE | /api/blog/moved-to | B | 주인 | 204. 이사 지정 취소 | BLOG-06 |
 | GET | /api/blog/deletion-preview | B | 주인 | `{ remainingPostCount, isPrimary }`. 삭제 경고 "옮기지 않은 글 N개" | BLOG-07 |
 | DELETE | /api/blog | B | 주인 | `{ confirmAddress }`(주소를 다시 입력) → 204. 대표면 409 `PRIMARY_BLOG` | BLOG-07 |
+
+#### 사이드바 응답
+
+```json
+{
+  "modules": [
+    { "type": "PROFILE", "data": { "name": "지원의 기록", "description": "개발 공부 기록", "profileImageUrl": null } },
+    { "type": "CATEGORY", "data": { "...": "카테고리 트리 응답과 같음" } },
+    { "type": "TAG", "data": [{ "id": 1, "name": "spring", "postCount": 14 }] },
+    { "type": "RECENT_POST", "data": [{ "id": 1532, "title": "..." }] },
+    { "type": "RECENT_COMMENT", "data": [{ "id": 88, "postId": 1532, "content": "...", "authorNickname": "하늘", "state": "NORMAL" }] },
+    { "type": "VISITOR", "data": { "today": 37, "yesterday": 52, "total": 4318 } },
+    { "type": "POPULAR_POST", "data": [{ "id": 1201, "title": "...", "viewCount": 1204 }] },
+    { "type": "SUBSCRIBE", "data": { "blogId": 3, "subscriberCount": 18, "subscribed": false } }
+  ]
+}
+```
+
+- 숨긴 모듈은 `modules`에 없다. `PROFILE`은 항상 있다. 새 블로그는 `VISITOR`·`POPULAR_POST`·`SUBSCRIBE`가 숨김으로 시작한다(BLOG-05).
+- 개수는 고정이다: 최근 글·최근 댓글·인기 글 각 5개. 인기 글은 누적 조회수 순, 볼 수 있는 글만.
+- 비밀댓글·숨긴 댓글은 `RECENT_COMMENT`에서 `state`만 주고 `content`는 `null`이다. 볼 수 없는 글의 댓글은 빠진다.
 
 ### POST 글
 
@@ -498,7 +520,7 @@
 
 ## 이 문서에서 채운 값
 
-기능 명세나 ERD에 없어서 API를 정리하며 Claude가 정한 값이다. [지원이 확인할 것](../review.md) B-22에도 올렸다.
+기능 명세나 ERD에 없어서 API를 정리하며 Claude가 정한 값이다. [지원이 확인할 것](../review.md) B-23에도 올렸다.
 
 | 항목 | 정한 값 | 다른 선택지 |
 | --- | --- | --- |

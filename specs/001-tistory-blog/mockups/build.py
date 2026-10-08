@@ -43,7 +43,7 @@ PLATFORM_COMMON = [
 BLOG_COMMON = [
     ("A", "화면 열 때", "GET", "/api/me", "로그인 상태. 401이면 비회원"),
     ("B", "화면 열 때", "GET", "/api/blog", "블로그 이름·주인·구독 여부. 404면 404 화면"),
-    ("C", "화면 열 때", "GET", "/api/blog/sidebar", "사이드바 전체(카테고리 트리, 태그, 최근 글·댓글 5)"),
+    ("C", "화면 열 때", "GET", "/api/blog/sidebar", "보이는 사이드바 모듈을 주인이 정한 순서로(기본: 홈 바로가기, 카테고리, 태그, 최근 글·댓글 5)"),
 ]
 MANAGE_COMMON = [
     ("A", "화면 열 때", "GET", "/api/me", "401이면 로그인 화면으로(돌아올 주소 포함)"),
@@ -103,7 +103,7 @@ def blog_head(logged: bool = True) -> str:
 def blog_sidebar() -> str:
     return f"""
 <aside class="sidebar" aria-label="사이드바">
-  <div class="row">{P("C")}<span class="small muted">사이드바 전체가 API C 하나</span></div>
+  <div class="row">{P("C")}<span class="small muted">사이드바 전체가 API C 하나. 순서와 보일 모듈은 주인이 블로그 설정에서 정한다</span></div>
   <div class="box"><div class="row"><span class="avatar lg"></span><div><b>지원의 기록</b><div class="small muted">백엔드 공부와 여행 메모</div></div></div>
     <div class="small muted num">구독자 18명</div></div>
   <div><h4>카테고리</h4>
@@ -548,7 +548,7 @@ page(
 page(
     slug="blog-main", group="블로그", title="블로그 메인", url="jiwon.blog.com/",
     codes=["BLOG-03", "BLOG-04", "CAT-02", "TAG-02", "SUB-01", "SUB-03", "BLOG-05"], chrome="blog",
-    lead="카테고리별(/category/{id})·태그별(/tag/{name}) 목록도 같은 화면에 조건만 붙인다. 목록 형태(리스트/썸네일)는 블로그 꾸미기 값을 따른다.",
+    lead="카테고리별(/category/{id})·태그별(/tag/{name}) 목록도 같은 화면에 조건만 붙인다. 목록 형태(리스트/썸네일)와 포인트 색은 블로그 꾸미기 값을 따른다.",
     body=f"""
 <div class="cols">
   <div class="stack" style="gap:18px">
@@ -567,7 +567,8 @@ page(
 </div>""",
     states=[("글이 없을 때", '<p class="muted">아직 글이 없습니다.</p><p class="small muted">주인에게는 "첫 글 쓰기" 버튼.</p>'),
             ("구독 중일 때", f'<button class="btn on" type="button">구독 중 {P(3)}</button>'),
-            ("차단된 회원이 구독 (403 BLOCKED_BY_BLOG)", '<p class="err">이 블로그는 구독할 수 없습니다.</p>')],
+            ("차단된 회원이 구독 (403 BLOCKED_BY_BLOG)", '<p class="err">이 블로그는 구독할 수 없습니다.</p>'),
+            ("주인이 켠 사이드바 모듈", '<div class="sidebar"><div><h4>방문자</h4><div class="small num">오늘 37 · 어제 52 · 누적 4,318</div></div><div><h4>인기 글</h4><ul class="small"><li>제주 3박 4일 동선</li><li>JPA N+1과 fetch join</li><li>…5개</li></ul></div><div><h4>구독</h4><div class="row small"><span class="num">구독자 18명</span><button class="btn" type="button">구독하기</button></div></div></div><p class="small muted">방문자 수·인기 글·구독은 새 블로그에서 숨김으로 시작한다(API C에 data가 같이 온다).</p>')],
     apis=[
         (1, "화면 열 때·페이지", "GET", "/api/posts?page=&size=&categoryId=&tag=", "10개씩. 카테고리·태그 주소면 조건을 붙임"),
         (2, "구독하기", "PUT", "/api/blogs/{blogId}/subscription", "{ subscribed, subscriberCount }로 숫자 갱신. 비회원이면 401 → 로그인"),
@@ -865,8 +866,8 @@ page(
 
 page(
     slug="manage-settings", group="블로그 관리", title="블로그 설정", url="jiwon.blog.com/manage/settings",
-    codes=["BLOG-02", "BLOG-05", "BLOG-06", "BLOG-07", "BLOG-08"], chrome="manage", active="manage-settings",
-    lead="블로그 정보, 꾸미기, 이사, 삭제. 주소는 바꿀 수 없어 보여 주기만 한다.",
+    codes=["BLOG-02", "BLOG-04", "BLOG-05", "BLOG-06", "BLOG-07", "BLOG-08"], chrome="manage", active="manage-settings",
+    lead="블로그 정보, 꾸미기(스킨·포인트 색·목록 형태·사이드바), 이사, 삭제. 주소는 바꿀 수 없어 보여 주기만 한다.",
     body=f"""
 <section class="section"><h2>블로그 정보</h2>
   <div class="row"><span class="avatar lg"></span><button class="btn" type="button">이미지 바꾸기 {P(1)}</button></div>
@@ -876,8 +877,24 @@ page(
   <button class="btn primary" type="button" style="justify-self:start">저장 {P(2)}</button></section>
 <section class="section"><h2>꾸미기</h2>
   <div class="row"><label class="row small"><input type="radio" name="skin" id="sk1" checked> 기본</label><label class="row small"><input type="radio" name="skin" id="sk2"> 매거진</label><label class="row small"><input type="radio" name="skin" id="sk3"> 노트</label></div>
+  <div class="row small"><span>포인트 색</span>
+    <span class="swatch on" style="background:#2f6fde" title="파랑 (기본)"></span><span class="swatch" style="background:#1f9d6b" title="초록"></span><span class="swatch" style="background:#e07a1f" title="주황"></span><span class="swatch" style="background:#d9508a" title="분홍"></span><span class="swatch" style="background:#7c5cd6" title="보라"></span><span class="swatch" style="background:#6b7280" title="회색"></span></div>
   <div class="row"><label class="row small"><input type="radio" name="lay" id="l1" checked> 리스트</label><label class="row small"><input type="radio" name="lay" id="l2"> 썸네일</label></div>
   <button class="btn" type="button" style="justify-self:start">적용 {P(3)}</button></section>
+<section class="section"><h2>사이드바 {P(9)}</h2>
+  <p class="small muted">끌어서 순서를 바꾸고, 보일 모듈을 고르세요. 모듈마다 개수는 정해져 있습니다(최근 글·댓글·인기 글 5개).</p>
+  <div class="stack">
+    <div class="row between box"><span>⋮⋮ 블로그 홈 바로가기</span><span class="chip">항상 보임</span></div>
+    <div class="row between box"><span>⋮⋮ 카테고리</span><label class="row small"><input type="checkbox" id="m2" checked> 보이기</label></div>
+    <div class="row between box"><span>⋮⋮ 구독 <span class="small muted">버튼과 구독자 수</span></span><label class="row small"><input type="checkbox" id="m8" checked> 보이기</label></div>
+    <div class="row between box"><span>⋮⋮ 태그</span><label class="row small"><input type="checkbox" id="m3" checked> 보이기</label></div>
+    <div class="row between box"><span>⋮⋮ 최근 글</span><label class="row small"><input type="checkbox" id="m4" checked> 보이기</label></div>
+    <div class="row between box"><span>⋮⋮ 최근 댓글</span><label class="row small"><input type="checkbox" id="m5" checked> 보이기</label></div>
+    <div class="row between box"><span>⋮⋮ 방문자 수 <span class="small muted">오늘·어제·누적</span></span><label class="row small"><input type="checkbox" id="m6"> 보이기</label></div>
+    <div class="row between box"><span>⋮⋮ 인기 글 <span class="small muted">누적 조회수 5개</span></span><label class="row small"><input type="checkbox" id="m7"> 보이기</label></div>
+  </div>
+  <button class="btn primary" type="button" style="justify-self:start">사이드바 저장 {P(10)}</button>
+  <span class="small muted">새 블로그는 방문자 수·인기 글·구독이 숨김으로 시작한다. 이 예시는 주인이 구독을 켜서 카테고리 아래로 옮긴 상태.</span></section>
 <section class="section" id="move"><h2>블로그 이사</h2>
   <p class="small muted">글을 옮기면 카테고리는 미분류가 되고 태그는 이름으로 다시 연결됩니다. 옛 글 주소는 새 블로그로 이어집니다.</p>
   <label class="field"><span>대상 블로그</span><select id="mto"><option>지원 여행기 (jiwon-travel)</option></select></label>{P(4)}
@@ -891,12 +908,14 @@ page(
     apis=[
         (1, "이미지 고를 때", "POST", "/api/images", ""),
         (2, "저장", "PATCH", "/api/blog", "{ name, description, profileImageId }"),
-        (3, "적용", "PUT", "/api/blog/appearance", "{ skin, listLayout }"),
+        (3, "꾸미기 적용", "PATCH", "/api/blog", "{ skin, listLayout, accentColor }. 포인트 색은 6색 중 하나(기본 BLUE)"),
         (4, "화면 열 때", "GET", "/api/me/blogs", "이사 대상 후보(이 블로그 제외)"),
         (5, "이사 지정", "PUT", "/api/blog/moved-to", "{ targetBlogId }"),
         (6, "지정 취소", "DELETE", "/api/blog/moved-to", ""),
         (7, "화면 열 때", "GET", "/api/blog/deletion-preview", "{ remainingPostCount, isPrimary }"),
         (8, "삭제", "DELETE", "/api/blog", "{ confirmAddress }. 204 후 마이페이지로"),
+        (9, "화면 열 때", "GET", "/api/blog/sidebar/modules", "모듈 8개의 순서·표시 여부(숨긴 것 포함)"),
+        (10, "사이드바 저장", "PUT", "/api/blog/sidebar/modules", "[{ moduleType, isVisible }] 8개 전체를 새 순서로. PROFILE을 숨기면 400"),
     ],
 )
 

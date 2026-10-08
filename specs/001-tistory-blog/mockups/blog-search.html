@@ -24,7 +24,7 @@
   </div>
   
 <aside class="sidebar" aria-label="사이드바">
-  <div class="row"><a class="pin" href="#api-C" title="API C">C</a><span class="small muted">사이드바 전체가 API C 하나</span></div>
+  <div class="row"><a class="pin" href="#api-C" title="API C">C</a><span class="small muted">사이드바 전체가 API C 하나. 순서와 보일 모듈은 주인이 블로그 설정에서 정한다</span></div>
   <div class="box"><div class="row"><span class="avatar lg"></span><div><b>지원의 기록</b><div class="small muted">백엔드 공부와 여행 메모</div></div></div>
     <div class="small muted num">구독자 18명</div></div>
   <div><h4>카테고리</h4>
@@ -40,7 +40,7 @@
 </div></main>
   </div>
   
-  <section class="api"><h2>이 화면이 부르는 API</h2><p class="small muted">화면의 파란 번호가 아래 줄이다. 글자 번호(A, B, C)는 같은 틀의 화면이 모두 부르는 공통 API다. 경로와 응답은 <a href="../contracts/rest-api.md">REST API 명세</a>를 따른다.</p><div class="table-wrap"><table><thead><tr><th>#</th><th>언제</th><th>요청</th><th>메모</th></tr></thead><tbody><tr id="api-A"><td><a class="pin" href="#api-A" title="API A">A</a></td><td>화면 열 때</td><td><span class="method">GET</span> /api/me</td><td>로그인 상태. 401이면 비회원</td></tr><tr id="api-B"><td><a class="pin" href="#api-B" title="API B">B</a></td><td>화면 열 때</td><td><span class="method">GET</span> /api/blog</td><td>블로그 이름·주인·구독 여부. 404면 404 화면</td></tr><tr id="api-C"><td><a class="pin" href="#api-C" title="API C">C</a></td><td>화면 열 때</td><td><span class="method">GET</span> /api/blog/sidebar</td><td>사이드바 전체(카테고리 트리, 태그, 최근 글·댓글 5)</td></tr><tr id="api-1"><td><a class="pin" href="#api-1" title="API 1">1</a></td><td>검색·페이지</td><td><span class="method">GET</span> /api/search?q=&amp;page=</td><td>블로그 Host에서 부르면 이 블로그만</td></tr></tbody></table></div></section>
+  <section class="api"><h2>이 화면이 부르는 API</h2><p class="small muted">화면의 파란 번호가 아래 줄이다. 글자 번호(A, B, C)는 같은 틀의 화면이 모두 부르는 공통 API다. 경로와 응답은 <a href="../contracts/rest-api.md">REST API 명세</a>를 따른다.</p><div class="table-wrap"><table><thead><tr><th>#</th><th>언제</th><th>요청</th><th>메모</th></tr></thead><tbody><tr id="api-A"><td><a class="pin" href="#api-A" title="API A">A</a></td><td>화면 열 때</td><td><span class="method">GET</span> /api/me</td><td>로그인 상태. 401이면 비회원</td></tr><tr id="api-B"><td><a class="pin" href="#api-B" title="API B">B</a></td><td>화면 열 때</td><td><span class="method">GET</span> /api/blog</td><td>블로그 이름·주인·구독 여부. 404면 404 화면</td></tr><tr id="api-C"><td><a class="pin" href="#api-C" title="API C">C</a></td><td>화면 열 때</td><td><span class="method">GET</span> /api/blog/sidebar</td><td>보이는 사이드바 모듈을 주인이 정한 순서로(기본: 홈 바로가기, 카테고리, 태그, 최근 글·댓글 5)</td></tr><tr id="api-1"><td><a class="pin" href="#api-1" title="API 1">1</a></td><td>검색·페이지</td><td><span class="method">GET</span> /api/search?q=&amp;page=</td><td>블로그 Host에서 부르면 이 블로그만</td></tr></tbody></table></div></section>
   
 </div>
 </body>
