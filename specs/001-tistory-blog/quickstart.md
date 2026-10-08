@@ -5,21 +5,23 @@
 ## 실행
 
 ```bash
-# MySQL 8, Redis (저장소 루트)
+# 모두 코드 저장소 루트(~/IdeaProjects/blog)에서
+
+# MySQL 8, Redis
 docker compose up -d
 
 # 백엔드 (http://localhost:8080, 처음 뜰 때 Flyway가 테이블 생성)
-cd backend && ./mvnw spring-boot:run
+./mvnw spring-boot:run
 
 # 백엔드 테스트 (Testcontainers라 Docker가 켜져 있어야 함)
-cd backend && ./mvnw test
+./mvnw test
 
 # 프론트 개발 서버 (/api → 8080 프록시)
 cd frontend && npm install && npm run dev
 
 # 배포용 jar (프론트 빌드 포함)
-cd frontend && npm run build && cp -r dist/* ../backend/src/main/resources/static/
-cd ../backend && ./mvnw clean package   # target/*.jar
+cd frontend && npm run build && cp -r dist/* ../src/main/resources/static/
+cd .. && ./mvnw clean package   # target/*.jar
 ```
 
 - 블로그 주소 사이 로그인 공유(상위 도메인 쿠키)를 확인하려면 `/etc/hosts`에 `127.0.0.1 blog.test alpha.blog.test beta.blog.test gamma.blog.test`를 넣고 `blog.test:8080`, `{주소}.blog.test:8080`으로 연다. `*.localhost`는 하위 도메인 쿠키 공유가 브라우저마다 달라 쓰지 않는다.

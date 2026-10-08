@@ -18,7 +18,7 @@ description: "지원 서비스 구현 작업 (2주 일정 기준)"
 
 아래 "N단계"는 유저 스토리별 묶음이고, 실제로 만드는 순서는 이 표의 **스텝**이다. 한 스텝은 브랜치·PR 하나 크기로, 끝나면 앱이 뜨고 테스트가 통과하는 상태여야 한다.
 
-**Claude Code CLI에 시키는 법**: `/speckit-implement 스텝 3만 진행하고 멈춰` 처럼 스텝 번호를 준다. Claude Code는 그 스텝의 작업만 하고, 끝난 작업은 `[X]`로 바꾸고, 아래 "끝났을 때 보여 줄 것"을 정리한 뒤 멈춘다. 지원이 "확인할 것"을 보고 PR을 병합하면 다음 스텝을 시킨다.
+**Claude Code CLI에 시키는 법**: 코드 저장소(`~/IdeaProjects/blog`)에서 `claude --add-dir ../blog-docs`로 열고 "스텝 3 진행해"처럼 스텝 번호를 준다. 코드 저장소의 `CLAUDE.md`([원본](./code-repo-CLAUDE.md))에 따라 그 스텝의 작업만 하고, 아래 "끝났을 때 보여 줄 것"을 정리한 뒤 멈춘다. 이 표의 체크박스는 스텝이 병합된 뒤 문서 저장소에서 따로 `[X]`로 바꾼다. 지원이 "확인할 것"을 보고 PR을 병합하면 다음 스텝을 시킨다.
 
 **모든 스텝에 공통으로 끝났을 때 보여 줄 것**: `./mvnw test` 결과, 바뀐 파일 목록, 만든 API 목록(contracts/rest-api.md와 다른 점이 있으면 그 이유), 미룬 것.
 
@@ -48,16 +48,16 @@ description: "지원 서비스 구현 작업 (2주 일정 기준)"
 
 - **[P]**: 다른 파일을 건드리고 의존이 없어 병렬로 할 수 있음
 - **[스토리]**: spec 유저 스토리(US1~US16)
-- 경로는 plan.md 구조 기준: `backend/src/main/java/com/blog/...`, `frontend/src/...`
+- 경로는 코드 저장소(plan.md 구조) 기준: `src/main/java/com/nhnacademy/blog/...`, `frontend/src/...`
 
 ---
 
 ## 1단계: 프로젝트 준비 (Setup)
 
-- [ ] T001 [W1] Maven Spring Boot 프로젝트 생성(Java 21, `java.version` 21), Maven Wrapper 포함 (Web, Security, Data JPA, Validation, Cache, Data Redis, Flyway(flyway-mysql), MySQL 드라이버, Testcontainers MySQL) in `backend/pom.xml`
+- [ ] T001 [W1] 이미 만든 Maven 프로젝트(Spring Boot 4.1.1, Java 21, Web MVC·Security·Data JPA·Validation·MySQL 드라이버 있음)에 의존성 추가: Cache, Data Redis, Flyway(`spring-boot-starter-flyway`, `flyway-mysql`), Testcontainers MySQL in `pom.xml`. 커밋된 `.DS_Store`를 지우고 `.gitignore`에 추가
 - [ ] T002 [P] [W1] Vite + React + TypeScript 프로젝트, `/api` → 8080 프록시 in `frontend/vite.config.ts`
-- [ ] T003 [P] [W1] `application.yml` 프로필 분리(dev: docker compose MySQL, prod: MySQL), `jpa.hibernate.ddl-auto=validate`, `TZ=Asia/Seoul`, `app.upload.dir`(dev 기본값 `/Users/chosun-nhn54/Documents/blog_project/uploads`, `.gitignore`에 `uploads/`), `erd/schema.sql`을 `db/migration/V1__init.sql`로 복사 in `backend/src/main/resources/` (R-02)
-- [ ] T004 [P] [W1] 프론트 빌드 결과를 `backend/src/main/resources/static`으로 복사하는 빌드 스크립트
+- [ ] T003 [P] [W1] `application.properties`를 `application.yml`로 바꾸고 프로필 분리(dev: docker compose MySQL, prod: MySQL), `jpa.hibernate.ddl-auto=validate`, `TZ=Asia/Seoul`, `app.upload.dir`(dev 기본값 `/Users/chosun-nhn54/IdeaProjects/blog/uploads`, `.gitignore`에 `uploads/`), 문서 저장소의 `erd/schema.sql`을 `db/migration/V1__init.sql`로 복사 in `src/main/resources/` (R-02)
+- [ ] T004 [P] [W1] 프론트 빌드 결과를 `src/main/resources/static`으로 복사하는 빌드 스크립트
 
 ---
 
@@ -73,7 +73,7 @@ description: "지원 서비스 구현 작업 (2주 일정 기준)"
 - [ ] T010 [W1] 화면 주소 처리: `/api/**` 외 요청은 블로그·글 확인 후 `index.html` 포워드, 301은 서버가 직접 in `global/config/SpaForwardController.java` (6장 ①)
 - [ ] T011 [W1] 가시성 판단 `PostVisibilityPolicy` (data-model 글 가시성 판단, 볼 수 없는 글은 401보다 먼저 404)와 목록용 공통 조건(Specification/QueryDSL) in `global/visibility/` (COM-01, POST-04)
 - [ ] T012 [W1] 페이지 요청 보정(size 1~50, page 음수→0)과 페이지·커서 응답 DTO in `global/web/` (R-06)
-- [ ] T013 [P] [W1] ADMIN 초기 계정(ERD의 "data.sql")을 Flyway `V2__admin_account.sql`로 넣기 in `backend/src/main/resources/db/migration/` (ADMIN-01)
+- [ ] T013 [P] [W1] ADMIN 초기 계정(ERD의 "data.sql")을 Flyway `V2__admin_account.sql`로 넣기 in `src/main/resources/db/migration/` (ADMIN-01)
 - [ ] T014 [P] [W1] XSS: OWASP HTML Sanitizer 허용 목록 `HtmlSanitizer`, jsoup 요약 `SummaryExtractor`, CSP 헤더 in `global/security/` (R-05, 기능 명세 공통 규칙 보안)
 - [ ] T015 [P] [W1] 프론트 라우터: 플랫폼 도메인 / 블로그 서브도메인 분기, API 클라이언트(쿠키 자동 전송 + CSRF 헤더, 401 → 플랫폼 로그인 후 원래 주소 복귀) in `frontend/src/app/`, `frontend/src/api/`
 - [ ] T016 [W1] 연타 방지: `Idempotency-Key` 인터셉터, 키·첫 응답을 Redis에 짧은 TTL로 저장 in `global/web/` (R-09, POST-01, CMT-01)
@@ -98,7 +98,7 @@ description: "지원 서비스 구현 작업 (2주 일정 기준)"
 - [ ] T024 [US1] [W1] 블로그 메인 글 목록 API(published_at DESC, id DESC, 페이지 10, 가시성 조건) in `post/` (BLOG-03)
 - [ ] T025 [US1] [W1] 사이드바 API: 이름·소개, 카테고리·글 수(CAT-03 전에는 한 단계, '미분류'는 글이 없으면 숨김), 최근 글 5, 최근 댓글 5 (볼 수 없는 글과 그 댓글 제외) in `blog/` (BLOG-04)
 - [ ] T026 [P] [US1] [W1] 화면: 가입, 로그인, 블로그 개설(주소 변경 불가 안내), 블로그 메인, 사이드바, 블로그 설정 in `frontend/src/pages/`
-- [ ] T027 [US1] [W1] 통합 테스트: 주소 규칙·중복·삭제된 주소 거절, 6번째 블로그 거절 in `backend/src/test/.../blog/`
+- [ ] T027 [US1] [W1] 통합 테스트: 주소 규칙·중복·삭제된 주소 거절, 6번째 블로그 거절 in `src/test/.../blog/`
 
 **중간 점검**: US1 단독 동작
 
@@ -117,11 +117,11 @@ description: "지원 서비스 구현 작업 (2주 일정 기준)"
 - [ ] T033 [US2] [W1] 글 삭제 API: 주인만, 소프트 삭제(`deleted_at`), 댓글·공감·알림 함께 처리(한 트랜잭션), 글 수·공감 수에서 바로 빠짐 in `post/` (POST-03)
 - [ ] T034 [US2] [W1] 공개 범위 변경 API (PUBLIC, PRIVATE; SUBSCRIBERS는 구독 이후) in `post/` (POST-06)
 - [ ] T035 [P] [US2] [W1] 화면: Tiptap 에디터(허용 서식만), 글쓰기·수정, 카테고리 관리, 삭제 확인 in `frontend/src/components/editor/`, `pages/manage/`
-- [ ] T036 [US2] [W2a] 이미지 업로드 API: 10MB, 확장자+실제 내용 검사(위장 파일 거절), UUID 파일명으로 `app.upload.dir`(개발: `/Users/chosun-nhn54/Documents/blog_project/uploads`)에 저장, `/uploads/**`로 서빙, 리사이즈·썸네일, EXIF 방향 보정, GIF 유지 in `image/` (POST-05, plan 저장소)
+- [ ] T036 [US2] [W2a] 이미지 업로드 API: 10MB, 확장자+실제 내용 검사(위장 파일 거절), UUID 파일명으로 `app.upload.dir`(개발: `/Users/chosun-nhn54/IdeaProjects/blog/uploads`)에 저장, `/uploads/**`로 서빙, 리사이즈·썸네일, EXIF 방향 보정, GIF 유지 in `image/` (POST-05, plan 저장소)
 - [ ] T037 [US2] [W2a] 에디터 이미지 버튼 ↔ 업로드 API 연결, 여러 장은 고른 순서대로 in `frontend/src/components/editor/` (POST-05)
 - [ ] T038 [P] [US2] [W2a] `tag`, `post_tag` 엔티티, 글 작성·수정 시 태그 최대 10개·중복 제거·없는 이름 자동 생성 in `tag/` (TAG-01)
 - [ ] T039 [US2] [W2a] 태그별 글 목록 `/tag/{name}` in `post/` (TAG-02)
-- [ ] T040 [US2] [W1] 통합 테스트: 수정 후 주소·순서 불변, 카테고리 삭제 시 미분류, 비공개 전환 시 목록·개수에서 빠짐 in `backend/src/test/.../post/`
+- [ ] T040 [US2] [W1] 통합 테스트: 수정 후 주소·순서 불변, 카테고리 삭제 시 미분류, 비공개 전환 시 목록·개수에서 빠짐 in `src/test/.../post/`
 
 **중간 점검**: US1 + US2 동작
 
@@ -140,7 +140,7 @@ description: "지원 서비스 구현 작업 (2주 일정 기준)"
 - [ ] T046 [US3] [W2a] 공감 API: PUT/DELETE 멱등, `post_like` UNIQUE, like_count 트랜잭션 갱신 in `reaction/` (SOC-01)
 - [ ] T047 [US3] [W2a] 블로그 내 검색 API: 제목·본문·태그, 대소문자 무시, trim·공백만 거절, 최신순 페이지 10, 가시성 조건 in `search/` (SRCH-01)
 - [ ] T048 [P] [US3] [W2a] 화면: 공감 버튼(즉시 반영), 블로그 검색(검색어 유지, 결과 주소 공유 가능) in `frontend/src/`
-- [ ] T049 [US3] [W2a] 통합 테스트: 비회원 댓글·공감 401, 공감 연타 1개, 댓글 수·공감 수 일치 in `backend/src/test/`
+- [ ] T049 [US3] [W2a] 통합 테스트: 비회원 댓글·공감 401, 공감 연타 1개, 댓글 수·공감 수 일치 in `src/test/`
 
 ---
 
@@ -151,7 +151,7 @@ description: "지원 서비스 구현 작업 (2주 일정 기준)"
 
 - [ ] T050 [US4] [W1] 서비스 계층 주인 검사 공통화 `BlogOwnerGuard` in `global/` (COM-01)
 - [ ] T051 [P] [US4] [W1] 화면: 404·403 페이지, 입력 오류 항목 표시(입력 유지), 관리자 영역 진입 보호 `/admin` in `frontend/src/` (COM-02, ADMIN-01)
-- [ ] T052 [US4] [W1] 통합 테스트: 남의 비공개 글 404, 남의 수정 403, 일반 회원 `/api/admin/**` 403, 다른 블로그 주소+글 번호 301/404, 500 응답에 스택 없음 in `backend/src/test/.../security/`
+- [ ] T052 [US4] [W1] 통합 테스트: 남의 비공개 글 404, 남의 수정 403, 일반 회원 `/api/admin/**` 403, 다른 블로그 주소+글 번호 301/404, 500 응답에 스택 없음 in `src/test/.../security/`
 
 **중간 점검**: P0 24개 중 1주차 분량 완성 → "가입 → 개설 → 발행 → 홈 발견 → 읽기·댓글" 한 바퀴
 

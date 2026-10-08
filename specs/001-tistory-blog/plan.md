@@ -12,11 +12,11 @@
 
 ## 기술 맥락 (Technical Context)
 
-**언어/버전**: Java 21 (Spring Boot 3.x, **Maven**, Maven Wrapper `mvnw` 포함), TypeScript/JavaScript (React 18) — 버전은 [research.md R-01](./research.md) 기본값
+**언어/버전**: Java 21 (Spring Boot 4.1, **Maven**, Maven Wrapper `mvnw` 포함), TypeScript/JavaScript (React 18) — 버전은 [research.md R-01](./research.md) 기본값
 
 **주요 의존성**: Spring Boot (Web, Security, Data JPA, Validation, Cache, Data Redis), Flyway, JWT 라이브러리, OWASP Java HTML Sanitizer, jsoup / React, React Router, Vite, Tiptap, DOMPurify
 
-**저장소**: 주 DB는 MySQL 8 (개발은 docker compose의 MySQL, 운영 MySQL). 테이블은 Flyway가 [erd/schema.sql](./erd/schema.sql)로 만들고 JPA는 `ddl-auto=validate`로 엔티티가 스키마와 맞는지만 확인한다 (R-02). Redis는 캐시(@Cacheable, TTL 5분)와 연타 방지 키 저장. PostgreSQL + pgvector는 비슷한 글 추천(OWN-06) 전용으로 2주 안에 도전(도전 과제, R-02). 이미지는 서버 로컬 디스크의 업로드 폴더(UUID 파일명)에 두고, DB에는 경로·원본 파일명·크기만. 업로드 폴더는 설정값 `app.upload.dir`이고 개발 기본값은 프로젝트 루트 아래 `/Users/chosun-nhn54/Documents/blog_project/uploads`(git에서 뺌), 운영은 서버 경로로 따로 준다. 화면에서는 `/uploads/{파일명}`으로 연다. ERD·data-model의 `./uploads/`는 이 폴더를 뜻한다.
+**저장소**: 주 DB는 MySQL 8 (개발은 docker compose의 MySQL, 운영 MySQL). 테이블은 Flyway가 [erd/schema.sql](./erd/schema.sql)로 만들고 JPA는 `ddl-auto=validate`로 엔티티가 스키마와 맞는지만 확인한다 (R-02). Redis는 캐시(@Cacheable, TTL 5분)와 연타 방지 키 저장. PostgreSQL + pgvector는 비슷한 글 추천(OWN-06) 전용으로 2주 안에 도전(도전 과제, R-02). 이미지는 서버 로컬 디스크의 업로드 폴더(UUID 파일명)에 두고, DB에는 경로·원본 파일명·크기만. 업로드 폴더는 설정값 `app.upload.dir`이고 개발 기본값은 코드 저장소 루트 아래 `/Users/chosun-nhn54/IdeaProjects/blog/uploads`(git에서 뺌), 운영은 서버 경로로 따로 준다. 화면에서는 `/uploads/{파일명}`으로 연다. ERD·data-model의 `./uploads/`는 이 폴더를 뜻한다.
 
 **테스트**: JUnit 5 + Spring Boot Test + MockMvc(백엔드, DB는 Testcontainers MySQL), Vitest(프론트, 최소) — 원본에 없어 기본값으로 둠 (R-01). 실행은 `./mvnw test`
 
@@ -101,17 +101,16 @@ specs/001-tistory-blog/
 
 ### 소스 코드 (저장소 루트)
 
-코드 저장소는 지원 컴퓨터의 `/Users/chosun-nhn54/Documents/blog_project`에 만든다. 아래 경로는 모두 이 폴더 기준이다.
+코드 저장소는 GitHub [AIP-1/blog-basic-AIGJ_01_017-blog](https://github.com/AIP-1/blog-basic-AIGJ_01_017-blog)이고, 지원 컴퓨터의 `/Users/chosun-nhn54/IdeaProjects/blog`가 그 클론이다(IntelliJ 프로젝트). 이 문서 저장소(blog-docs)와는 별개다. Spring Initializr로 만든 Maven 프로젝트가 루트에 있어서 **저장소 루트가 곧 백엔드**이고, 프론트만 `frontend/` 하위 폴더에 둔다. 기본 패키지는 `com.nhnacademy.blog`. 아래 경로는 모두 이 저장소 루트 기준이다.
 
 ```text
 docker-compose.yml          # 개발용 MySQL 8, Redis (도전 과제 때 PostgreSQL + pgvector 추가)
 uploads/                    # 개발용 이미지 저장 폴더 (app.upload.dir, .gitignore)
 
-backend/
-├── pom.xml
-├── mvnw, .mvn/
-└── src/
-    ├── main/java/com/blog/
+pom.xml
+mvnw, mvnw.cmd, .mvn/
+src/
+    ├── main/java/com/nhnacademy/blog/   # BlogApplication.java
     │   ├── global/          # config(Security, Cache, Web), error(공통 오류 응답), host(서브도메인 해석), visibility(가시성 판단)
     │   ├── auth/            # 가입·로그인·JWT·소셜
     │   ├── member/
@@ -130,8 +129,8 @@ backend/
     │   ├── admin/           # 서비스 관리
     │   ├── image/
     │   └── recommend/       # 비슷한 글 추천 (PostgreSQL + pgvector, 도전 과제)
-    ├── main/resources/      # application.yml, db/migration/(V1__init.sql = erd/schema.sql, 이후 V2…), ADMIN 초기 계정(Flyway 데이터 마이그레이션), static/(React 빌드 결과)
-    └── test/java/com/blog/
+    ├── main/resources/      # application.yml(지금의 application.properties를 바꿈), db/migration/(V1__init.sql = erd/schema.sql, 이후 V2…), ADMIN 초기 계정(Flyway 데이터 마이그레이션), static/(React 빌드 결과)
+    └── test/java/com/nhnacademy/blog/
 
 frontend/
 ├── vite.config.ts           # /api → localhost:8080 프록시
@@ -142,9 +141,11 @@ frontend/
     └── api/
 ```
 
-**구조 결정**: 웹 애플리케이션 구조. 빌드 시 `frontend/dist`를 `backend/src/main/resources/static`으로 복사해 jar 하나로 배포한다. 백엔드는 기능(도메인) 단위 패키지.
+**구조 결정**: 웹 애플리케이션 구조. 빌드 시 `frontend/dist`를 `src/main/resources/static`으로 복사해 jar 하나로 배포한다. 백엔드는 기능(도메인) 단위 패키지.
 
-**스키마 관리**: Crowfoot ERD → `erd/schema.sql` → `backend/src/main/resources/db/migration/V1__init.sql`로 복사. 스키마를 바꿀 때는 Crowfoot을 고치고 변경분만 `V2__….sql`처럼 새 파일로 더한다(이미 적용된 V1은 고치지 않는다). 엔티티는 테이블에 맞춰 쓰고, 맞지 않으면 앱이 뜰 때 validate가 실패한다.
+**Spring Boot 4 주의**: 프로젝트가 Spring Boot 4.1.1로 만들어져 있다(Initializr 기본). 4.x는 스타터 이름(`spring-boot-starter-webmvc` 등)과 Flyway 자동 설정(`spring-boot-starter-flyway` 필요), Jackson 3 같은 점이 3.x와 다르므로, Claude Code가 3.x 예제를 그대로 쓰지 않게 한다.
+
+**스키마 관리**: Crowfoot ERD → `erd/schema.sql` → 코드 저장소의 `src/main/resources/db/migration/V1__init.sql`로 복사. 스키마를 바꿀 때는 Crowfoot을 고치고 변경분만 다음 번호(`V3__….sql` 등)의 새 파일로 더한다(이미 적용된 V1은 고치지 않는다). 엔티티는 테이블에 맞춰 쓰고, 맞지 않으면 앱이 뜰 때 validate가 실패한다.
 
 ## 구현 순서와 검토
 
