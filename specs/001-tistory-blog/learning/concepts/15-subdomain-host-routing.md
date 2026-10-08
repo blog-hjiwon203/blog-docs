@@ -1,6 +1,6 @@
 # 15. 서브도메인과 Host 헤더로 블로그 찾기
 
-> 관련 스텝: [스텝 3](../step-03.md) (T009) · 관련 개념: [10-http-cookies](./10-http-cookies.md), [13-csrf-samesite-cors](./13-csrf-samesite-cors.md), [16-authorization-visibility](./16-authorization-visibility.md), [18-spa-server-routing](./18-spa-server-routing.md)
+> 관련 스텝: [스텝 3](../step-03.md) (T009), 개발 환경 보강 2026-10-09(dnsmasq) · 관련 개념: [10-http-cookies](./10-http-cookies.md), [13-csrf-samesite-cors](./13-csrf-samesite-cors.md), [16-authorization-visibility](./16-authorization-visibility.md), [18-spa-server-routing](./18-spa-server-routing.md)
 
 ## 1. 이 문서로 배우는 것
 
@@ -8,6 +8,8 @@
 - 브라우저가 `alpha.blog.com`을 열 때 DNS가 이름을 IP 주소로 바꾸는 과정
 - 블로그가 수천 개여도 DNS 설정은 한 줄이면 되는 이유(와일드카드 DNS)
 - 로컬 개발에서 `/etc/hosts`를 고치는 이유와 `*.localhost`를 쓰지 않는 이유
+- `/etc/hosts`의 한계(블로그마다 한 줄)와, dnsmasq + `/etc/resolver`로 `*.blog.test` 전체를 한 번에 내 컴퓨터로 보내는 법
+- 실제 배포에서 DNS 와일드카드 레코드와 와일드카드 HTTPS 인증서를 설정하는 법
 - 한 서버가 여러 주소의 요청을 받고 구분하는 방법(HTTP `Host` 헤더, 가상 호스트)
 - 멀티테넌시: 하나의 서비스 안에 블로그(테넌트)가 여럿 사는 구조
 - 서브도메인 방식과 경로 방식(`blog.com/@alpha`)의 장단점
@@ -93,6 +95,19 @@ DNS에 적는 기록(레코드)의 대표적인 종류:
 
 HTTPS를 쓰려면 인증서도 와일드카드 인증서(`*.blog.com`)가 필요하다. 이것도 한 단계만 덮는다.
 
+**실제로 설정하는 곳.** 도메인(`blog.com`)을 산 곳(가비아, Cloudflare, AWS Route 53 등)의 DNS 관리 화면에서 레코드를 더한다. 화면 모양은 달라도 넣는 값은 같다.
+
+| 타입 | 이름(호스트) | 값 | TTL | 뜻 |
+| --- | --- | --- | --- | --- |
+| A | `@` (도메인 자신) | 서버 IP | 300 등 | 플랫폼 주소 `blog.com` |
+| A | `*` | 서버 IP | 300 등 | 모든 블로그 주소 `{주소}.blog.com` |
+| A 또는 CNAME | `www` | 서버 IP 또는 `blog.com` | | `www.blog.com`도 플랫폼 (`*`가 덮지만 따로 두면 의도가 분명하다) |
+
+- **TTL**은 다른 DNS 서버가 이 답을 몇 초 동안 기억해도 되는지다. 처음 설정할 때는 짧게(300초) 두면 잘못 넣었을 때 빨리 바로잡힌다.
+- 레코드는 바로 퍼지지 않는다. 몇 분에서 길게는 TTL만큼 걸린다.
+- **와일드카드 인증서**: 무료 인증서인 Let's Encrypt는 `*.blog.com` 인증서를 **DNS-01 방식**으로만 준다. "이 도메인의 주인이 맞다"를 DNS에 `_acme-challenge.blog.com` TXT 레코드를 넣어 증명하는 방식이다. DNS 회사가 API를 주면 certbot 같은 도구가 자동으로 넣고 갱신한다.
+- 앱 쪽은 설정값 하나만 바꾼다. `app.domain.platform`(운영은 환경 변수 `APP_PLATFORM_DOMAIN`)을 실제 도메인으로 두면, 블로그 주소 해석과 로그인 쿠키 도메인(`Domain=.blog.com`)이 모두 그 값을 따른다(5.3).
+
 ### 3.4 /etc/hosts: 내 컴퓨터만의 DNS
 
 `/etc/hosts`(Windows는 `C:\Windows\System32\drivers\etc\hosts`)는 운영체제가 DNS보다 먼저 보는 파일이다. 한 줄에 "IP 이름 이름 ..."을 적는다.
@@ -106,9 +121,86 @@ HTTPS를 쓰려면 인증서도 와일드카드 인증서(`*.blog.com`)가 필�
 - **와일드카드를 쓸 수 없다.** hosts 파일은 `*.blog.test`를 지원하지 않아서, 테스트할 블로그 주소를 하나씩 적어야 한다. quickstart.md가 `alpha`, `beta`, `gamma`를 적게 하는 이유다.
 - 관리자 권한이 필요하다(`sudo vi /etc/hosts`).
 
+- **새 블로그를 만들 때마다 한 줄씩 더해야 한다.** 화면에서 블로그를 개설하면 바로 그 주소(`myfirst.blog.test`)로 이동하는데, hosts에 없으면 브라우저가 `DNS_PROBE_FINISHED_NXDOMAIN`(그런 이름 없음) 오류를 낸다. 서버까지 요청이 가지도 않은 것이라 서버 로그에는 아무것도 없다.
+
 **왜 `*.localhost`를 쓰지 않나**: 요즘 브라우저는 `alpha.localhost`처럼 `.localhost`로 끝나는 이름을 hosts 없이도 127.0.0.1로 보내 준다. 편해 보이지만, 이 프로젝트는 **모든 블로그 주소가 로그인 쿠키를 같이 써야** 한다(`Domain=.blog.test`, [10-http-cookies](./10-http-cookies.md)). `localhost`에 대한 쿠키 도메인 처리는 브라우저마다 달라서, `Domain=.localhost` 쿠키가 하위 주소에 공유되지 않는 경우가 있다(research.md R-03 "로컬 개발"). 그래서 실제 운영과 같은 구조(`blog.test` + 하위 주소)를 hosts로 흉내 낸다.
 
-### 3.5 HTTP Host 헤더
+### 3.5 dnsmasq와 /etc/resolver: 내 컴퓨터의 와일드카드 DNS
+
+hosts는 와일드카드가 안 되니, 내 컴퓨터 안에 **작은 DNS 서버**를 띄워 와일드카드 규칙을 주는 방법이 있다. 그 DNS 서버 프로그램이 **dnsmasq**다.
+
+```
+address=/blog.test/127.0.0.1
+```
+
+dnsmasq 설정에 이 한 줄을 두면 `blog.test`와 그 아래 모든 이름(`alpha.blog.test`, `아무거나.blog.test`)을 127.0.0.1로 답한다. 3.3의 `*.blog.com A ...` 레코드와 같은 일을 내 컴퓨터 안에서 하는 셈이다.
+
+그런데 운영체제는 평소에 통신사·공유기 DNS에 묻지, 내 컴퓨터의 dnsmasq에 묻지 않는다. macOS는 **`/etc/resolver/{도메인}` 파일**로 "이 도메인과 그 아래 이름은 이 DNS 서버에 물어라"를 정할 수 있다. 파일 이름이 곧 도메인이다.
+
+```
+/etc/resolver/blog.test 의 내용:
+nameserver 127.0.0.1
+```
+
+**판단은 두 단계로 나뉜다.**
+
+| 단계 | 누가 | 무엇을 보고 | 범위 |
+| --- | --- | --- | --- |
+| ① 누구에게 물을지 | macOS | `/etc/resolver/` 파일 이름 | `blog.test`면 `*.blog.test`만 dnsmasq로, 나머지(`naver.com` 등)는 원래 DNS |
+| ② 뭐라고 답할지 | dnsmasq | `address=/blog.test/127.0.0.1` 규칙 | 규칙에 맞는 이름은 127.0.0.1, 안 맞으면 원래 DNS에 대신 물음 |
+
+와일드카드 역할은 ② dnsmasq 규칙이 하고, ①은 "이 질문을 dnsmasq에 넘길지"만 정한다.
+
+```
+"xyz.blog.test의 IP는?"
+  → /etc/hosts에 없음
+  → ① 끝이 blog.test → /etc/resolver/blog.test → 127.0.0.1의 dnsmasq에 물음
+  → ② dnsmasq: address=/blog.test/127.0.0.1 규칙에 맞음 → 127.0.0.1
+  → 브라우저가 127.0.0.1:8080에 연결, Host: xyz.blog.test로 요청 → BlogHostResolver(5.1)
+```
+
+파일 이름을 `test`로 하면(`/etc/resolver/test`) ①이 `.test`로 끝나는 이름을 **전부** dnsmasq로 보낸다. 다른 프로젝트에서 `myapp.test`를 쓸 때 dnsmasq 규칙만 한 줄 더하면 되는 대신, 이 프로젝트에 필요한 것보다 범위가 넓다. 규칙이 없는 `foo.test`는 ②에서 원래 DNS로 넘어가 결국 "없음"이 되므로 어느 쪽이든 동작은 같다. 이 문서는 범위가 좁은 `blog.test`를 쓴다.
+
+**dnsmasq는 내 컴퓨터에서 온 질문만 받게 한다.** dnsmasq는 기본으로 모든 네트워크 연결(와이파이 등)에서 질문을 받는다. 같은 와이파이의 다른 기기가 내 dnsmasq에 DNS를 물을 수 있다는 뜻이다. 필요 없으니 닫는다.
+
+```
+listen-address=127.0.0.1    # 내 컴퓨터 자신으로 온 질문만
+bind-interfaces             # 그 주소에만 붙어서 다른 연결에서는 듣지 않음
+```
+
+**dnsmasq와 블로그 서버는 별개 프로그램이다.** dnsmasq는 `brew services`로 켜 두면 컴퓨터를 켤 때 자동으로 켜지고, Spring 서버를 켜든 끄든 계속 돈다. 그래서 브라우저 오류로 어디가 꺼졌는지 알 수 있다.
+
+| 상태 | 브라우저 오류 | 어디서 실패했나 |
+| --- | --- | --- |
+| dnsmasq 꺼짐, hosts에도 없음 | `DNS_PROBE_FINISHED_NXDOMAIN` | 이름 찾기(DNS) |
+| dnsmasq 켜짐, Spring 서버 꺼짐 | `ERR_CONNECTION_REFUSED` | 127.0.0.1:8080에 받는 프로그램이 없음 |
+| 서버 켜짐, Docker(MySQL) 꺼짐 | 서버가 뜨지 않음 | 서버가 DB에 연결 못 함 |
+
+개발이 끝난 뒤 dnsmasq를 꼭 되돌릴 필요는 없다. `*.blog.test`에만 영향이 있고 가볍다. 다른 프로그램(일부 VPN, 다른 DNS 도구)이 53번 포트를 써야 해서 부딪히거나, 다시 쓸 일이 없을 때 7장의 되돌리기를 한다.
+
+`.test`는 실제 인터넷에서 쓰지 않기로 예약된 끝 이름이라(RFC 2606) 진짜 사이트와 겹칠 걱정이 없다.
+
+| | /etc/hosts | dnsmasq + /etc/resolver |
+| --- | --- | --- |
+| 와일드카드 | 안 됨, 이름마다 한 줄 | `address=/blog.test/127.0.0.1` 한 줄 |
+| 설치 | 필요 없음 | `brew install dnsmasq` |
+| 새 블로그 | 매번 추가 | 할 일 없음 |
+| 운영과 닮은 정도 | 낮음 | 운영의 와일드카드 레코드와 같은 구조 |
+
+명령 모음은 7장 실습 6에 있다.
+
+### 3.6 DNS 오류와 서버의 주소 해석은 다른 단계
+
+"블로그 주소 라우팅 기능이 있으면 이 오류도 해결되지 않나?" 아니다. 요청은 두 단계를 지난다.
+
+```
+① 이름 찾기(DNS)         내 컴퓨터가 함: alpha.blog.test → 127.0.0.1    ← NXDOMAIN은 여기서 실패
+② 블로그 고르기(Host)     서버가 함: Host: alpha.blog.test → alpha 블로그  ← BlogHostResolver
+```
+
+①이 실패하면 요청이 서버에 닿지 않으니 서버 코드로는 고칠 수 없다. 개발에서는 hosts나 dnsmasq가, 운영에서는 DNS 와일드카드 레코드가 ①을 맡는다.
+
+### 3.7 HTTP Host 헤더
 
 HTTP/1.1 요청에는 **Host 헤더가 반드시** 들어간다. 브라우저가 주소창의 호스트 이름(과 포트)을 그대로 넣는다.
 
@@ -133,7 +225,7 @@ Accept: text/html
 
 > 운영에서 앞에 로드밸런서나 리버스 프록시(Nginx)를 두면, 프록시가 Host를 바꿔 넘기거나 `X-Forwarded-Host`에 원래 값을 담는다. 그때는 Spring Boot의 `server.forward-headers-strategy` 설정이 필요할 수 있다. 지금 프로젝트는 프록시 없이 직접 받는 구조다.
 
-### 3.6 가상 호스트: 한 서버, 여러 사이트
+### 3.8 가상 호스트: 한 서버, 여러 사이트
 
 **가상 호스트(virtual host)**는 서버 하나가 Host 헤더를 보고 여러 사이트를 나눠 서빙하는 방식이다. Nginx의 `server_name`, Apache의 `<VirtualHost>`가 대표적이다.
 
@@ -147,7 +239,7 @@ Host: b.com │  Host == b.com → 사이트 B    │
 
 이 프로젝트는 같은 생각을 **애플리케이션 안에서** 한다. Spring Boot 앱 하나가 모든 Host를 받고, 코드(`BlogHostResolver`)가 Host를 보고 플랫폼 화면인지, 어느 블로그인지 정한다.
 
-### 3.7 멀티테넌시
+### 3.9 멀티테넌시
 
 **테넌트(tenant)**는 "세입자"라는 뜻이다. 하나의 서비스(건물)에 여러 고객(세입자)이 각자의 공간을 갖는 구조를 **멀티테넌시**라고 한다. 이 프로젝트에서 테넌트는 **블로그**다.
 
@@ -159,7 +251,7 @@ Host: b.com │  Host == b.com → 사이트 B    │
 
 테이블을 공유하는 방식에서는 "모든 조회에 `blog_id` 조건이 붙었나"가 생명이다. 그래서 요청이 들어오는 입구에서 **현재 블로그를 한 번 정해 두고**(`@CurrentBlog`), 모든 기능이 그 블로그를 기준으로 일하게 만든다.
 
-### 3.8 서브도메인 방식 vs 경로 방식
+### 3.10 서브도메인 방식 vs 경로 방식
 
 블로그를 구분하는 방법은 크게 두 가지다.
 
@@ -468,6 +560,12 @@ server: {
 7. **테넌트 조건 빠뜨리기**: 블로그 API에서 글을 찾을 때 `postRepository.findById(id)`만 쓰면 다른 블로그의 글이 나온다. `@CurrentBlog`로 받은 블로그와 글의 소속을 꼭 비교한다(가시성 판단 ②).
 8. **Vite 프록시에 `changeOrigin: true`**: 위 5.6. 백엔드가 블로그를 못 찾는다.
 9. **운영에서 리버스 프록시 뒤에 둘 때 Host가 바뀜**: 프록시가 원래 Host를 넘기도록 설정해야 한다.
+10. **dnsmasq만 켜고 `/etc/resolver/blog.test`를 안 만듦**: macOS가 dnsmasq에 묻지 않아 여전히 NXDOMAIN이다.
+11. **`dig`·`nslookup`으로 확인**: 이 둘은 macOS의 `/etc/resolver`를 거치지 않고 DNS 서버에 바로 물어서, 설정이 맞아도 "없음"이 나올 수 있다. `ping`이나 `dscacheutil -q host -a name xyz.blog.test`로 확인한다.
+12. **설정을 바꿨는데 그대로**: 운영체제가 예전 답을 기억(캐시)하고 있다. `sudo dscacheutil -flushcache; sudo killall -HUP mDNSResponder`로 비우고, 브라우저는 새로 연다.
+13. **dnsmasq를 쓰면서 hosts에 옛 줄을 남김**: hosts가 먼저라 그 이름은 hosts 값을 쓴다. 지금은 둘 다 127.0.0.1이라 문제없지만, 헷갈리지 않게 지운다.
+14. **와일드카드 레코드만 두고 인증서는 `blog.com`용 하나만**: 블로그 주소에서 HTTPS 오류가 난다. `*.blog.com` 인증서가 따로 필요하다.
+15. **dnsmasq를 모든 네트워크에 열어 둠**: 기본 설정은 와이파이 등 모든 연결에서 질문을 받는다. `listen-address=127.0.0.1`과 `bind-interfaces`로 내 컴퓨터만 받게 한다.
 
 ## 7. 직접 해 보기
 
@@ -508,6 +606,53 @@ curl -s -o /dev/null -w "%{http_code}\n" -H "Host: localhost" localhost:8080/   
 
 `frontend/vite.config.ts`의 `'/api': 'http://localhost:8080'`을 `'/api': { target: 'http://localhost:8080', changeOrigin: true }`로 바꾸고, hosts가 있는 상태에서 `npm run dev` 후 `curl -i -H "Host: alpha.blog.test:5173" localhost:5173/api/test/blog`(테스트 API는 테스트 소스에만 있으므로, 실제로는 스텝 4 이후 블로그 API로 확인)를 부르면 블로그를 못 찾는다. 원래대로 되돌린다.
 
+**실습 6. dnsmasq로 바꾸기 (명령 모음)**
+
+`/etc/hosts`에 블로그 주소를 하나씩 넣던 방식을 dnsmasq로 바꾸고, 옛 hosts 줄을 지운다. 위에서부터 차례로 실행한다.
+
+```bash
+# ── 1. dnsmasq 설치와 규칙 ─────────────────────────────
+brew install dnsmasq
+echo 'address=/blog.test/127.0.0.1' >> "$(brew --prefix)/etc/dnsmasq.conf"
+printf 'listen-address=127.0.0.1\nbind-interfaces\n' >> "$(brew --prefix)/etc/dnsmasq.conf"   # 내 컴퓨터만
+grep -E 'blog.test|listen-address|bind-interfaces' "$(brew --prefix)/etc/dnsmasq.conf"   # 세 줄이 보이면 됨
+
+# ── 2. dnsmasq 켜기 (53번 포트를 쓰므로 sudo, 컴퓨터를 켤 때 자동 시작) ──
+sudo brew services start dnsmasq
+sudo brew services list | grep dnsmasq                  # started 이면 성공
+
+# ── 3. *.blog.test 이름은 dnsmasq에 묻게 하기 ─────────
+sudo mkdir -p /etc/resolver
+echo 'nameserver 127.0.0.1' | sudo tee /etc/resolver/blog.test
+scutil --dns | grep -A3 'domain   : blog.test'          # resolver 등록 확인
+# 예전에 /etc/resolver/test로 만들었다면 둘 중 하나만 남긴다: sudo rm /etc/resolver/test
+
+# ── 4. 기존 /etc/hosts의 blog.test 줄 되돌리기 ─────────
+sudo cp /etc/hosts /etc/hosts.backup-$(date +%Y%m%d)    # 혹시 몰라 백업
+grep -n 'blog\.test' /etc/hosts                         # 지울 줄 미리 보기
+sudo sed -i '' '/blog\.test/d' /etc/hosts                # blog.test가 들어간 줄만 삭제
+grep -c 'blog\.test' /etc/hosts                         # 0 이면 다 지워짐
+
+# ── 5. 캐시 비우고 확인 ───────────────────────────────
+sudo dscacheutil -flushcache; sudo killall -HUP mDNSResponder
+ping -c 1 alpha.blog.test                              # 127.0.0.1에서 응답
+ping -c 1 xyz-anything.blog.test                       # 처음 보는 이름도 127.0.0.1
+dscacheutil -q host -a name myfirst.blog.test          # ip_address: 127.0.0.1
+```
+
+브라우저는 완전히 껐다 켜거나 시크릿 창으로 `http://{아무 블로그}.blog.test:8080`을 연다. `ERR_CONNECTION_REFUSED`가 나오면 DNS는 된 것이고 Spring 서버가 꺼져 있는 것이다(3.5 표).
+
+**되돌리기 (dnsmasq를 그만 쓰고 hosts로 돌아갈 때)**
+
+```bash
+sudo brew services stop dnsmasq
+sudo rm -f /etc/resolver/blog.test /etc/resolver/test
+sudo sed -i '' -e '/address=\/blog.test\//d' -e '/^listen-address=127.0.0.1$/d' -e '/^bind-interfaces$/d' "$(brew --prefix)/etc/dnsmasq.conf"
+sudo cp /etc/hosts.backup-YYYYMMDD /etc/hosts           # 4단계에서 만든 백업 날짜로
+sudo dscacheutil -flushcache; sudo killall -HUP mDNSResponder
+# brew uninstall dnsmasq                                # 아예 지우려면
+```
+
 ## 8. 확인 문제
 
 1. `alpha.blog.com`에서 TLD, 2단계 도메인, 서브도메인은 각각 무엇인가?
@@ -534,9 +679,26 @@ curl -s -o /dev/null -w "%{http_code}\n" -H "Host: localhost" localhost:8080/   
 8. Vite 프록시에서 `changeOrigin: true`를 켜면 블로그 API가 왜 깨지나?
 <details><summary>답</summary>프록시가 Host 헤더를 대상 서버 주소(<code>localhost:8080</code>)로 바꿔 보내서, 백엔드가 서브도메인을 읽지 못해 플랫폼이나 알 수 없는 주소로 판단하기 때문이다.</details>
 
+9. 브라우저가 `DNS_PROBE_FINISHED_NXDOMAIN`을 낼 때 서버 로그에 아무것도 없는 이유는?
+<details><summary>답</summary>이름을 IP로 바꾸는 단계(DNS)에서 실패해 요청이 서버에 닿지도 않았기 때문이다. 서버의 Host 해석(BlogHostResolver)은 그다음 단계라 이 오류와 관계없다.</details>
+
+10. dnsmasq를 설치하고 규칙을 넣었는데도 `alpha.blog.test`가 열리지 않는다. 무엇을 빠뜨렸을 가능성이 큰가?
+<details><summary>답</summary><code>/etc/resolver/blog.test</code>(내용 <code>nameserver 127.0.0.1</code>)를 만들지 않아 macOS가 <code>*.blog.test</code> 이름을 dnsmasq에 묻지 않는 경우다. 또는 dnsmasq가 켜지지 않았거나(<code>sudo brew services list</code>), 예전 답이 캐시에 남아 있는 경우다.</details>
+
+11. 실제 배포에서 블로그 1만 개를 HTTPS로 열려면 DNS와 인증서에 각각 무엇이 필요한가?
+<details><summary>답</summary>DNS에는 <code>*</code> A 레코드 한 줄(플랫폼용 <code>@</code> 포함), 인증서는 <code>*.blog.com</code> 와일드카드 인증서 하나다. Let's Encrypt라면 DNS-01 방식(TXT 레코드로 소유 증명)으로 받는다.</details>
+
+12. `/etc/resolver/blog.test`와 dnsmasq의 `address=/blog.test/127.0.0.1`은 각각 무엇을 정하나?
+<details><summary>답</summary><code>/etc/resolver/blog.test</code>는 macOS가 어떤 이름을 dnsmasq에 물을지(<code>*.blog.test</code>만)를 정하고, dnsmasq 규칙은 물어 온 이름에 뭐라고 답할지(127.0.0.1)를 정한다. 와일드카드 답은 dnsmasq 규칙이 한다.</details>
+
+13. dnsmasq를 켜 둔 채 Spring 서버를 끄고 블로그 주소를 열면 어떤 오류가 나고, NXDOMAIN과 무엇이 다른가?
+<details><summary>답</summary><code>ERR_CONNECTION_REFUSED</code>다. 이름은 127.0.0.1로 찾았지만 8080번에서 받는 프로그램이 없다는 뜻이다. NXDOMAIN은 이름 찾기 자체가 실패한 것이다.</details>
+
 ## 9. 더 읽을거리
 
-- RFC 1034/1035 (DNS 개념과 구조), RFC 2606 (`test` 등 예약 TLD)
+- RFC 1034/1035 (DNS 개념과 구조), RFC 2606 (`test` 등 예약 TLD), RFC 4592 (와일드카드 DNS)
+- dnsmasq 설명서 `man dnsmasq`의 `--address`, macOS `man 5 resolver` (`/etc/resolver` 파일)
+- Let's Encrypt 문서 "Challenge Types"의 DNS-01: https://letsencrypt.org/docs/challenge-types/
 - MDN Web Docs, "Host" 헤더: https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Host
 - MDN Web Docs, "What is a domain name?"
 - Spring Framework 레퍼런스, Web MVC "Method Arguments"와 `HandlerMethodArgumentResolver`

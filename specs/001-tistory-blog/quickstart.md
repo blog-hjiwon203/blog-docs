@@ -24,7 +24,16 @@ cd frontend && npm run build && cp -r dist/* ../src/main/resources/static/
 cd .. && ./mvnw clean package   # target/*.jar
 ```
 
-- 블로그 주소 사이 로그인 공유(상위 도메인 쿠키)를 확인하려면 `/etc/hosts`에 `127.0.0.1 blog.test alpha.blog.test beta.blog.test gamma.blog.test`를 넣고 `blog.test:8080`, `{주소}.blog.test:8080`으로 연다. `*.localhost`는 하위 도메인 쿠키 공유가 브라우저마다 달라 쓰지 않는다.
+- 블로그 주소(`{주소}.blog.test:8080`)를 브라우저로 열려면 `*.blog.test`가 내 컴퓨터(127.0.0.1)를 가리켜야 한다. **dnsmasq를 권한다**(한 번 설정하면 새 블로그도 바로 열린다, 명령은 [학습 자료 15의 실습 6](./learning/concepts/15-subdomain-host-routing.md)):
+  ```bash
+  brew install dnsmasq
+  echo 'address=/blog.test/127.0.0.1' >> "$(brew --prefix)/etc/dnsmasq.conf"
+  printf 'listen-address=127.0.0.1\nbind-interfaces\n' >> "$(brew --prefix)/etc/dnsmasq.conf"
+  sudo brew services start dnsmasq
+  sudo mkdir -p /etc/resolver && echo 'nameserver 127.0.0.1' | sudo tee /etc/resolver/blog.test
+  ```
+  dnsmasq는 Spring 서버와 별개로 계속 돈다. 서버를 끈 채 블로그 주소를 열면 `ERR_CONNECTION_REFUSED`, dnsmasq가 꺼져 있으면 `DNS_PROBE_FINISHED_NXDOMAIN`이다.
+  dnsmasq 없이 하려면 `/etc/hosts`에 `127.0.0.1 blog.test alpha.blog.test beta.blog.test gamma.blog.test`처럼 쓸 주소를 하나씩 넣는다(새 블로그마다 한 줄 더). `*.localhost`는 하위 도메인 쿠키 공유가 브라우저마다 달라 쓰지 않는다.
 - 서비스 관리자 초기 계정은 Flyway 데이터 마이그레이션으로 들어간다.
 
 ## P0 한 바퀴 (spec SC-001, US1~US3)
