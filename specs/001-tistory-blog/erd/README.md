@@ -2,7 +2,7 @@
 
 > **이 문서는?** Crowfoot에서 설계한 지원 블로그 서비스의 ERD를 정리한 것이다. 원본은 Crowfoot 문서 [티스토리 클론 블로그 (지원)](https://crowfoot.java21.net/workspaces/49/models/665)이고, 이 파일은 그 내용을 옮긴 사본이다. 설계를 바꿀 때는 Crowfoot을 먼저 고치고 이 파일을 다시 만든다.
 
-- 기준: Crowfoot 문서 버전 62 (2026-10-08), MySQL
+- 기준: Crowfoot 문서 버전 65 (2026-10-08), MySQL
 - 테이블 25개, 관계 37개, 영역 6개
 - 실행 가능한 DDL: [schema.sql](./schema.sql)
 - [data-model.md](../data-model.md)는 이 ERD와 같은 내용으로 맞춰 두었다. 원래 data-model.md에서 무엇을 왜 바꿨는지는 [data-model-diff.md](./data-model-diff.md)
@@ -69,7 +69,7 @@ erDiagram
 ```mermaid
 erDiagram
     member {
-        BIGINT id PK "회원 번호"
+        BIGINT id PK "회원 ID"
         BIGINT profile_image_id FK "프로필 이미지"
         VARCHAR_255 email UK "이메일"
         VARCHAR_100 password_hash "비밀번호 해시"
@@ -82,14 +82,14 @@ erDiagram
         DATETIME updated_at "수정 시각"
     }
     social_account {
-        BIGINT id PK "ID"
-        BIGINT member_id FK,UK "회원 번호"
+        BIGINT id PK "소셜 연동 ID"
+        BIGINT member_id FK,UK "회원 ID"
         VARCHAR_10 provider UK "제공사"
         VARCHAR_100 provider_user_id UK "제공사 회원 식별자"
         DATETIME created_at "생성 일시"
     }
     email_verification {
-        BIGINT id PK "ID"
+        BIGINT id PK "이메일 인증 ID"
         VARCHAR_255 email "이메일"
         VARCHAR_10 code "인증 코드"
         DATETIME expires_at "만료 시각"
@@ -97,15 +97,15 @@ erDiagram
         DATETIME created_at "생성 일시"
     }
     password_reset_token {
-        BIGINT id PK "ID"
-        BIGINT member_id FK "회원 번호"
+        BIGINT id PK "비밀번호 재설정 토큰 ID"
+        BIGINT member_id FK "회원 ID"
         VARCHAR_64 token_hash UK "토큰 해시"
         DATETIME expires_at "만료 시각"
         DATETIME used_at "사용 시각"
         DATETIME created_at "생성 일시"
     }
     image {
-        BIGINT id PK "ID"
+        BIGINT id PK "이미지 ID"
         BIGINT uploader_id "올린 회원"
         VARCHAR_255 path "저장 경로"
         VARCHAR_255 thumbnail_path "썸네일 경로"
@@ -125,7 +125,7 @@ erDiagram
 
 | 컬럼 | 논리명 | 타입 | NULL | 기본값 | 키 | 설명 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `id` | 회원 번호 | BIGINT | N | 자동 증가 | PK |  |
+| `id` | 회원 ID | BIGINT | N | 자동 증가 | PK |  |
 | `profile_image_id` | 프로필 이미지 | BIGINT | Y |  | FK |  |
 | `email` | 이메일 | VARCHAR(255) | Y |  | UK | 이메일 가입 회원만 값이 있고 모두 인증됨. 소셜 가입·탈퇴 회원은 NULL |
 | `password_hash` | 비밀번호 해시 | VARCHAR(100) | Y |  |  | bcrypt |
@@ -147,8 +147,8 @@ erDiagram
 
 | 컬럼 | 논리명 | 타입 | NULL | 기본값 | 키 | 설명 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `id` | ID | BIGINT | N | 자동 증가 | PK |  |
-| `member_id` | 회원 번호 | BIGINT | N |  | FK,UK |  |
+| `id` | 소셜 연동 ID | BIGINT | N | 자동 증가 | PK |  |
+| `member_id` | 회원 ID | BIGINT | N |  | FK,UK |  |
 | `provider` | 제공사 | VARCHAR(10) | N |  | UK |  |
 | `provider_user_id` | 제공사 회원 식별자 | VARCHAR(100) | N |  | UK |  |
 | `created_at` | 생성 일시 | DATETIME(6) | N | CURRENT_TIMESTAMP(6) |  |  |
@@ -164,7 +164,7 @@ erDiagram
 
 | 컬럼 | 논리명 | 타입 | NULL | 기본값 | 키 | 설명 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `id` | ID | BIGINT | N | 자동 증가 | PK |  |
+| `id` | 이메일 인증 ID | BIGINT | N | 자동 증가 | PK |  |
 | `email` | 이메일 | VARCHAR(255) | N |  |  |  |
 | `code` | 인증 코드 | VARCHAR(10) | N |  |  |  |
 | `expires_at` | 만료 시각 | DATETIME | N |  |  |  |
@@ -178,8 +178,8 @@ erDiagram
 
 | 컬럼 | 논리명 | 타입 | NULL | 기본값 | 키 | 설명 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `id` | ID | BIGINT | N | 자동 증가 | PK |  |
-| `member_id` | 회원 번호 | BIGINT | N |  | FK |  |
+| `id` | 비밀번호 재설정 토큰 ID | BIGINT | N | 자동 증가 | PK |  |
+| `member_id` | 회원 ID | BIGINT | N |  | FK |  |
 | `token_hash` | 토큰 해시 | VARCHAR(64) | N |  | UK | 링크 토큰의 SHA-256. 원문은 저장하지 않는다 |
 | `expires_at` | 만료 시각 | DATETIME | N |  |  | 발급 후 30분 |
 | `used_at` | 사용 시각 | DATETIME | Y |  |  | 한 번 쓰면 기록 |
@@ -194,7 +194,7 @@ erDiagram
 
 | 컬럼 | 논리명 | 타입 | NULL | 기본값 | 키 | 설명 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `id` | ID | BIGINT | N | 자동 증가 | PK |  |
+| `id` | 이미지 ID | BIGINT | N | 자동 증가 | PK |  |
 | `uploader_id` | 올린 회원 | BIGINT | N |  |  | member.id. 회원 ↔ 이미지 순환 참조를 피하려고 외래 키 없이 둔다. 서버가 로그인 회원으로 채운다 |
 | `path` | 저장 경로 | VARCHAR(255) | N |  |  |  |
 | `thumbnail_path` | 썸네일 경로 | VARCHAR(255) | Y |  |  |  |
@@ -212,10 +212,10 @@ erDiagram
 ```mermaid
 erDiagram
     blog {
-        BIGINT id PK "ID"
+        BIGINT id PK "블로그 ID"
         BIGINT moved_to_blog_id FK "이사 대상 블로그"
         BIGINT profile_image_id FK "프로필 이미지"
-        BIGINT member_id FK "회원 번호"
+        BIGINT member_id FK "회원 ID"
         VARCHAR_32 address UK "주소"
         VARCHAR_50 name "이름"
         VARCHAR_500 description "소개글"
@@ -230,38 +230,38 @@ erDiagram
         BIGINT total_visitor_count "누적 방문자"
     }
     blog_visit {
-        BIGINT id PK "ID"
-        BIGINT blog_id FK,UK "blog ID"
+        BIGINT id PK "블로그 방문 ID"
+        BIGINT blog_id FK,UK "블로그 ID"
         DATE visit_date UK "방문 날짜"
         VARCHAR_64 visitor_key UK "방문자 키"
         VARCHAR_10 referrer_type "유입 종류"
         VARCHAR_100 referrer_host "유입 호스트"
     }
     blog_daily_stat {
-        BIGINT id PK "ID"
-        BIGINT blog_id FK,UK "blog ID"
+        BIGINT id PK "블로그 일별 통계 ID"
+        BIGINT blog_id FK,UK "블로그 ID"
         DATE stat_date UK "날짜"
         INT visitor_count "방문자 수"
         INT view_count "글 조회 수"
     }
     blog_referrer_daily {
-        BIGINT id PK "ID"
-        BIGINT blog_id FK,UK "blog ID"
+        BIGINT id PK "블로그 일별 유입 경로 ID"
+        BIGINT blog_id FK,UK "블로그 ID"
         DATE stat_date UK "날짜"
         VARCHAR_10 referrer_type UK "유입 종류"
         VARCHAR_100 referrer_host UK "유입 호스트"
         INT visit_count "방문 수"
     }
     blog_blocked_member {
-        BIGINT id PK "ID"
-        BIGINT blocked_member_id FK,UK "차단 회원 번호"
-        BIGINT blog_id FK,UK "blog ID"
+        BIGINT id PK "차단 회원 ID"
+        BIGINT blocked_member_id FK,UK "차단된 회원 ID"
+        BIGINT blog_id FK,UK "블로그 ID"
         VARCHAR_200 memo "메모"
         DATETIME created_at "차단 시각"
     }
     blog_banned_word {
-        BIGINT id PK "ID"
-        BIGINT blog_id FK,UK "blog ID"
+        BIGINT id PK "금칙어 ID"
+        BIGINT blog_id FK,UK "블로그 ID"
         VARCHAR_30 word UK "금칙어"
     }
     member ||--|{ blog : "member_id"
@@ -283,10 +283,10 @@ erDiagram
 
 | 컬럼 | 논리명 | 타입 | NULL | 기본값 | 키 | 설명 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `id` | ID | BIGINT | N | 자동 증가 | PK |  |
+| `id` | 블로그 ID | BIGINT | N | 자동 증가 | PK |  |
 | `moved_to_blog_id` | 이사 대상 블로그 | BIGINT | Y |  | FK | 연쇄 이사 시 최종 대상으로 갱신 |
 | `profile_image_id` | 프로필 이미지 | BIGINT | Y |  | FK |  |
-| `member_id` | 회원 번호 | BIGINT | N |  | FK |  |
+| `member_id` | 회원 ID | BIGINT | N |  | FK |  |
 | `address` | 주소 | VARCHAR(32) | N |  | UK | 영문 소문자·숫자·하이픈 4~32자, 불변 |
 | `name` | 이름 | VARCHAR(50) | N |  |  |  |
 | `description` | 소개글 | VARCHAR(500) | Y |  |  |  |
@@ -311,8 +311,8 @@ erDiagram
 
 | 컬럼 | 논리명 | 타입 | NULL | 기본값 | 키 | 설명 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `id` | ID | BIGINT | N | 자동 증가 | PK |  |
-| `blog_id` | blog ID | BIGINT | N |  | FK,UK |  |
+| `id` | 블로그 방문 ID | BIGINT | N | 자동 증가 | PK |  |
+| `blog_id` | 블로그 ID | BIGINT | N |  | FK,UK |  |
 | `visit_date` | 방문 날짜 | DATE | N |  | UK |  |
 | `visitor_key` | 방문자 키 | VARCHAR(64) | N |  | UK | 회원 id 또는 익명 식별자(view_log와 같은 방식) |
 | `referrer_type` | 유입 종류 | VARCHAR(10) | N | DIRECT |  | SEARCH, SNS, DIRECT, INTERNAL, OTHER |
@@ -329,8 +329,8 @@ erDiagram
 
 | 컬럼 | 논리명 | 타입 | NULL | 기본값 | 키 | 설명 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `id` | ID | BIGINT | N | 자동 증가 | PK |  |
-| `blog_id` | blog ID | BIGINT | N |  | FK,UK |  |
+| `id` | 블로그 일별 통계 ID | BIGINT | N | 자동 증가 | PK |  |
+| `blog_id` | 블로그 ID | BIGINT | N |  | FK,UK |  |
 | `stat_date` | 날짜 | DATE | N |  | UK |  |
 | `visitor_count` | 방문자 수 | INT | N | 0 |  |  |
 | `view_count` | 글 조회 수 | INT | N | 0 |  |  |
@@ -344,8 +344,8 @@ erDiagram
 
 | 컬럼 | 논리명 | 타입 | NULL | 기본값 | 키 | 설명 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `id` | ID | BIGINT | N | 자동 증가 | PK |  |
-| `blog_id` | blog ID | BIGINT | N |  | FK,UK |  |
+| `id` | 블로그 일별 유입 경로 ID | BIGINT | N | 자동 증가 | PK |  |
+| `blog_id` | 블로그 ID | BIGINT | N |  | FK,UK |  |
 | `stat_date` | 날짜 | DATE | N |  | UK |  |
 | `referrer_type` | 유입 종류 | VARCHAR(10) | N |  | UK |  |
 | `referrer_host` | 유입 호스트 | VARCHAR(100) | N | '' | UK |  |
@@ -360,9 +360,9 @@ erDiagram
 
 | 컬럼 | 논리명 | 타입 | NULL | 기본값 | 키 | 설명 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `id` | ID | BIGINT | N | 자동 증가 | PK |  |
-| `blocked_member_id` | 차단 회원 번호 | BIGINT | N |  | FK,UK |  |
-| `blog_id` | blog ID | BIGINT | N |  | FK,UK |  |
+| `id` | 차단 회원 ID | BIGINT | N | 자동 증가 | PK |  |
+| `blocked_member_id` | 차단된 회원 ID | BIGINT | N |  | FK,UK |  |
+| `blog_id` | 블로그 ID | BIGINT | N |  | FK,UK |  |
 | `memo` | 메모 | VARCHAR(200) | Y |  |  |  |
 | `created_at` | 차단 시각 | DATETIME(6) | N | CURRENT_TIMESTAMP(6) |  |  |
 
@@ -375,8 +375,8 @@ erDiagram
 
 | 컬럼 | 논리명 | 타입 | NULL | 기본값 | 키 | 설명 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `id` | ID | BIGINT | N | 자동 증가 | PK |  |
-| `blog_id` | blog ID | BIGINT | N |  | FK,UK |  |
+| `id` | 금칙어 ID | BIGINT | N | 자동 증가 | PK |  |
+| `blog_id` | 블로그 ID | BIGINT | N |  | FK,UK |  |
 | `word` | 금칙어 | VARCHAR(30) | N |  | UK |  |
 
 - 유니크 `uk_blog_banned_word_blog_id_word`: (blog_id, word)
@@ -387,9 +387,9 @@ erDiagram
 ```mermaid
 erDiagram
     post {
-        BIGINT id PK "글 번호"
-        BIGINT blog_id FK "blog ID"
-        BIGINT category_id FK "분류 ID"
+        BIGINT id PK "글 ID"
+        BIGINT blog_id FK "블로그 ID"
+        BIGINT category_id FK "카테고리 ID"
         BIGINT thumbnail_image_id FK "대표 이미지"
         VARCHAR_200 title "제목"
         MEDIUMTEXT content_html "본문"
@@ -409,8 +409,8 @@ erDiagram
         DATETIME updated_at "수정 시각"
     }
     view_log {
-        BIGINT id PK "ID"
-        BIGINT post_id FK "글 번호"
+        BIGINT id PK "조회 기록 ID"
+        BIGINT post_id FK "글 ID"
         VARCHAR_64 viewer_key "조회자 키"
         DATETIME viewed_at "조회 시각"
     }
@@ -428,9 +428,9 @@ erDiagram
 
 | 컬럼 | 논리명 | 타입 | NULL | 기본값 | 키 | 설명 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `id` | 글 번호 | BIGINT | N | 자동 증가 | PK |  |
-| `blog_id` | blog ID | BIGINT | N |  | FK |  |
-| `category_id` | 분류 ID | BIGINT | Y |  | FK |  |
+| `id` | 글 ID | BIGINT | N | 자동 증가 | PK |  |
+| `blog_id` | 블로그 ID | BIGINT | N |  | FK |  |
+| `category_id` | 카테고리 ID | BIGINT | Y |  | FK |  |
 | `thumbnail_image_id` | 대표 이미지 | BIGINT | Y |  | FK |  |
 | `title` | 제목 | VARCHAR(200) | N |  |  |  |
 | `content_html` | 본문 | MEDIUMTEXT | N |  |  | 서버 정화 후 저장 |
@@ -464,8 +464,8 @@ erDiagram
 
 | 컬럼 | 논리명 | 타입 | NULL | 기본값 | 키 | 설명 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `id` | ID | BIGINT | N | 자동 증가 | PK |  |
-| `post_id` | 글 번호 | BIGINT | N |  | FK |  |
+| `id` | 조회 기록 ID | BIGINT | N | 자동 증가 | PK |  |
+| `post_id` | 글 ID | BIGINT | N |  | FK |  |
 | `viewer_key` | 조회자 키 | VARCHAR(64) | N |  |  | 회원 id 또는 익명 식별자 |
 | `viewed_at` | 조회 시각 | DATETIME(6) | N | CURRENT_TIMESTAMP(6) |  |  |
 
@@ -478,9 +478,9 @@ erDiagram
 ```mermaid
 erDiagram
     category {
-        BIGINT id PK "ID"
+        BIGINT id PK "카테고리 ID"
         BIGINT parent_id FK "상위 카테고리"
-        BIGINT blog_id FK,UK "blog ID"
+        BIGINT blog_id FK,UK "블로그 ID"
         VARCHAR_30 name UK "이름"
         INT sort_order "순서"
         BOOLEAN is_private "비공개 여부"
@@ -488,13 +488,13 @@ erDiagram
         DATETIME updated_at "수정 일시"
     }
     tag {
-        BIGINT id PK "ID"
-        BIGINT blog_id FK,UK "blog ID"
+        BIGINT id PK "태그 ID"
+        BIGINT blog_id FK,UK "블로그 ID"
         VARCHAR_30 name UK "이름"
         DATETIME updated_at "수정 일시"
     }
     post_tag {
-        BIGINT post_id PK,FK "글 번호"
+        BIGINT post_id PK,FK "글 ID"
         BIGINT tag_id PK,FK "태그 ID"
     }
     blog ||--|{ category : "blog_id"
@@ -512,9 +512,9 @@ erDiagram
 
 | 컬럼 | 논리명 | 타입 | NULL | 기본값 | 키 | 설명 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `id` | ID | BIGINT | N | 자동 증가 | PK |  |
+| `id` | 카테고리 ID | BIGINT | N | 자동 증가 | PK |  |
 | `parent_id` | 상위 카테고리 | BIGINT | Y |  | FK | NULL 또는 1단계 상위 |
-| `blog_id` | blog ID | BIGINT | N |  | FK,UK |  |
+| `blog_id` | 블로그 ID | BIGINT | N |  | FK,UK |  |
 | `name` | 이름 | VARCHAR(30) | N |  | UK |  |
 | `sort_order` | 순서 | INT | N | 0 |  |  |
 | `is_private` | 비공개 여부 | BOOLEAN | N | 0 |  |  |
@@ -528,8 +528,8 @@ erDiagram
 
 | 컬럼 | 논리명 | 타입 | NULL | 기본값 | 키 | 설명 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `id` | ID | BIGINT | N | 자동 증가 | PK |  |
-| `blog_id` | blog ID | BIGINT | N |  | FK,UK |  |
+| `id` | 태그 ID | BIGINT | N | 자동 증가 | PK |  |
+| `blog_id` | 블로그 ID | BIGINT | N |  | FK,UK |  |
 | `name` | 이름 | VARCHAR(30) | N |  | UK |  |
 | `updated_at` | 수정 일시 | DATETIME(6) | N | CURRENT_TIMESTAMP(6) |  |  |
 
@@ -542,7 +542,7 @@ erDiagram
 
 | 컬럼 | 논리명 | 타입 | NULL | 기본값 | 키 | 설명 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `post_id` | 글 번호 | BIGINT | N |  | PK,FK |  |
+| `post_id` | 글 ID | BIGINT | N |  | PK,FK |  |
 | `tag_id` | 태그 ID | BIGINT | N |  | PK,FK |  |
 
 - 근거 기능: BLOG-06, POST-01, TAG-01, POST-02, POST-04, TAG-02, TAG-03, TAG-04, SRCH-01
@@ -552,10 +552,10 @@ erDiagram
 ```mermaid
 erDiagram
     comment {
-        BIGINT id PK "ID"
+        BIGINT id PK "댓글 ID"
         BIGINT parent_id FK "부모 댓글"
-        BIGINT post_id FK "글 번호"
-        BIGINT member_id FK "회원 번호"
+        BIGINT post_id FK "글 ID"
+        BIGINT member_id FK "회원 ID"
         VARCHAR_1000 content "내용"
         BOOLEAN is_secret "비밀댓글 여부"
         BOOLEAN is_blinded "숨김 여부"
@@ -564,10 +564,10 @@ erDiagram
         DATETIME updated_at "수정 일시"
     }
     guestbook {
-        BIGINT id PK "ID"
+        BIGINT id PK "방명록 ID"
         BIGINT parent_id FK "부모 글"
-        BIGINT blog_id FK "blog ID"
-        BIGINT member_id FK "회원 번호"
+        BIGINT blog_id FK "블로그 ID"
+        BIGINT member_id FK "회원 ID"
         VARCHAR_1000 content "내용"
         BOOLEAN is_secret "비밀글 여부"
         DATETIME deleted_at "삭제 시각"
@@ -575,19 +575,19 @@ erDiagram
         DATETIME updated_at "수정 일시"
     }
     post_like {
-        BIGINT id PK "ID"
-        BIGINT post_id FK,UK "글 번호"
-        BIGINT member_id FK,UK "회원 번호"
+        BIGINT id PK "공감 ID"
+        BIGINT post_id FK,UK "글 ID"
+        BIGINT member_id FK,UK "회원 ID"
         DATETIME created_at "공감 시각"
     }
     subscription {
-        BIGINT id PK "ID"
-        BIGINT blog_id FK,UK "blog ID"
-        BIGINT member_id FK,UK "회원 번호"
+        BIGINT id PK "구독 ID"
+        BIGINT blog_id FK,UK "블로그 ID"
+        BIGINT member_id FK,UK "회원 ID"
         DATETIME created_at "구독 시각"
     }
     notification {
-        BIGINT id PK "ID"
+        BIGINT id PK "알림 ID"
         BIGINT receiver_id FK "받는 회원"
         VARCHAR_20 type "종류"
         VARCHAR_20 target_type "대상 종류"
@@ -597,9 +597,9 @@ erDiagram
         DATETIME created_at "생성 일시"
     }
     post_bookmark {
-        BIGINT id PK "ID"
-        BIGINT post_id FK,UK "글 번호"
-        BIGINT member_id FK,UK "회원 번호"
+        BIGINT id PK "저장 ID"
+        BIGINT post_id FK,UK "글 ID"
+        BIGINT member_id FK,UK "회원 ID"
         VARCHAR_200 title_snapshot "저장 시점 글 제목"
         VARCHAR_50 blog_name_snapshot "저장 시점 블로그 이름"
         DATETIME created_at "저장 시각"
@@ -625,10 +625,10 @@ erDiagram
 
 | 컬럼 | 논리명 | 타입 | NULL | 기본값 | 키 | 설명 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `id` | ID | BIGINT | N | 자동 증가 | PK |  |
+| `id` | 댓글 ID | BIGINT | N | 자동 증가 | PK |  |
 | `parent_id` | 부모 댓글 | BIGINT | Y |  | FK | NULL 또는 1단계 |
-| `post_id` | 글 번호 | BIGINT | N |  | FK |  |
-| `member_id` | 회원 번호 | BIGINT | N |  | FK |  |
+| `post_id` | 글 ID | BIGINT | N |  | FK |  |
+| `member_id` | 회원 ID | BIGINT | N |  | FK |  |
 | `content` | 내용 | VARCHAR(1000) | N |  |  |  |
 | `is_secret` | 비밀댓글 여부 | BOOLEAN | N | 0 |  |  |
 | `is_blinded` | 숨김 여부 | BOOLEAN | N | 0 |  | 사유는 moderation_log 최신 BLIND 행 |
@@ -646,10 +646,10 @@ erDiagram
 
 | 컬럼 | 논리명 | 타입 | NULL | 기본값 | 키 | 설명 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `id` | ID | BIGINT | N | 자동 증가 | PK |  |
+| `id` | 방명록 ID | BIGINT | N | 자동 증가 | PK |  |
 | `parent_id` | 부모 글 | BIGINT | Y |  | FK |  |
-| `blog_id` | blog ID | BIGINT | N |  | FK |  |
-| `member_id` | 회원 번호 | BIGINT | N |  | FK |  |
+| `blog_id` | 블로그 ID | BIGINT | N |  | FK |  |
+| `member_id` | 회원 ID | BIGINT | N |  | FK |  |
 | `content` | 내용 | VARCHAR(1000) | N |  |  |  |
 | `is_secret` | 비밀글 여부 | BOOLEAN | N | 0 |  |  |
 | `deleted_at` | 삭제 시각 | DATETIME | Y |  |  |  |
@@ -663,9 +663,9 @@ erDiagram
 
 | 컬럼 | 논리명 | 타입 | NULL | 기본값 | 키 | 설명 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `id` | ID | BIGINT | N | 자동 증가 | PK |  |
-| `post_id` | 글 번호 | BIGINT | N |  | FK,UK |  |
-| `member_id` | 회원 번호 | BIGINT | N |  | FK,UK |  |
+| `id` | 공감 ID | BIGINT | N | 자동 증가 | PK |  |
+| `post_id` | 글 ID | BIGINT | N |  | FK,UK |  |
+| `member_id` | 회원 ID | BIGINT | N |  | FK,UK |  |
 | `created_at` | 공감 시각 | DATETIME(6) | N | CURRENT_TIMESTAMP(6) |  |  |
 
 - 유니크 `uk_post_like_member_id_post_id`: (member_id, post_id)
@@ -676,9 +676,9 @@ erDiagram
 
 | 컬럼 | 논리명 | 타입 | NULL | 기본값 | 키 | 설명 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `id` | ID | BIGINT | N | 자동 증가 | PK |  |
-| `blog_id` | blog ID | BIGINT | N |  | FK,UK |  |
-| `member_id` | 회원 번호 | BIGINT | N |  | FK,UK |  |
+| `id` | 구독 ID | BIGINT | N | 자동 증가 | PK |  |
+| `blog_id` | 블로그 ID | BIGINT | N |  | FK,UK |  |
+| `member_id` | 회원 ID | BIGINT | N |  | FK,UK |  |
 | `created_at` | 구독 시각 | DATETIME(6) | N | CURRENT_TIMESTAMP(6) |  |  |
 
 - 유니크 `uk_subscription_member_id_blog_id`: (member_id, blog_id)
@@ -688,7 +688,7 @@ erDiagram
 
 | 컬럼 | 논리명 | 타입 | NULL | 기본값 | 키 | 설명 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `id` | ID | BIGINT | N | 자동 증가 | PK |  |
+| `id` | 알림 ID | BIGINT | N | 자동 증가 | PK |  |
 | `receiver_id` | 받는 회원 | BIGINT | N |  | FK |  |
 | `type` | 종류 | VARCHAR(20) | N |  |  |  |
 | `target_type` | 대상 종류 | VARCHAR(20) | N |  |  |  |
@@ -709,9 +709,9 @@ erDiagram
 
 | 컬럼 | 논리명 | 타입 | NULL | 기본값 | 키 | 설명 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `id` | ID | BIGINT | N | 자동 증가 | PK |  |
-| `post_id` | 글 번호 | BIGINT | N |  | FK,UK |  |
-| `member_id` | 회원 번호 | BIGINT | N |  | FK,UK |  |
+| `id` | 저장 ID | BIGINT | N | 자동 증가 | PK |  |
+| `post_id` | 글 ID | BIGINT | N |  | FK,UK |  |
+| `member_id` | 회원 ID | BIGINT | N |  | FK,UK |  |
 | `title_snapshot` | 저장 시점 글 제목 | VARCHAR(200) | N |  |  |  |
 | `blog_name_snapshot` | 저장 시점 블로그 이름 | VARCHAR(50) | N |  |  |  |
 | `created_at` | 저장 시각 | DATETIME(6) | N | CURRENT_TIMESTAMP(6) |  |  |
@@ -725,7 +725,7 @@ erDiagram
 ```mermaid
 erDiagram
     report {
-        BIGINT id PK "ID"
+        BIGINT id PK "신고 ID"
         BIGINT reporter_id FK,UK "신고한 회원"
         VARCHAR_20 target_type UK "대상 종류"
         BIGINT target_id UK "대상 번호"
@@ -737,7 +737,7 @@ erDiagram
         DATETIME created_at "생성 일시"
     }
     moderation_log {
-        BIGINT id PK "ID"
+        BIGINT id PK "관리 이력 ID"
         BIGINT admin_id FK "처리한 관리자"
         VARCHAR_20 action "조치"
         VARCHAR_20 target_type "대상 종류"
@@ -747,7 +747,7 @@ erDiagram
         VARCHAR_200 reason_detail "사유 설명"
     }
     notice {
-        BIGINT id PK "ID"
+        BIGINT id PK "공지 ID"
         BIGINT admin_id FK "작성한 관리자"
         VARCHAR_200 title "제목"
         TEXT content "내용"
@@ -765,7 +765,7 @@ erDiagram
 
 | 컬럼 | 논리명 | 타입 | NULL | 기본값 | 키 | 설명 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `id` | ID | BIGINT | N | 자동 증가 | PK |  |
+| `id` | 신고 ID | BIGINT | N | 자동 증가 | PK |  |
 | `reporter_id` | 신고한 회원 | BIGINT | N |  | FK,UK |  |
 | `target_type` | 대상 종류 | VARCHAR(20) | N |  | UK |  |
 | `target_id` | 대상 번호 | BIGINT | N |  | UK |  |
@@ -791,7 +791,7 @@ INSERT만, 수정·삭제 API 없음. 제재 사유의 유일한 저장 위치: 
 
 | 컬럼 | 논리명 | 타입 | NULL | 기본값 | 키 | 설명 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `id` | ID | BIGINT | N | 자동 증가 | PK |  |
+| `id` | 관리 이력 ID | BIGINT | N | 자동 증가 | PK |  |
 | `admin_id` | 처리한 관리자 | BIGINT | N |  | FK |  |
 | `action` | 조치 | VARCHAR(20) | N |  |  |  |
 | `target_type` | 대상 종류 | VARCHAR(20) | N |  |  |  |
@@ -813,7 +813,7 @@ INSERT만, 수정·삭제 API 없음. 제재 사유의 유일한 저장 위치: 
 
 | 컬럼 | 논리명 | 타입 | NULL | 기본값 | 키 | 설명 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `id` | ID | BIGINT | N | 자동 증가 | PK |  |
+| `id` | 공지 ID | BIGINT | N | 자동 증가 | PK |  |
 | `admin_id` | 작성한 관리자 | BIGINT | N |  | FK |  |
 | `title` | 제목 | VARCHAR(200) | N |  |  |  |
 | `content` | 내용 | TEXT | N |  |  |  |

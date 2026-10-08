@@ -1,8 +1,8 @@
--- Crowfoot 문서 665 버전 62 (2026-10-08)에서 내보낸 MySQL DDL. 직접 고치지 말고 Crowfoot을 고친 뒤 다시 내보낸다.
+-- Crowfoot 문서 665 버전 65 (2026-10-08)에서 내보낸 MySQL DDL. 직접 고치지 말고 Crowfoot을 고친 뒤 다시 내보낸다.
 -- https://crowfoot.java21.net/workspaces/49/models/665
 
 CREATE TABLE member (
-    id BIGINT NOT NULL AUTO_INCREMENT COMMENT '회원 번호',
+    id BIGINT NOT NULL AUTO_INCREMENT COMMENT '회원 ID',
     profile_image_id BIGINT COMMENT '프로필 이미지',
     email VARCHAR(255) COMMENT '이메일-----이메일 가입 회원만 값이 있고 모두 인증됨. 소셜 가입·탈퇴 회원은 NULL',
     password_hash VARCHAR(100) COMMENT '비밀번호 해시-----bcrypt',
@@ -20,8 +20,8 @@ CREATE TABLE member (
     CONSTRAINT ck_member_status CHECK (status IN ('ACTIVE', 'SUSPENDED', 'WITHDRAWN'))
 ) COMMENT='회원-----이메일 가입·소셜 가입 회원. 탈퇴해도 행은 남는다';
 CREATE TABLE social_account (
-    id BIGINT NOT NULL AUTO_INCREMENT COMMENT 'ID',
-    member_id BIGINT NOT NULL COMMENT '회원 번호',
+    id BIGINT NOT NULL AUTO_INCREMENT COMMENT '소셜 연동 ID',
+    member_id BIGINT NOT NULL COMMENT '회원 ID',
     provider VARCHAR(10) NOT NULL COMMENT '제공사',
     provider_user_id VARCHAR(100) NOT NULL COMMENT '제공사 회원 식별자',
     created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT '생성 일시',
@@ -31,7 +31,7 @@ CREATE TABLE social_account (
     CONSTRAINT ck_social_account_provider CHECK (provider IN ('KAKAO', 'GOOGLE'))
 ) COMMENT='소셜 연동';
 CREATE TABLE email_verification (
-    id BIGINT NOT NULL AUTO_INCREMENT COMMENT 'ID',
+    id BIGINT NOT NULL AUTO_INCREMENT COMMENT '이메일 인증 ID',
     email VARCHAR(255) NOT NULL COMMENT '이메일',
     code VARCHAR(10) NOT NULL COMMENT '인증 코드',
     expires_at DATETIME NOT NULL COMMENT '만료 시각',
@@ -40,8 +40,8 @@ CREATE TABLE email_verification (
     PRIMARY KEY (id)
 ) COMMENT='이메일 인증-----가입 전 단계라 회원과 연결하지 않는다';
 CREATE TABLE password_reset_token (
-    id BIGINT NOT NULL AUTO_INCREMENT COMMENT 'ID',
-    member_id BIGINT NOT NULL COMMENT '회원 번호',
+    id BIGINT NOT NULL AUTO_INCREMENT COMMENT '비밀번호 재설정 토큰 ID',
+    member_id BIGINT NOT NULL COMMENT '회원 ID',
     token_hash VARCHAR(64) NOT NULL COMMENT '토큰 해시-----링크 토큰의 SHA-256. 원문은 저장하지 않는다',
     expires_at DATETIME NOT NULL COMMENT '만료 시각-----발급 후 30분',
     used_at DATETIME COMMENT '사용 시각-----한 번 쓰면 기록',
@@ -50,7 +50,7 @@ CREATE TABLE password_reset_token (
     CONSTRAINT uk_password_reset_token_token_hash UNIQUE (token_hash)
 ) COMMENT='비밀번호 재설정 토큰';
 CREATE TABLE image (
-    id BIGINT NOT NULL AUTO_INCREMENT COMMENT 'ID',
+    id BIGINT NOT NULL AUTO_INCREMENT COMMENT '이미지 ID',
     uploader_id BIGINT NOT NULL COMMENT '올린 회원-----member.id. 회원 ↔ 이미지 순환 참조를 피하려고 외래 키 없이 둔다. 서버가 로그인 회원으로 채운다',
     path VARCHAR(255) NOT NULL COMMENT '저장 경로',
     thumbnail_path VARCHAR(255) COMMENT '썸네일 경로',
@@ -62,10 +62,10 @@ CREATE TABLE image (
     CONSTRAINT ck_image_size CHECK (size <= 10485760)
 ) COMMENT='이미지-----업로드 파일. ./uploads/{uuid}.{ext}';
 CREATE TABLE blog (
-    id BIGINT NOT NULL AUTO_INCREMENT COMMENT 'ID',
+    id BIGINT NOT NULL AUTO_INCREMENT COMMENT '블로그 ID',
     moved_to_blog_id BIGINT COMMENT '이사 대상 블로그-----연쇄 이사 시 최종 대상으로 갱신',
     profile_image_id BIGINT COMMENT '프로필 이미지',
-    member_id BIGINT NOT NULL COMMENT '회원 번호',
+    member_id BIGINT NOT NULL COMMENT '회원 ID',
     address VARCHAR(32) NOT NULL COMMENT '주소-----영문 소문자·숫자·하이픈 4~32자, 불변',
     name VARCHAR(50) NOT NULL COMMENT '이름',
     description VARCHAR(500) COMMENT '소개글',
@@ -84,9 +84,9 @@ CREATE TABLE blog (
     CONSTRAINT ck_blog_list_layout CHECK (list_layout IN ('LIST', 'THUMBNAIL'))
 ) COMMENT='블로그-----주소는 삭제돼도 행이 남아 영구 예약';
 CREATE TABLE category (
-    id BIGINT NOT NULL AUTO_INCREMENT COMMENT 'ID',
+    id BIGINT NOT NULL AUTO_INCREMENT COMMENT '카테고리 ID',
     parent_id BIGINT COMMENT '상위 카테고리-----NULL 또는 1단계 상위',
-    blog_id BIGINT NOT NULL COMMENT 'blog ID',
+    blog_id BIGINT NOT NULL COMMENT '블로그 ID',
     name VARCHAR(30) NOT NULL COMMENT '이름',
     sort_order INT NOT NULL DEFAULT 0 COMMENT '순서',
     is_private TINYINT(1) NOT NULL DEFAULT 0 COMMENT '비공개 여부',
@@ -96,9 +96,9 @@ CREATE TABLE category (
     CONSTRAINT uk_category_blog_id_parent_key_name UNIQUE (blog_id, parent_key, name)
 ) COMMENT='카테고리-----''전체 글''·''미분류''는 행이 아니라 가상 항목';
 CREATE TABLE post (
-    id BIGINT NOT NULL AUTO_INCREMENT COMMENT '글 번호',
-    blog_id BIGINT NOT NULL COMMENT 'blog ID',
-    category_id BIGINT COMMENT '분류 ID',
+    id BIGINT NOT NULL AUTO_INCREMENT COMMENT '글 ID',
+    blog_id BIGINT NOT NULL COMMENT '블로그 ID',
+    category_id BIGINT COMMENT '카테고리 ID',
     thumbnail_image_id BIGINT COMMENT '대표 이미지',
     title VARCHAR(200) NOT NULL COMMENT '제목',
     content_html MEDIUMTEXT NOT NULL COMMENT '본문-----서버 정화 후 저장',
@@ -122,38 +122,38 @@ CREATE TABLE post (
     CONSTRAINT ck_post_topic CHECK (topic IS NULL OR topic IN ('IT_DEV', 'TRAVEL', 'FOOD', 'DAILY', 'REVIEW', 'HOBBY', 'FINANCE', 'HEALTH', 'CULTURE', 'EDUCATION'))
 ) COMMENT='글-----글 주소 {주소}.blog.com/{id}. 이사하면 blog_id가 바뀌고 옛 주소는 301';
 CREATE TABLE tag (
-    id BIGINT NOT NULL AUTO_INCREMENT COMMENT 'ID',
-    blog_id BIGINT NOT NULL COMMENT 'blog ID',
+    id BIGINT NOT NULL AUTO_INCREMENT COMMENT '태그 ID',
+    blog_id BIGINT NOT NULL COMMENT '블로그 ID',
     name VARCHAR(30) NOT NULL COMMENT '이름',
     updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6) COMMENT '수정 일시',
     PRIMARY KEY (id),
     CONSTRAINT uk_tag_blog_id_name UNIQUE (blog_id, name)
 ) COMMENT='태그';
 CREATE TABLE post_tag (
-    post_id BIGINT NOT NULL COMMENT '글 번호',
+    post_id BIGINT NOT NULL COMMENT '글 ID',
     tag_id BIGINT NOT NULL COMMENT '태그 ID',
     PRIMARY KEY (post_id, tag_id)
 ) COMMENT='글 태그-----글당 최대 10개는 서비스에서 검사';
 CREATE TABLE view_log (
-    id BIGINT NOT NULL AUTO_INCREMENT COMMENT 'ID',
-    post_id BIGINT NOT NULL COMMENT '글 번호',
+    id BIGINT NOT NULL AUTO_INCREMENT COMMENT '조회 기록 ID',
+    post_id BIGINT NOT NULL COMMENT '글 ID',
     viewer_key VARCHAR(64) NOT NULL COMMENT '조회자 키-----회원 id 또는 익명 식별자',
     viewed_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT '조회 시각',
     PRIMARY KEY (id)
 ) COMMENT='조회 기록-----같은 viewer_key가 5분 안에 다시 열면 기록하지 않는다. 최근 1시간 인기 점수와 최근 7일 블로그 점수 집계. 7일보다 오래된 행은 매일 지운다';
 CREATE TABLE post_like (
-    id BIGINT NOT NULL AUTO_INCREMENT COMMENT 'ID',
-    post_id BIGINT NOT NULL COMMENT '글 번호',
-    member_id BIGINT NOT NULL COMMENT '회원 번호',
+    id BIGINT NOT NULL AUTO_INCREMENT COMMENT '공감 ID',
+    post_id BIGINT NOT NULL COMMENT '글 ID',
+    member_id BIGINT NOT NULL COMMENT '회원 ID',
     created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT '공감 시각',
     PRIMARY KEY (id),
     CONSTRAINT uk_post_like_member_id_post_id UNIQUE (member_id, post_id)
 ) COMMENT='공감';
 CREATE TABLE comment (
-    id BIGINT NOT NULL AUTO_INCREMENT COMMENT 'ID',
+    id BIGINT NOT NULL AUTO_INCREMENT COMMENT '댓글 ID',
     parent_id BIGINT COMMENT '부모 댓글-----NULL 또는 1단계',
-    post_id BIGINT NOT NULL COMMENT '글 번호',
-    member_id BIGINT NOT NULL COMMENT '회원 번호',
+    post_id BIGINT NOT NULL COMMENT '글 ID',
+    member_id BIGINT NOT NULL COMMENT '회원 ID',
     content VARCHAR(1000) NOT NULL COMMENT '내용',
     is_secret TINYINT(1) NOT NULL DEFAULT 0 COMMENT '비밀댓글 여부',
     is_blinded TINYINT(1) NOT NULL DEFAULT 0 COMMENT '숨김 여부-----사유는 moderation_log 최신 BLIND 행',
@@ -163,10 +163,10 @@ CREATE TABLE comment (
     PRIMARY KEY (id)
 ) COMMENT='댓글';
 CREATE TABLE guestbook (
-    id BIGINT NOT NULL AUTO_INCREMENT COMMENT 'ID',
+    id BIGINT NOT NULL AUTO_INCREMENT COMMENT '방명록 ID',
     parent_id BIGINT COMMENT '부모 글',
-    blog_id BIGINT NOT NULL COMMENT 'blog ID',
-    member_id BIGINT NOT NULL COMMENT '회원 번호',
+    blog_id BIGINT NOT NULL COMMENT '블로그 ID',
+    member_id BIGINT NOT NULL COMMENT '회원 ID',
     content VARCHAR(1000) NOT NULL COMMENT '내용',
     is_secret TINYINT(1) NOT NULL DEFAULT 0 COMMENT '비밀글 여부',
     deleted_at DATETIME COMMENT '삭제 시각',
@@ -175,15 +175,15 @@ CREATE TABLE guestbook (
     PRIMARY KEY (id)
 ) COMMENT='방명록-----규칙은 댓글과 같다';
 CREATE TABLE subscription (
-    id BIGINT NOT NULL AUTO_INCREMENT COMMENT 'ID',
-    blog_id BIGINT NOT NULL COMMENT 'blog ID',
-    member_id BIGINT NOT NULL COMMENT '회원 번호',
+    id BIGINT NOT NULL AUTO_INCREMENT COMMENT '구독 ID',
+    blog_id BIGINT NOT NULL COMMENT '블로그 ID',
+    member_id BIGINT NOT NULL COMMENT '회원 ID',
     created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT '구독 시각',
     PRIMARY KEY (id),
     CONSTRAINT uk_subscription_member_id_blog_id UNIQUE (member_id, blog_id)
 ) COMMENT='구독';
 CREATE TABLE notification (
-    id BIGINT NOT NULL AUTO_INCREMENT COMMENT 'ID',
+    id BIGINT NOT NULL AUTO_INCREMENT COMMENT '알림 ID',
     receiver_id BIGINT NOT NULL COMMENT '받는 회원',
     type VARCHAR(20) NOT NULL COMMENT '종류',
     target_type VARCHAR(20) NOT NULL COMMENT '대상 종류',
@@ -196,7 +196,7 @@ CREATE TABLE notification (
     CONSTRAINT ck_notification_target_type CHECK (target_type IN ('POST', 'COMMENT', 'BLOG', 'MEMBER'))
 ) COMMENT='알림';
 CREATE TABLE report (
-    id BIGINT NOT NULL AUTO_INCREMENT COMMENT 'ID',
+    id BIGINT NOT NULL AUTO_INCREMENT COMMENT '신고 ID',
     reporter_id BIGINT NOT NULL COMMENT '신고한 회원',
     target_type VARCHAR(20) NOT NULL COMMENT '대상 종류',
     target_id BIGINT NOT NULL COMMENT '대상 번호',
@@ -215,7 +215,7 @@ CREATE TABLE report (
     CONSTRAINT ck_report_result CHECK (result IS NULL OR result IN ('BLIND', 'RESTRICT_BLOG', 'SUSPEND', 'REJECT'))
 ) COMMENT='신고';
 CREATE TABLE moderation_log (
-    id BIGINT NOT NULL AUTO_INCREMENT COMMENT 'ID',
+    id BIGINT NOT NULL AUTO_INCREMENT COMMENT '관리 이력 ID',
     admin_id BIGINT NOT NULL COMMENT '처리한 관리자',
     action VARCHAR(20) NOT NULL COMMENT '조치',
     target_type VARCHAR(20) NOT NULL COMMENT '대상 종류',
@@ -231,7 +231,7 @@ CREATE TABLE moderation_log (
     CONSTRAINT ck_moderation_log_etc_detail CHECK (reason IS NULL OR reason <> 'ETC' OR reason_detail IS NOT NULL)
 ) COMMENT='관리 이력-----INSERT만, 수정·삭제 API 없음. 제재 사유의 유일한 저장 위치: 대상의 최신 제재 행에서 사유를 읽는다';
 CREATE TABLE notice (
-    id BIGINT NOT NULL AUTO_INCREMENT COMMENT 'ID',
+    id BIGINT NOT NULL AUTO_INCREMENT COMMENT '공지 ID',
     admin_id BIGINT NOT NULL COMMENT '작성한 관리자',
     title VARCHAR(200) NOT NULL COMMENT '제목',
     content TEXT NOT NULL COMMENT '내용',
@@ -240,9 +240,9 @@ CREATE TABLE notice (
     PRIMARY KEY (id)
 ) COMMENT='공지';
 CREATE TABLE post_bookmark (
-    id BIGINT NOT NULL AUTO_INCREMENT COMMENT 'ID',
-    post_id BIGINT NOT NULL COMMENT '글 번호',
-    member_id BIGINT NOT NULL COMMENT '회원 번호',
+    id BIGINT NOT NULL AUTO_INCREMENT COMMENT '저장 ID',
+    post_id BIGINT NOT NULL COMMENT '글 ID',
+    member_id BIGINT NOT NULL COMMENT '회원 ID',
     title_snapshot VARCHAR(200) NOT NULL COMMENT '저장 시점 글 제목',
     blog_name_snapshot VARCHAR(50) NOT NULL COMMENT '저장 시점 블로그 이름',
     created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT '저장 시각',
@@ -250,8 +250,8 @@ CREATE TABLE post_bookmark (
     CONSTRAINT uk_post_bookmark_member_id_post_id UNIQUE (member_id, post_id)
 ) COMMENT='저장-----회원이 저장한 글. 볼 수 없게 된 글도 행을 남기고 저장 시점 제목·블로그 이름만 보여 준다(헌법 원칙 II 예외)';
 CREATE TABLE blog_visit (
-    id BIGINT NOT NULL AUTO_INCREMENT COMMENT 'ID',
-    blog_id BIGINT NOT NULL COMMENT 'blog ID',
+    id BIGINT NOT NULL AUTO_INCREMENT COMMENT '블로그 방문 ID',
+    blog_id BIGINT NOT NULL COMMENT '블로그 ID',
     visit_date DATE NOT NULL COMMENT '방문 날짜',
     visitor_key VARCHAR(64) NOT NULL COMMENT '방문자 키-----회원 id 또는 익명 식별자(view_log와 같은 방식)',
     referrer_type VARCHAR(10) NOT NULL DEFAULT 'DIRECT' COMMENT '유입 종류-----SEARCH, SNS, DIRECT, INTERNAL, OTHER',
@@ -261,8 +261,8 @@ CREATE TABLE blog_visit (
     CONSTRAINT ck_blog_visit_referrer_type CHECK (referrer_type IN ('SEARCH','SNS','DIRECT','INTERNAL','OTHER'))
 ) COMMENT='블로그 방문-----블로그·날짜·방문자마다 한 행(하루 1회). 주인 본인 방문은 세지 않는다. 매일 새벽 blog_daily_stat·blog_referrer_daily로 모으고 7일 뒤 지운다';
 CREATE TABLE blog_daily_stat (
-    id BIGINT NOT NULL AUTO_INCREMENT COMMENT 'ID',
-    blog_id BIGINT NOT NULL COMMENT 'blog ID',
+    id BIGINT NOT NULL AUTO_INCREMENT COMMENT '블로그 일별 통계 ID',
+    blog_id BIGINT NOT NULL COMMENT '블로그 ID',
     stat_date DATE NOT NULL COMMENT '날짜',
     visitor_count INT NOT NULL DEFAULT 0 COMMENT '방문자 수',
     view_count INT NOT NULL DEFAULT 0 COMMENT '글 조회 수',
@@ -270,8 +270,8 @@ CREATE TABLE blog_daily_stat (
     CONSTRAINT uk_blog_daily_stat_blog_id_stat_date UNIQUE (blog_id, stat_date)
 ) COMMENT='블로그 일별 통계-----전날 blog_visit을 모은 일별 방문자 수와 글 조회 수. 어제 방문자와 일·주·월 그래프에 쓴다';
 CREATE TABLE blog_referrer_daily (
-    id BIGINT NOT NULL AUTO_INCREMENT COMMENT 'ID',
-    blog_id BIGINT NOT NULL COMMENT 'blog ID',
+    id BIGINT NOT NULL AUTO_INCREMENT COMMENT '블로그 일별 유입 경로 ID',
+    blog_id BIGINT NOT NULL COMMENT '블로그 ID',
     stat_date DATE NOT NULL COMMENT '날짜',
     referrer_type VARCHAR(10) NOT NULL COMMENT '유입 종류',
     referrer_host VARCHAR(100) NOT NULL DEFAULT '' COMMENT '유입 호스트',
@@ -280,17 +280,17 @@ CREATE TABLE blog_referrer_daily (
     CONSTRAINT uk_blog_referrer_daily_blog_id_stat_date_referrer_type_referrer_host UNIQUE (blog_id, stat_date, referrer_type, referrer_host)
 ) COMMENT='블로그 일별 유입 경로-----전날 blog_visit을 유입 종류·호스트별로 센 값';
 CREATE TABLE blog_blocked_member (
-    id BIGINT NOT NULL AUTO_INCREMENT COMMENT 'ID',
-    blocked_member_id BIGINT NOT NULL COMMENT '차단 회원 번호',
-    blog_id BIGINT NOT NULL COMMENT 'blog ID',
+    id BIGINT NOT NULL AUTO_INCREMENT COMMENT '차단 회원 ID',
+    blocked_member_id BIGINT NOT NULL COMMENT '차단된 회원 ID',
+    blog_id BIGINT NOT NULL COMMENT '블로그 ID',
     memo VARCHAR(200) COMMENT '메모',
     created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT '차단 시각',
     PRIMARY KEY (id),
     CONSTRAINT uk_blog_block_blog_id_blocked_member_id UNIQUE (blog_id, blocked_member_id)
 ) COMMENT='차단 회원-----블로그 주인이 차단한 회원. 그 블로그에 댓글·방명록을 쓰거나 구독할 수 없다. 주인이 쓰는 기능이라 관리 이력에 남기지 않는다';
 CREATE TABLE blog_banned_word (
-    id BIGINT NOT NULL AUTO_INCREMENT COMMENT 'ID',
-    blog_id BIGINT NOT NULL COMMENT 'blog ID',
+    id BIGINT NOT NULL AUTO_INCREMENT COMMENT '금칙어 ID',
+    blog_id BIGINT NOT NULL COMMENT '블로그 ID',
     word VARCHAR(30) NOT NULL COMMENT '금칙어',
     PRIMARY KEY (id),
     CONSTRAINT uk_blog_banned_word_blog_id_word UNIQUE (blog_id, word)
