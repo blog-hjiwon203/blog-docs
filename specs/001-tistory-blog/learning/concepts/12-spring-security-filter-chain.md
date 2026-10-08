@@ -1,6 +1,6 @@
 # Spring Security 필터 체인
 
-> 관련 스텝: [스텝 3](../step-03.md) · 관련 작업: T007, T008, ADMIN-01 · 버전: Spring Boot 4.1.1, Spring Security 7.1
+> 관련 스텝: [스텝 3](../step-03.md), [스텝 4](../step-04.md)(정지 사유 공유, `@PreAuthorize`를 실제 API에) · 관련 작업: T007, T008, T019, T020, ADMIN-01 · 버전: Spring Boot 4.1.1, Spring Security 7.1
 
 ## 1. 이 문서로 배우는 것
 
@@ -13,6 +13,7 @@
 - 401과 403을 정하는 곳(`AuthenticationEntryPoint`, `AccessDeniedHandler`, `@ExceptionHandler`)
 - 직접 만든 필터를 끼우는 법과 `@Component`로 등록할 때의 함정
 - 이 프로젝트의 `SecurityConfig`, `JwtAuthenticationFilter`, `CsrfHeaderFilter`, `LoginMember`
+- (스텝 4) 필터와 로그인 API가 같은 정지 안내를 쓰게 한 `SuspensionDetails`, 실제 API에 붙은 `@PreAuthorize`
 
 **먼저 알면 좋은 것**: [10-http-cookies](./10-http-cookies.md), [11-jwt](./11-jwt.md), Spring 빈과 `@Configuration`/`@Bean`([01-spring-boot-basics](./01-spring-boot-basics.md)), `@RestControllerAdvice`([07-spring-mvc-exception-handling](./07-spring-mvc-exception-handling.md)).
 
@@ -316,19 +317,19 @@ public class SecurityConfig {
     SecurityFilterChain securityFilterChain(HttpSecurity http, AuthCookieManager cookieManager,
                                             JwtTokenProvider tokenProvider, TokenStore tokenStore,
                                             MemberRepository memberRepository,
-                                            ModerationLogRepository moderationLogRepository,
+                                            SuspensionDetails suspensionDetails,          // 스텝 4: 정지 사유 읽기
                                             ErrorResponseWriter errorResponseWriter, AuthProperties authProperties,
                                             Clock clock) throws Exception {
         // 필터는 빈이 아니라 여기서 new로 만든다 (3.11의 함정 회피)
         JwtAuthenticationFilter jwtFilter = new JwtAuthenticationFilter(cookieManager, tokenProvider, tokenStore,
-                memberRepository, moderationLogRepository, errorResponseWriter, authProperties, clock);
+                memberRepository, suspensionDetails, errorResponseWriter, authProperties, clock);
         CsrfHeaderFilter csrfFilter = new CsrfHeaderFilter(errorResponseWriter);
 
         return http
                 .csrf(AbstractHttpConfigurer::disable)            // 기본 CSRF 토큰 끄기 → 헤더 방식으로 대체
                 .httpBasic(AbstractHttpConfigurer::disable)       // 브라우저 기본 로그인 창 끄기
                 .formLogin(AbstractHttpConfigurer::disable)       // /login 폼 끄기 (React가 화면 담당)
-                .logout(AbstractHttpConfigurer::disable)          // /logout 끄기 (스텝 4에서 API로)
+                .logout(AbstractHttpConfigurer::disable)          // /logout 끄기 (스텝 4의 POST /api/auth/logout이 대신함)
                 .requestCache(AbstractHttpConfigurer::disable)    // 로그인 후 원래 주소로 돌려보내기 저장 끄기
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
@@ -384,7 +385,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {   // @Compon
             if (isApiRequest(request)) {
                 cookieManager.clear(response);
                 errorResponseWriter.write(response,
-                        new BusinessException(ErrorCode.MEMBER_SUSPENDED, suspensionDetail(member.get())));
+                        new BusinessException(ErrorCode.MEMBER_SUSPENDED, suspensionDetails.of(member.get())));
                 return;                              // chain.doFilter를 안 부름 → 여기서 끝
             }
             chain.doFilter(request, response);       // 화면 요청은 비회원으로 그림
@@ -404,7 +405,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {   // @Compon
 읽는 포인트:
 - **모든 갈래가 `chain.doFilter`를 부르거나 `return`으로 끝난다.** 정지 회원 API 요청만 응답을 직접 쓰고 끝낸다. 나머지 실패는 "비회원으로 계속"이다. 로그인이 필요한지는 뒤(URL 규칙, `@PreAuthorize`, 서비스)가 판단한다. 필터가 401을 직접 주지 않는 이유는 공개 API(글 읽기)도 같은 필터를 지나기 때문이다.
 - `UsernamePasswordAuthenticationToken.authenticated(...)`: 이름과 달리 "아이디·비밀번호 로그인"에만 쓰는 것이 아니라, principal과 권한을 담은 **인증 완료 객체**를 만드는 범용 구현이다. `authenticated` 정적 메서드는 `isAuthenticated() == true`로 만든다.
-- 정지 사유는 `moderation_log`의 최신 SUSPEND 행에서 읽어 `detail`에 넣는다(ADMIN-02).
+- 정지 사유는 `moderation_log`의 최신 SUSPEND 행에서 읽어 `detail`에 넣는다(ADMIN-02). 스텝 3에서는 이 필터 안의 private 메서드 `suspensionDetail()`이 읽었고, 스텝 4에서 `SuspensionDetails` 컴포넌트로 옮겼다(5.6).
 
 ### 5.3 `CsrfHeaderFilter`
 
@@ -470,6 +471,75 @@ public ResponseEntity<ErrorResponse> handleAccessDenied(AccessDeniedException e)
 
 ---
 
+### 5.6 (스텝 4) 필터와 API가 같은 정지 안내를 쓰기: `SuspensionDetails`
+
+정지된 회원은 두 곳에서 403 `MEMBER_SUSPENDED`를 받는다.
+
+| 언제 | 어디서 |
+| --- | --- |
+| 이미 로그인한 쿠키로 API를 부를 때 | `JwtAuthenticationFilter`(필터) |
+| 로그인 버튼을 누를 때(비밀번호가 맞은 뒤) | `AuthService.login`(서비스, 스텝 4) |
+
+두 곳의 안내(사유, 사유 문구, 기한)가 같아야 한다. 스텝 3에서는 필터 안 private 메서드에만 있었으므로, 로그인 API를 만들면서 복사하지 않고 **빈 하나로 꺼냈다**.
+
+경로: `src/main/java/com/nhnacademy/blog/global/auth/SuspensionDetails.java`
+
+```java
+@Component
+public class SuspensionDetails {
+
+    private final ModerationLogRepository moderationLogRepository;
+    private final Clock clock;
+
+    public SuspensionDetails(ModerationLogRepository moderationLogRepository, Clock clock) {
+        this.moderationLogRepository = moderationLogRepository;
+        this.clock = clock;
+    }
+
+    public SuspensionDetail of(Member member) {
+        SanctionReason reason = moderationLogRepository
+                .findFirstByTargetTypeAndTargetIdAndActionOrderByCreatedAtDescIdDesc(
+                        ModerationTargetType.MEMBER, member.getId(), ModerationAction.SUSPEND)
+                .map(ModerationLog::getReason)
+                .orElse(null);
+        OffsetDateTime until = member.getSuspendedUntil() == null
+                ? null
+                : member.getSuspendedUntil().atZone(clock.getZone()).toOffsetDateTime();
+        return new SuspensionDetail(reason == null ? null : reason.name(),
+                reason == null ? null : reason.getMessage(), until);
+    }
+
+}
+```
+
+- `@Component`라 빈이다. 그런데 필터(`JwtAuthenticationFilter`)는 빈이 아니라 `SecurityConfig`에서 `new`로 만든다(3.11). 그래서 필터는 이 빈을 **스스로 주입받지 못하고**, `SecurityConfig`의 `@Bean` 메서드가 매개변수로 받아 생성자에 넘긴다(5.1의 바뀐 부분). 필터가 하던 일이 빈으로 옮겨 가면 이렇게 "설정 클래스가 받아서 넘겨 주는" 줄이 바뀐다.
+- `SuspensionDetails` 자체는 서블릿 필터가 아니라 그냥 컴포넌트이므로, `@Component`를 붙여도 3.11의 "필터가 두 번 걸리는" 함정과 상관없다.
+- 서비스 쪽: `AuthService`가 생성자로 주입받아 `throw new BusinessException(ErrorCode.MEMBER_SUSPENDED, suspensionDetails.of(member))`로 쓴다([가입과 로그인](./21-signup-login.md)).
+- 테스트: `LoginIntegrationTest.suspendedMemberGetsReasonOnlyWithRightPassword`(로그인 쪽), `AuthenticationIntegrationTest`의 정지 회원 테스트(필터 쪽)가 같은 `detail.reason`, `detail.reasonMessage`, `detail.suspendedUntil`을 확인한다.
+
+### 5.7 (스텝 4) `@PreAuthorize`가 실제 API에
+
+스텝 3에는 테스트 전용 `/api/test/me`에만 붙어 있었다. 스텝 4에서 실제 API에 처음 붙었다.
+
+| API | 비회원이 부르면 |
+| --- | --- |
+| `GET /api/me` (`MeController.me`) | 401. 프론트는 이것으로 로그인 상태를 안다(`allowAnonymous`로 불러 이동하지 않음) |
+| `POST /api/auth/logout` (`AuthController.logout`) | 401 (rest-api.md 권한 "회원") |
+| `GET /api/blogs/address-availability`, `POST /api/blogs` (`BlogController`) | 401 |
+
+```java
+@PostMapping("/api/auth/logout")
+@PreAuthorize("isAuthenticated()")
+@ResponseStatus(HttpStatus.NO_CONTENT)
+public void logout(HttpServletRequest request, HttpServletResponse response) {
+    cookieManager.logout(request, response);
+}
+```
+
+- URL 규칙(`authorizeHttpRequests`)은 `/api/admin/**`만 다루고 나머지는 `permitAll`이다. 그래서 "로그인만 하면 되는" API는 이처럼 메서드에 표시한다. 블로그 **주인**인지는 `@PreAuthorize`가 아니라 `BlogOwnerGuard`가 본다. 블로그를 먼저 찾아야(404) 주인인지 알 수 있기 때문이다([가시성](./16-authorization-visibility.md)).
+- 비회원이 걸리면 3.8·5.5대로 `GlobalExceptionHandler`가 401로 바꾼다. 테스트: `SignupIntegrationTest.meIs401ForAnonymous`, `LogoutIntegrationTest.anonymousLogoutIs401`, `BlogCreateIntegrationTest.loginIsRequired`.
+- 로그아웃에 `@PreAuthorize`가 있어도 `.logout(disable)` 덕분에 Spring Security 기본 `/logout`과 섞이지 않는다.
+
 ## 6. 자주 하는 실수와 함정
 
 1. **커스텀 필터에 `@Component`를 붙인다.** 서블릿 컨테이너에 따로 등록되어 체인 밖에서 한 번 더 걸린다(3.11).
@@ -481,6 +551,8 @@ public ResponseEntity<ErrorResponse> handleAccessDenied(AccessDeniedException e)
 7. **`@PreAuthorize` 거절이 필터에서 처리된다고 생각한다.** MVC의 `@ExceptionHandler`가 먼저 잡는다. 전역 `Exception` 처리기가 있으면 500이 될 수 있다.
 8. **"인증 = null이면 비회원"으로 판단한다.** 익명 필터 뒤에서는 `AnonymousAuthenticationToken`이 들어 있다. `instanceof`로 확인한다.
 9. **필터 순서가 응답 헤더에 미치는 영향을 잊는다.** 보안 체인이 끝낸 응답에는 뒤쪽 서블릿 필터의 헤더(이 프로젝트의 CSP)가 붙지 않는다(3.4).
+10. **(스텝 4) 필터의 로직을 서비스에 복사한다.** 정지 안내처럼 같은 판단이 필터와 서비스 양쪽에 필요하면 빈으로 꺼내 둘이 함께 쓴다. 복사하면 한쪽만 고쳐져 안내가 달라진다.
+11. **(스텝 4) 빈으로 만들지 않은 필터에 `@Autowired`를 기대한다.** `new`로 만든 객체에는 Spring이 주입하지 않는다. 필요한 빈은 `SecurityConfig`가 받아 생성자로 넘긴다.
 
 ---
 
@@ -518,7 +590,15 @@ curl -i localhost:8080/api/anything                     # 404 NOT_FOUND, CSP 헤
 
 테스트용으로 `jakarta.servlet.Filter`를 직접 구현한 작은 필터(`doFilter`에서 `System.out.println("hit " + request.getRequestURI())` 후 `chain.doFilter`)를 만들고 `@Component`를 붙인다. `SecurityConfig`에서도 `.addFilterBefore(그 필터 빈, AnonymousAuthenticationFilter.class)`로 넣는다. 앱을 띄우고 요청을 한 번 보내면 `hit`이 **두 번** 찍힌다(보안 체인 안에서 한 번, 서블릿 필터로 한 번). `OncePerRequestFilter`를 상속하게 바꾸면 한 번만 찍힌다. 확인 후 지운다.
 
-### 실습 5: 디버거로 따라가기
+### 실습 5 (스텝 4): 로그인 API와 필터가 같은 정지 안내를 주는지
+
+```bash
+./mvnw test -Dtest='LoginIntegrationTest#suspendedMemberGetsReasonOnlyWithRightPassword,AuthenticationIntegrationTest'
+```
+
+`SuspensionDetails.of`의 `reason.getMessage()`를 `"바뀐 문구"`로 바꿔 보면 두 쪽 응답이 함께 바뀐다(테스트는 문구 존재만 보므로 통과한다). 문구가 한 곳에서 정해진다는 것을 확인하고 되돌린다.
+
+### 실습 6: 디버거로 따라가기
 
 IntelliJ에서 `JwtAuthenticationFilter.doFilterInternal` 첫 줄과 `TestApiController.me`에 중단점을 걸고 `loginCookieAuthenticates` 테스트를 디버그 실행한다. 호출 스택(Frames)에서 `FilterChainProxy`, `DelegatingFilterProxy`를 찾아본다.
 
@@ -572,6 +652,18 @@ IntelliJ에서 `JwtAuthenticationFilter.doFilterInternal` 첫 줄과 `TestApiCon
 <details><summary>답</summary>
 
 Spring Boot가 Filter 빈을 서블릿 컨테이너에도 등록해 보안 체인 밖에서 한 번 더 걸린다. 해결: 빈으로 만들지 않고 SecurityConfig에서 new로 만들거나, FilterRegistrationBean으로 서블릿 등록을 끈다.
+</details>
+
+9. (스텝 4) `JwtAuthenticationFilter`는 `SuspensionDetails` 빈을 어떻게 받나? 왜 그렇게 해야 하나?
+<details><summary>답</summary>
+
+`SecurityConfig`의 `securityFilterChain` <code>@Bean</code> 메서드가 매개변수로 빈을 받아 필터 생성자에 넘긴다. 필터는 <code>@Component</code>가 아니라 <code>new</code>로 만들므로(두 번 걸리는 함정 회피) Spring이 직접 주입하지 않기 때문이다.
+</details>
+
+10. (스텝 4) `POST /api/blogs`에는 `@PreAuthorize("isAuthenticated()")`를 쓰고, `PATCH /api/blog`(블로그 수정)에는 쓰지 않고 `BlogOwnerGuard`를 쓰는 이유는?
+<details><summary>답</summary>
+
+블로그 개설은 "로그인했는가"만 보면 되지만, 블로그 수정은 "이 블로그의 주인인가"를 봐야 하고 그 전에 블로그가 있는지(404)를 먼저 판단해야 한다. `@CurrentBlog`로 블로그를 찾은 뒤 `BlogOwnerGuard`가 401 → 403을 판단해야 상태 코드 순서가 지켜진다.
 </details>
 
 ---

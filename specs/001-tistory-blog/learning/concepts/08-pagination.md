@@ -1,6 +1,6 @@
 # 페이지네이션: 페이지 번호와 커서
 
-> 관련 스텝: [스텝 2](../step-02.md)(T012 `PageQuery`, `PageResponse`, `CursorResponse`, `TimeIdCursor`)
+> 관련 스텝: [스텝 2](../step-02.md)(T012 `PageQuery`, `PageResponse`, `CursorResponse`, `TimeIdCursor`), [스텝 4](../step-04.md)(블로그 메인 글 목록 `GET /api/posts`, 화면의 페이지 번호 묶음)
 > 기준 버전: Spring Data JPA 4(Spring Boot 4.1.1), MySQL 8.4
 
 ## 1. 이 문서로 배우는 것
@@ -12,6 +12,7 @@
 - 커서를 불투명 문자열로 주는 이유, "하나 더 읽기" 기법
 - Spring Data의 `Pageable`, `PageRequest`, `Page`(0부터 셈)
 - 이 프로젝트의 `PageQuery`, `PageResponse`, `CursorResponse`, `TimeIdCursor`와 문서끼리 규칙이 달랐던 사건
+- (스텝 4) 처음 실제로 쓴 목록 API(블로그 메인)와, 화면에서 페이지 번호를 10개씩 묶어 보여 주는 방법
 
 **먼저 알면 좋은 것**: SQL `ORDER BY`, `LIMIT`, `WHERE`, 인덱스가 무엇인지(책의 색인처럼 정렬된 목록), [JPA 기초](./06-jpa-entity-mapping.md), [예외 처리](./07-spring-mvc-exception-handling.md)(400 응답).
 
@@ -202,7 +203,7 @@ Repository 메서드가 `Page<T>`를 돌려주면 Spring Data가 내용 쿼리�
 
 ## 5. 이 프로젝트에서는
 
-경로는 코드 저장소 `src/main/java/com/nhnacademy/blog/global/web/` 기준이다. 아직(스텝 3까지) 이 도구를 쓰는 목록 API는 없고, 스텝 4의 블로그 글 목록부터 쓴다.
+경로는 코드 저장소 `src/main/java/com/nhnacademy/blog/global/web/` 기준이다. 스텝 3까지는 이 도구를 쓰는 목록 API가 없었고, 스텝 4의 블로그 글 목록(5.7)에서 처음 썼다.
 
 ### 5.1 요청 검증: `PageQuery.java`
 
@@ -327,7 +328,126 @@ return CursorResponse.of(fetched, size,
         post -> new TimeIdCursor(post.getPublishedAt(), post.getId()).encode());
 ```
 
-### 5.6 사건: 문서끼리 규칙이 달랐다
+### 5.6 (스텝 4) 처음 쓴 곳: 블로그 메인 글 목록
+
+**서버**: `post/presentation/PostController.java`, `post/application/PostQueryService.java`
+
+```java
+@GetMapping("/api/posts")
+public PageResponse<PostSummaryResponse> posts(@CurrentBlog Blog blog,
+                                               @RequestParam(required = false) Integer page,
+                                               @RequestParam(required = false) Integer size,
+                                               @RequestParam(required = false) Long categoryId) {
+    PageQuery pageQuery = PageQuery.of(page, size, PostQueryService.BLOG_PAGE_SIZE);
+    return PageResponse.from(
+            postQueryService.blogPosts(blog, LoginMembers.currentId(), categoryId, pageQuery),
+            post -> PostSummaryResponse.of(post, blog));
+}
+```
+
+```java
+public static final int BLOG_PAGE_SIZE = 10;
+private static final Sort LATEST = Sort.by(Sort.Order.desc("publishedAt"), Sort.Order.desc("id"));
+...
+return postRepository.findAll(condition, page.toPageable(LATEST));
+```
+
+- `Integer page`, `Integer size`(`int`가 아님): 안 보내면 null이 되어야 `PageQuery.of`가 기본값(1쪽, 10개)을 넣을 수 있다.
+- `PageQuery.of`를 `@CurrentBlog` 뒤, 메서드 안에서 부른다. 없는 블로그에 `?page=0`을 보내면 400이 아니라 404가 먼저 나간다(상태 코드 순서, [가시성](./16-authorization-visibility.md)).
+- 정렬 `publishedAt DESC, id DESC`: spec "목록과 페이지"의 "최신순 = 처음 발행 시각 내림차순, 같으면 나중에 만든 글이 위". 4.3의 tie-break 그대로다. 글을 수정해도 `published_at`은 바뀌지 않으므로 순서가 그대로다.
+- `condition`은 가시성 조건(`listedIn`)이라, 목록 쿼리와 개수 쿼리가 같은 조건을 쓴다. 6절의 "개수에 볼 수 없는 글이 섞이는" 실수를 피한다.
+- `PageResponse.from(page, mapper)`로 엔티티를 응답 DTO로 바꾼다.
+
+**테스트**: `src/test/.../post/BlogPostListIntegrationTest.java`의 `latestFirstTenPerPageAndTieBrokenById`
+
+```java
+LocalDateTime base = LocalDateTime.of(2026, 10, 1, 9, 0);
+Post[] posts = new Post[12];
+for (int i = 0; i < 12; i++) {
+    posts[i] = testPosts.published(blog, null, Visibility.PUBLIC, base.plusHours(i));
+}
+// 발행 시각이 같으면 나중에 만든 글이 위다
+Post sameTime = testPosts.published(blog, null, Visibility.PUBLIC, base.plusHours(11));
+
+list(null, "")
+        .andExpect(jsonPath("$.content", hasSize(10)))
+        .andExpect(jsonPath("$.totalElements").value(13))
+        .andExpect(jsonPath("$.totalPages").value(2))
+        .andExpect(jsonPath("$.content[0].id").value(sameTime.getId()))
+        .andExpect(jsonPath("$.content[1].id").value(posts[11].getId()))
+        ...
+list(null, "?page=2")
+        .andExpect(jsonPath("$.content[*].id", contains(posts[2].getId().intValue(),
+                posts[1].getId().intValue(), posts[0].getId().intValue())));
+list(null, "?page=999").andExpect(status().isOk()).andExpect(jsonPath("$.content", hasSize(0)));
+list(null, "?size=51").andExpect(status().isBadRequest());
+list(null, "?page=0").andExpect(status().isBadRequest());
+```
+
+| 확인하는 것 | 줄 |
+| --- | --- |
+| 한 쪽 10개, 전체 13개면 2쪽 | `hasSize(10)`, `totalElements 13`, `totalPages 2` |
+| 발행 시각이 같으면 id가 큰(나중에 만든) 글이 위 | `posts[11]`과 같은 시각인 `sameTime`이 0번 |
+| 2쪽은 나머지 3개 | `page=2` → posts[2], [1], [0] |
+| 마지막 쪽을 넘으면 빈 목록(200) | `page=999` |
+| 범위 밖은 400 | `size=51`, `page=0` |
+
+처음 이 테스트를 쓸 때 2쪽 기대값을 2개로 잘못 적어 실패했다(13개 = 10 + 3). 테스트가 틀릴 수도 있다는 것, 실패하면 코드와 기대값 중 어느 쪽이 틀렸는지 먼저 따져야 한다는 것을 보여 준 예다.
+
+**화면: 페이지 번호 10개 묶음**: `frontend/src/components/pageGroup.ts`, `Pagination.tsx`
+
+spec "목록과 페이지"는 "페이지 번호는 10개씩 묶어 보여 주고 이전·다음 버튼을 둔다"고 정했다. 25쪽이 있고 지금 15쪽이면 `[이전] 11 12 … 20 [다음]`이다. 계산은 화면과 떼어 순수 함수로 두었다.
+
+```ts
+export const PAGE_GROUP = 10
+
+/** 페이지 번호를 10개씩 묶어 보여 준다 (spec 목록과 페이지). current는 1부터. */
+export function pageGroup(current: number, totalPages: number): PageGroup {
+  if (totalPages < 1) {
+    return { pages: [], prev: null, next: null }
+  }
+  const start = Math.floor((current - 1) / PAGE_GROUP) * PAGE_GROUP + 1
+  const end = Math.min(start + PAGE_GROUP - 1, totalPages)
+  const pages = Array.from({ length: Math.max(end - start + 1, 0) }, (_, i) => start + i)
+  return { pages, prev: start > 1 ? start - 1 : null, next: end < totalPages ? end + 1 : null }
+}
+```
+
+- `start`: 15쪽이면 `floor(14 / 10) * 10 + 1 = 11`. `current - 1`로 0부터 센 뒤 나누는 것이 요령이다(10쪽은 `floor(9/10)=0`이라 1~10 묶음에 들어간다).
+- `end`: 묶음 끝과 실제 마지막 쪽 중 작은 것. 25쪽이 끝이면 21~25.
+- `prev`: 이전 묶음의 **마지막** 쪽(11~20 묶음이면 10). `next`: 다음 묶음의 **첫** 쪽(21).
+- 테스트 `pageGroup.test.ts`가 첫 묶음, 가운데 묶음, 마지막 묶음, 글이 없을 때를 확인한다.
+
+```tsx
+export default function Pagination({ page, totalPages, href }: {
+  page: number
+  totalPages: number
+  href: (page: number) => string
+}) {
+  const group = pageGroup(page, totalPages)
+  if (totalPages <= 1) {
+    return null
+  }
+  return (
+    <nav className="pager" aria-label="페이지">
+      {group.prev !== null && <Link to={href(group.prev)}>이전</Link>}
+      {group.pages.map((number) => (
+        <Link key={number} to={href(number)} className={number === page ? 'on' : undefined}
+              aria-current={number === page ? 'page' : undefined}>
+          {number}
+        </Link>
+      ))}
+      {group.next !== null && <Link to={href(group.next)}>다음</Link>}
+    </nav>
+  )
+}
+```
+
+- 쪽 번호를 **주소**(`/?page=3`, `/category/5?page=2`)에 둔다. 새로고침하거나 주소를 공유해도 같은 쪽이 열린다. `href`를 밖에서 받아 전체 글·카테고리 목록이 같은 컴포넌트를 쓴다.
+- `aria-current="page"`: 화면 읽기 프로그램에 "지금 쪽"을 알린다.
+- 파일 이름 사건: 처음에 계산 함수를 `pagination.ts`로 지었더니 `Pagination.tsx`와 대소문자만 달라, macOS(대소문자를 구분하지 않는 파일 시스템)에서 TypeScript가 두 파일을 같은 파일로 보고 오류를 냈다. 그래서 `pageGroup.ts`로 바꿨다.
+
+### 5.7 사건: 문서끼리 규칙이 달랐다
 
 스텝 2의 T012를 만들려고 문서를 읽었더니 셋이 서로 달랐다.
 
@@ -380,7 +500,14 @@ return CursorResponse.of(fetched, size,
 4. **중복 현상 손으로 재현하기**
    - 종이에 글 15개(1~15, 큰 번호가 최신)를 쓰고 size=5로 1쪽을 본다(15~11). 새 글 16을 더한 뒤 2쪽(OFFSET 5)을 계산한다. 어떤 글이 두 번 나오는가? 같은 상황을 커서(마지막 = 11)로 계산하면?
 
-5. **0부터/1부터 실수 체험**
+5. **(스텝 4) 블로그 메인 목록 테스트와 페이지 번호 묶음**
+   ```bash
+   ./mvnw test -Dtest='BlogPostListIntegrationTest#latestFirstTenPerPageAndTieBrokenById'
+   cd frontend && npx vitest run src/components/pageGroup.test.ts
+   ```
+   `PostQueryService.LATEST`에서 `Sort.Order.desc("id")`를 지우고 다시 돌려 보자. 같은 발행 시각인 두 글(sameTime, posts[11])의 순서가 보장되지 않아 테스트가 실패하거나 우연히 통과한다. "우연히 통과"도 문제라는 점이 tie-break가 필요한 이유다. 되돌린다.
+
+6. **0부터/1부터 실수 체험**
    - `PageQuery.toPageable`의 `page - 1`을 `page`로 바꾸고 `PageQueryTest`를 돌린다. 어떤 테스트가 왜 실패하는지 본다. 되돌린다.
 
 ## 8. 확인 문제
@@ -408,6 +535,12 @@ return CursorResponse.of(fetched, size,
 
 8. 페이지 번호 방식에서 마지막 쪽을 넘는 `?page=99`의 응답은?
    <details><summary>답</summary>오류가 아니라 content가 빈 배열인 정상 응답(200)이다. totalElements, totalPages는 실제 값.</details>
+
+9. (스텝 4) 블로그 메인 컨트롤러가 `page`, `size`를 `int`가 아니라 `Integer`로 받는 이유는?
+   <details><summary>답</summary>안 보낸 값을 null로 받아야 <code>PageQuery.of</code>가 기본값(1쪽, 10개)을 넣을 수 있다. <code>int</code>는 null이 될 수 없어 안 보냈을 때 처리가 어렵다(필수 값이 되거나 0이 들어간다).</details>
+
+10. (스텝 4) 총 25쪽, 지금 15쪽일 때 화면의 페이지 번호와 이전·다음 버튼이 가리키는 쪽은?
+   <details><summary>답</summary>번호는 11~20, 이전은 10쪽(이전 묶음의 마지막), 다음은 21쪽(다음 묶음의 첫 쪽)이다(<code>pageGroup(15, 25)</code>).</details>
 
 ## 9. 더 읽을거리
 

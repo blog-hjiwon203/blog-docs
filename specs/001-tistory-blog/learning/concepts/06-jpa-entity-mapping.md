@@ -1,6 +1,6 @@
 # JPA와 엔티티 매핑
 
-> 관련 스텝: [스텝 2](../step-02.md)(엔티티 다섯 개, JPA Auditing), [스텝 3](../step-03.md)(`join fetch`, Specification)
+> 관련 스텝: [스텝 2](../step-02.md)(엔티티 다섯 개, JPA Auditing), [스텝 3](../step-03.md)(`join fetch`, Specification), [스텝 4](../step-04.md)(`@EntityGraph`, 리포지토리 조각, 상위 N개 조회, 잠금 쿼리)
 > 기준 버전: Spring Boot 4.1.1, Spring Data JPA 4, Hibernate 7, MySQL 8.4
 
 ## 1. 이 문서로 배우는 것
@@ -13,6 +13,7 @@
 - `@MappedSuperclass`와 JPA Auditing
 - Repository 메서드 이름 쿼리, `@Query`(JPQL), Specification(Criteria API)
 - `ddl-auto=validate`가 잡아 주는 것, 트랜잭션 기초
+- (스텝 4) `@EntityGraph`로 목록에서 연관 함께 읽기, 리포지토리 조각(custom fragment)으로 집계 쿼리 붙이기, `findBy(spec, ...)`로 개수 쿼리 없이 상위 N개, Specification을 조인에 다시 쓰기, `@Lock` 쿼리 메서드
 
 **먼저 알면 좋은 것**: SQL의 SELECT·JOIN·서브쿼리, 자바 클래스와 인터페이스, [Flyway](./03-flyway-migration.md)(테이블을 누가 만드는지), [Spring Boot 기초](./01-spring-boot-basics.md)(빈, 자동 설정).
 
@@ -239,6 +240,18 @@ findFirst  By  TargetType And TargetId And Action  OrderBy CreatedAt Desc Id Des
 이름이 틀리면(없는 필드) 앱이 **시작할 때** 실패한다. 실행해 봐야 아는 SQL 문자열 오류보다 빨리 알 수 있다.
 
 **JPQL**은 SQL처럼 생겼지만 **테이블이 아니라 엔티티와 필드 이름**을 쓴다. `select b from Blog b where b.address = :address`의 `Blog`는 클래스, `address`는 필드다.
+
+### 4.8 (스텝 4) 목록 조회에 더 쓴 도구
+
+세 가지 방법만으로는 아쉬운 경우가 스텝 4에서 생겼다.
+
+| 하고 싶은 것 | 도구 | 동작 |
+| --- | --- | --- |
+| Specification 목록에서도 N+1 없이 연관을 함께 읽기 | `@EntityGraph(attributePaths = "category")` | Repository 메서드에 붙이면 그 조회의 SELECT에 연관을 fetch 조인으로 더한다. `join fetch`를 JPQL 문자열 없이 거는 방법이다 |
+| 이름으로도, `@Query`로도 만들기 어려운 쿼리(동적 조건 + group by) | **리포지토리 조각(custom fragment)** | 인터페이스 `XxxRepository`를 따로 만들고 구현 클래스를 `XxxRepositoryImpl`로 지으면, Spring Data가 이름 규칙(`Impl` 접미사)으로 찾아 Repository에 끼워 넣는다 |
+| 정렬 후 상위 N개만, 전체 개수는 필요 없음 | `JpaSpecificationExecutor.findBy(spec, q -> q.sortBy(...).limit(N).all())` | 흐르는 쿼리(fluent query) API. `Pageable`로 첫 페이지를 받으면 Spring Data가 `Page`를 채우려고 개수(COUNT) 쿼리를 따로 내지만, 이 방법은 목록 쿼리 하나만 나간다 |
+
+**페이지 조회 = 쿼리 두 번**: `findAll(spec, pageable)`은 `Page`를 돌려주므로 목록 SELECT(`LIMIT/OFFSET`)와 전체 개수 `SELECT COUNT(...)`를 함께 실행한다. `@EntityGraph`는 목록 SELECT에만 적용되고, 개수 쿼리에는 fetch 조인이 붙지 않는다(개수를 세는 데 카테고리 이름은 필요 없다).
 
 ## 5. 이 프로젝트에서는
 
@@ -471,6 +484,165 @@ public class BlogService {
 - 여러 Repository 호출을 **하나로 묶어야**(모두 성공 또는 모두 실패) 할 때 서비스에 `@Transactional`을 붙인다. 예: 블로그 개설 + 사이드바 모듈 8개 생성(data-model.md).
 - `@Transactional`은 **프록시**로 동작한다. 같은 클래스 안에서 `this.other()`로 부르면 프록시를 거치지 않아 트랜잭션이 적용되지 않는다.
 - 테스트 클래스에 붙인 `@Transactional`(예: `PostVisibilityIntegrationTest`)은 테스트가 끝나면 **롤백**한다. 테스트끼리 데이터가 섞이지 않는다.
+- 스텝 4에서 실제로 서비스에 붙였다(`BlogService.open`, `AuthService.signup` 등). 위의 "블로그 개설 + 사이드바 모듈 8개"는 사이드바 설정 기능(T086, 백로그)에서 더하고, 스텝 4의 개설은 블로그 행 하나만 만든다. 트랜잭션과 동시 요청, 잠금은 [트랜잭션과 잠금](./23-transactions-locking.md)에서 자세히 다룬다.
+
+### 5.9 (스텝 4) 목록·집계 쿼리
+
+**① `@EntityGraph`로 Specification 목록에 카테고리 함께 읽기**: `post/domain/PostRepository.java`
+
+```java
+public interface PostRepository extends JpaRepository<Post, Long>, JpaSpecificationExecutor<Post>,
+        PostCountRepository {
+    ...
+    /**
+     * 글 목록(페이지). 목록 한 줄에 카테고리 이름이 나가므로 카테고리를 함께 읽는다(N+1 방지).
+     * 개수 쿼리에는 이 fetch가 붙지 않는다.
+     */
+    @Override
+    @EntityGraph(attributePaths = "category")
+    Page<Post> findAll(Specification<Post> spec, Pageable pageable);
+}
+```
+
+- `JpaSpecificationExecutor`가 이미 가진 `findAll(Specification, Pageable)`을 **다시 선언(@Override)**하고 애노테이션만 붙였다. 구현은 Spring Data가 그대로 만들고, 실행할 때 `category`를 fetch 조인으로 더한다.
+- 블로그 메인 목록(`PostQueryService.blogPosts`)의 한 줄마다 카테고리 이름(`PostSummaryResponse.category`)이 나간다. 이것이 없으면 10줄에 카테고리 SELECT가 최대 10번 더 나간다(N+1, 4.4).
+- 이 Repository의 **모든** `findAll(spec, pageable)` 호출에 적용된다. 카테고리가 필요 없는 페이지 조회에서도 조인이 붙는다는 점은 알고 쓴다.
+- 글의 `blog`는 fetch하지 않는다. 목록은 언제나 한 블로그 안이라, 응답의 `blog` 칸은 요청한 블로그(`@CurrentBlog`)로 채운다(`PostSummaryResponse.of(post, blog)`). `post.getBlog()`는 프록시라 트랜잭션 밖에서 `getAddress()`를 부르면 `LazyInitializationException`이다(`getId()`만은 프록시가 이미 알고 있어 괜찮다).
+
+**② 리포지토리 조각으로 카테고리별 글 수**: `post/domain/PostCountRepository.java`, `PostCountRepositoryImpl.java`
+
+```java
+public interface PostCountRepository {
+
+    /** 조건에 맞는 글 수를 카테고리별로. 키 null은 미분류다. */
+    Map<Long, Long> countByCategory(Specification<Post> condition);
+
+}
+```
+
+```java
+/**
+ * select category_id, count(*) from post where (가시성 조건) group by category_id
+ */
+class PostCountRepositoryImpl implements PostCountRepository {
+
+    private final EntityManager entityManager;
+
+    PostCountRepositoryImpl(EntityManager entityManager) {
+        this.entityManager = entityManager;
+    }
+
+    @Override
+    public Map<Long, Long> countByCategory(Specification<Post> condition) {
+        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
+        CriteriaQuery<Tuple> query = cb.createTupleQuery();
+        Root<Post> post = query.from(Post.class);
+        Join<Post, Category> category = post.join("category", JoinType.LEFT);
+        query.multiselect(category.get("id"), cb.count(post))
+                .where(condition.toPredicate(post, query, cb))
+                .groupBy(category.get("id"));
+
+        Map<Long, Long> counts = new HashMap<>();
+        for (Tuple row : entityManager.createQuery(query).getResultList()) {
+            counts.put(row.get(0, Long.class), row.get(1, Long.class));
+        }
+        return counts;
+    }
+
+}
+```
+
+줄별로:
+- `PostRepository extends ..., PostCountRepository`: Repository 인터페이스가 조각 인터페이스도 상속한다. 호출하는 쪽은 `postRepository.countByCategory(...)`로 다른 메서드처럼 쓴다.
+- 클래스 이름 `PostCountRepositoryImpl`: **조각 인터페이스 이름 + `Impl`**. Spring Data가 이 이름으로 구현을 찾아 Repository 프록시에 연결한다. 이름이 다르면 구현이 연결되지 않아, Spring Data가 `countByCategory`를 메서드 이름 쿼리로 해석하려 한다. 원하는 쿼리가 아니므로 시작이나 호출 때 오류가 난다.
+- `EntityManager`: JPA의 핵심 객체. Spring Data 없이 직접 쿼리를 만들고 실행할 때 쓴다. 생성자로 주입받는다.
+- `createTupleQuery()` + `multiselect(...)`: 엔티티 하나가 아니라 **값 여러 개**(카테고리 id, 개수)를 한 행으로 받는다. `Tuple`은 그런 행이다.
+- `post.join("category", JoinType.LEFT)`: 미분류 글(category NULL)도 세려면 외부 조인이어야 한다. 내부 조인이면 미분류가 사라진다(5.5와 같은 이유).
+- `condition.toPredicate(post, query, cb)`: 밖에서 받은 Specification(가시성 조건)을 이 쿼리에 그대로 끼운다. **목록과 개수가 같은 조건**을 쓰게 하는 핵심이다([가시성](./16-authorization-visibility.md)).
+- `groupBy(category.get("id"))`: SQL `GROUP BY category_id`. 결과 맵에서 키 `null`이 미분류 수다(`HashMap`은 null 키를 허용한다).
+- 쓰는 곳: `category/application/CategoryTreeService.tree()`가 이 맵으로 트리 노드마다 글 수를 붙이고, 하위 카테고리 수를 상위에 더한다.
+
+**③ `findBy`로 상위 5개만**: `blog/application/SidebarService.java`
+
+```java
+private List<Sidebar.RecentPost> recentPosts(Blog blog, Long viewerId, LocalDateTime now) {
+    return postRepository.findBy(PostSpecifications.listedIn(blog, viewerId, now),
+                    query -> query.sortBy(LATEST_POSTS).limit(RECENT_SIZE).all())
+            .stream()
+            .map(post -> new Sidebar.RecentPost(post.getId(), post.getTitle()))
+            .toList();
+}
+```
+
+- `findBy(spec, 함수)`: 조건(spec)을 주고, 함수 안에서 정렬(`sortBy`), 개수 제한(`limit`), 결과 모양(`all()`은 List)을 고른다.
+- `LATEST_POSTS`는 `Sort.by(desc("publishedAt"), desc("id"))`, `RECENT_SIZE`는 5. 실행되는 SQL은 `... ORDER BY published_at DESC, id DESC LIMIT 5` 하나다. 사이드바는 "전체 몇 개"가 필요 없으니 COUNT 쿼리를 낼 이유가 없다.
+- `CommentRepository`도 `JpaSpecificationExecutor<Comment>`를 상속해 최근 댓글 5개를 같은 방식으로 읽는다.
+
+**④ Specification을 조인에 다시 쓰기**: `global/visibility/PostSpecifications.java`
+
+스텝 3의 `visibleTo`는 `root`(글이 FROM의 주인공)에서만 쓸 수 있었다. 사이드바 최근 댓글은 FROM의 주인공이 **댓글**이고 글은 조인 대상이다. 그래서 조건을 `From<?, Post>`(Root와 Join의 공통 부모 타입)를 받는 메서드로 꺼냈다.
+
+```java
+public static Predicate listedIn(From<?, Post> post, CriteriaQuery<?> query, CriteriaBuilder cb, Blog blog,
+                                 Long viewerId, LocalDateTime now) {
+    Predicate inBlog = cb.equal(post.get("blog").get("id"), blog.getId());
+    if (blog.isOwnedBy(viewerId)) {
+        return cb.and(inBlog, cb.isNull(post.get("deletedAt")),
+                cb.equal(post.get("status"), PostStatus.PUBLISHED));
+    }
+    return cb.and(inBlog, visibleTo(post, query, cb, viewerId, now));
+}
+```
+
+```java
+// SidebarService.recentComments
+Specification<Comment> condition = (root, query, cb) -> {
+    Join<Comment, Post> post = root.join("post");          // FROM comment JOIN post
+    return cb.and(cb.isNull(root.get("deletedAt")),
+            PostSpecifications.listedIn(post, query, cb, blog, viewerId, now));
+};
+```
+
+- `Root<Post>`도 `Join<Comment, Post>`도 `From<?, Post>`다. 그래서 같은 조건 코드를 글 목록과 댓글 목록이 함께 쓴다. 볼 수 없는 글의 댓글이 사이드바에 새는 일을 규칙 하나로 막는다(헌법 원칙 II).
+- 조건 내용(주인은 왜 발행 글 전부인지)은 [가시성](./16-authorization-visibility.md)에서 설명한다.
+
+**⑤ 파생 쿼리와 잠금 쿼리**
+
+```java
+// blog/domain/BlogRepository.java
+boolean existsByAddress(String address);       // 삭제된 블로그 주소도 true(영구 예약)
+
+@Query("select count(b) from Blog b where b.member.id = :memberId and b.deletedAt is null")
+long countActiveByMemberId(@Param("memberId") Long memberId);
+
+// subscription/domain/SubscriptionRepository.java
+long countByBlogId(Long blogId);               // SELECT COUNT(*) ... WHERE blog_id = ?
+
+// category/domain/CategoryRepository.java
+List<Category> findByBlogIdOrderBySortOrderAscIdAsc(Long blogId);
+
+// member/domain/MemberRepository.java
+@Lock(LockModeType.PESSIMISTIC_WRITE)
+@Query("select m from Member m where m.id = :id")
+Optional<Member> findByIdForUpdate(@Param("id") Long id);
+```
+
+- `countBy...`: 개수만 센다. `existsBy...`와 같이 행을 읽어 오지 않는다.
+- `countActiveByMemberId`는 "삭제 안 됨" 조건이 붙어 이름으로 쓰기 어색해서 `@Query`로 썼다. `@Query`가 있으면 이름은 아무렇게나 지어도 된다.
+- `OrderBySortOrderAscIdAsc`: 주인이 정한 순서, 같으면 만든 순서. 정렬을 이름에 넣으면 호출할 때 `Sort`를 넘기지 않아도 된다.
+- `@Lock(PESSIMISTIC_WRITE)`: MySQL에서는 `SELECT ... FOR UPDATE`가 된다. 트랜잭션 안에서만 의미가 있다(트랜잭션이 끝날 때 잠금이 풀린다). 블로그 개설이 같은 회원의 동시 요청을 한 줄로 세우는 데 쓴다. 자세한 내용은 [트랜잭션과 잠금](./23-transactions-locking.md).
+
+**⑥ `open-in-view: false`에서 응답 만들기**
+
+스텝 4에서 서비스가 생기자 "트랜잭션이 끝난 뒤 컨트롤러가 응답 DTO를 만들 때 지연 로딩이 터지지 않게" 하는 규칙이 필요해졌다. 이 프로젝트는 세 가지를 쓴다.
+
+| 방법 | 예 |
+| --- | --- |
+| 필요한 연관을 미리 읽기 | `@EntityGraph`(①), `findByAddress`의 `join fetch`(`BlogService.updateInfo`가 이것으로 다시 읽음) |
+| 트랜잭션 안에서 값을 꺼내 기록(record)으로 넘기기 | `SidebarService`가 댓글 작성자 닉네임을 트랜잭션 안에서 꺼내 `Sidebar.RecentComment`로 만든다 |
+| 이미 읽힌 엔티티를 쓰기 | `BlogService.open`이 잠금으로 읽은 `Member`를 새 블로그에 넣어, 트랜잭션 밖에서도 주인 닉네임을 읽을 수 있다 |
+
+계층마다 무엇을 넘기는지는 [계층 구조와 DTO](./24-layered-architecture-dto.md)에서 다룬다.
 
 ## 6. 자주 하는 실수와 함정
 
@@ -485,6 +657,10 @@ public class BlogService {
 | 테스트에서 `jdbcTemplate.update(...)`로 바꾼 뒤 같은 트랜잭션에서 엔티티를 다시 읽음 | 1차 캐시 때문에 **바뀌기 전 값**이 나온다 | `flush()` 후 SQL 실행, 그다음 `clear()`(`PostVisibilityIntegrationTest.sql()`) |
 | `equals/hashCode`를 모든 필드로 만듦 | 프록시·지연 로딩과 섞여 이상하게 동작 | 엔티티에 만들지 않음 |
 | 엔티티를 그대로 JSON 응답으로 | LAZY 프록시 직렬화 오류, 비밀번호 해시 같은 필드 노출 | 스텝 4부터 응답 DTO(`presentation/dto`)를 따로 둔다 |
+| 상위 N개만 필요한데 `findAll(spec, PageRequest.of(0, 5))` | `Page`를 채우려고 COUNT 쿼리가 하나 더 나감 | `findBy(spec, q -> q.sortBy(...).limit(5).all())` (5.9 ③) |
+| 조각 구현 클래스 이름을 `PostCountRepositoryImplementation` 등으로 지음 | Spring Data가 구현을 못 찾고 메서드 이름 쿼리로 해석하려다 오류 | `{조각 인터페이스 이름}Impl` (5.9 ②) |
+| 미분류까지 세는 집계에 내부 조인 | category가 NULL인 글이 집계에서 사라짐 | `JoinType.LEFT` |
+| `@Lock` 메서드를 서비스 트랜잭션 밖에서 부름 | 잠금은 그 메서드를 감싼 트랜잭션이 끝날 때 풀린다. "읽고 → 확인하고 → 저장"을 한 트랜잭션으로 묶지 않으면 그 사이를 지켜 주지 못한다 | 잠금 메서드는 `@Transactional` 서비스 메서드 안에서 부른다 |
 
 ## 7. 직접 해 보기
 
@@ -514,7 +690,16 @@ public class BlogService {
    - `PostVisibilityIntegrationTest.sql()`에서 `entityManager.clear();`를 지우고 `blindedPostIsShownOnlyToOwnerWithFlag`를 돌린다.
    - 기대: SQL로 `is_blinded = 1`로 바꿨는데 엔티티는 여전히 `false`라 테스트가 실패한다. 되돌린다.
 
-5. **ORDINAL의 위험**
+5. **(스텝 4) 페이지 조회는 쿼리 두 번, findBy는 한 번**
+   - 2번처럼 `show-sql`을 켜고 `./mvnw test -Dtest=BlogPostListIntegrationTest#latestFirstTenPerPageAndTieBrokenById`를 돌린다.
+   - 기대: 글 목록 SELECT(`left join category`, `limit`)와 `select count(...)`가 짝으로 보인다. 개수 쿼리에는 category 조인이 없는 것도 확인한다.
+   - 이어서 `./mvnw test -Dtest=SidebarIntegrationTest#recentPostsAreLatestFiveVisibleOnes` — 최근 글 SELECT는 `limit 5` 하나뿐이고 count가 없다.
+
+6. **(스텝 4) @EntityGraph를 빼면**
+   - `PostRepository`의 `@EntityGraph(attributePaths = "category")` 줄을 지우고 `BlogPostListIntegrationTest#filtersByCategoryIncludingChildrenAndUncategorized`를 돌린다.
+   - 기대: 응답을 만들 때(트랜잭션 밖) `post.getCategory().getName()`이 프록시라 `LazyInitializationException` → 500으로 실패한다. 되돌린다.
+
+7. **ORDINAL의 위험**
    - 종이에: `enum PostStatus { DRAFT, PUBLISHED, SCHEDULED }`를 ORDINAL로 저장했다고 하자. 중간에 `REVIEW`를 끼워 `{ DRAFT, REVIEW, PUBLISHED, SCHEDULED }`가 되면, DB에 `1`로 저장된 기존 발행 글은 무엇이 되는가?
 
 ## 8. 확인 문제
@@ -543,10 +728,20 @@ public class BlogService {
 8. `findFirstByTargetTypeAndTargetIdAndActionOrderByCreatedAtDescIdDesc`에서 `IdDesc`를 뺀다면 어떤 문제가 생길 수 있나?
    <details><summary>답</summary>created_at이 같은 기록이 둘 이상이면 어느 것이 "첫 번째"인지 DB가 보장하지 않는다. 같은 요청에도 다른 사유가 나올 수 있다. id로 순서를 확정해야 결과가 항상 같다.</details>
 
+9. (스텝 4) `findAll(spec, pageable)`에 `@EntityGraph(attributePaths = "category")`를 붙였다. 목록 SELECT와 개수 쿼리에는 각각 어떤 변화가 있나?
+   <details><summary>답</summary>목록 SELECT에는 category가 fetch 조인으로 더해져 글마다 카테고리를 따로 읽지 않는다(N+1 방지). 개수 쿼리에는 fetch 조인이 붙지 않는다.</details>
+
+10. (스텝 4) 사이드바 최근 댓글에 "볼 수 없는 글의 댓글 제외" 조건을 걸 때 `PostSpecifications.visibleTo(Long, LocalDateTime)`(Specification<Post>)를 그대로 쓸 수 없었던 이유와 해결 방법은?
+    <details><summary>답</summary>Specification&lt;Post&gt;는 글이 쿼리의 Root일 때 쓰는데, 최근 댓글 쿼리의 Root는 댓글이고 글은 Join이다. 조건을 Root와 Join의 공통 타입 <code>From&lt;?, Post&gt;</code>를 받는 메서드(<code>listedIn(From, query, cb, ...)</code>)로 꺼내, 댓글 → 글 조인에도 같은 조건을 붙였다.</details>
+
+11. (스텝 4) `PostCountRepositoryImpl`을 Spring Data가 어떻게 찾아 `PostRepository`에 연결하나?
+    <details><summary>답</summary><code>PostRepository</code>가 조각 인터페이스 <code>PostCountRepository</code>를 상속하고, Spring Data가 "조각 인터페이스 이름 + Impl" 이름의 클래스를 찾아 그 메서드의 구현으로 쓴다.</details>
+
 ## 9. 더 읽을거리
 
 - Jakarta Persistence 3.2 명세 — 엔티티, 영속성 컨텍스트, JPQL, Criteria API의 원문: https://jakarta.ee/specifications/persistence/
 - Hibernate ORM User Guide — 지연 로딩, 프록시, fetch 전략, 스키마 검증: https://hibernate.org/orm/documentation/
 - Spring Data JPA Reference — 메서드 이름 쿼리 키워드 표, `@Query`, Specification, Auditing: https://docs.spring.io/spring-data/jpa/reference/
+- Spring Data JPA Reference의 "Custom Repository Implementations"(조각과 `Impl` 접미사), "Entity Graphs", "Fluent Query API"(`findBy`), "Locking"
 - Spring Boot Reference의 "Data Access" 장 — `spring.jpa.*` 설정, Open Session In View 경고
 - 이 저장소: [data-model.md](../../data-model.md)(컬럼 규칙), [erd/schema.sql](../../erd/schema.sql)

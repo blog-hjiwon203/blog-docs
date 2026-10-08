@@ -1,6 +1,6 @@
 # 비밀번호 저장: 해시, salt, bcrypt
 
-> 관련 스텝: [스텝 2](../step-02.md)(T013 관리자 초기 계정), [스텝 3](../step-03.md)(`SecurityConfig.passwordEncoder`), 스텝 4(가입·로그인)
+> 관련 스텝: [스텝 2](../step-02.md)(T013 관리자 초기 계정), [스텝 3](../step-03.md)(`SecurityConfig.passwordEncoder`), [스텝 4](../step-04.md)(가입·로그인, `PasswordRule`, 로그인의 타이밍 방어) · 관련 개념: [21-signup-login](./21-signup-login.md), [22-bean-validation](./22-bean-validation.md)
 > 기준 버전: Spring Security 7.1.1(`spring-security-crypto`), MySQL 8.4
 
 ## 1. 이 문서로 배우는 것
@@ -13,6 +13,7 @@
 - Spring Security의 `PasswordEncoder`, `BCryptPasswordEncoder`, `DelegatingPasswordEncoder`(`{bcrypt}` 접두사)
 - 이 프로젝트의 관리자 초기 계정 해시를 만든 방법, 개발용 비밀번호를 운영 전에 바꿔야 하는 이유
 - 비밀번호 규칙과 bcrypt의 72바이트 제한
+- (스텝 4) 규칙을 코드로 막는 `PasswordRule`, 로그인 응답 시간으로 가입 여부가 새지 않게 하는 더미 해시 비교
 
 **먼저 알면 좋은 것**: [Flyway](./03-flyway-migration.md)(V2 데이터 마이그레이션), [Spring Boot 기초](./01-spring-boot-basics.md)(빈).
 
@@ -149,6 +150,19 @@ $2a$10$1XrAfK4aVBNuC7uNq35kiuugsN.I0RN6Ynqh4Bj6xqJy4B1SUTfB6
 
 그래서 **같은 비밀번호를 두 번 encode하면 결과가 다르다**(salt가 다르니까). 비교는 반드시 `matches()`로 하고, `encode(입력) == 저장값`처럼 하면 항상 실패한다.
 
+### 4.2.1 (스텝 4) 응답 시간도 정보다: 타이밍 공격
+
+로그인을 이렇게 짜면 실패 문구를 통일해도 정보가 샌다.
+
+```
+없는 이메일   → 회원 조회 → 없음 → 바로 401          (몇 ms)
+있는 이메일   → 회원 조회 → matches()(bcrypt) → 401  (cost 10이면 수십 ms 더)
+```
+
+같은 401이라도 걸린 시간이 다르다. 공격자는 여러 이메일로 로그인을 시도해 **느리게 실패하는 이메일 = 가입된 이메일**로 골라낼 수 있다. 이렇게 처리 시간 차이로 정보를 알아내는 것을 **타이밍 공격(timing attack)**이라 한다.
+
+대책은 없는 이메일일 때도 **미리 만들어 둔 가짜 해시**와 `matches()`를 한 번 돌려, 두 경우 모두 bcrypt 계산 한 번만큼 걸리게 하는 것이다(5.6). 완벽하게 같은 시간이 되지는 않지만 bcrypt 계산이라는 큰 차이를 없앤다.
+
 ### 4.3 72바이트 제한
 
 bcrypt 알고리즘은 입력의 **앞 72바이트만** 쓴다. 예전 구현들은 넘는 부분을 조용히 잘랐다. 그러면 "앞 72바이트만 같은 다른 비밀번호"도 로그인되는 문제가 생긴다.
@@ -234,7 +248,7 @@ Spring Security에는 여러 알고리즘을 섞어 쓸 수 있는 `DelegatingPa
 | V2 해시를 `BCryptPasswordEncoder.matches("admin1234!", ...)` | `true` |
 | cost 10 / cost 12 한 번 계산 | 약 68ms / 약 275ms (개발 PC, 한 번 측정이라 참고용) |
 
-### 5.5 비밀번호 규칙 (스텝 4에서 만들 것)
+### 5.5 비밀번호 규칙 (스텝 4 전에 정리한 것)
 
 tasks.md T018: "비밀번호 8자+영문+숫자, bcrypt". 해시와 규칙은 맡은 일이 다르다.
 
@@ -244,9 +258,81 @@ tasks.md T018: "비밀번호 8자+영문+숫자, bcrypt". 해시와 규칙은 �
 | bcrypt(salt, cost) | DB가 털렸을 때 원래 비밀번호를 알아내기 |
 | 최대 길이 | bcrypt 72바이트 제한에 걸려 500이 나는 것. 가입 단계에서 400으로 미리 막는다 |
 
-스텝 4에서 `@Size(max = ...)`나 바이트 길이 검사를 넣을 때, 한글이 3바이트라는 점을 함께 고려한다. 정확한 최대 길이는 명세에 없어 그때 정한다.
+스텝 4에서 `@Size(max = ...)`나 바이트 길이 검사를 넣을 때, 한글이 3바이트라는 점을 함께 고려한다. 정확한 최대 길이는 명세에 없어 그때 정한다. → 스텝 4에서 바이트 검사로 넣었다(5.6). 스텝 3 노트의 "남은 문제"에 있던 "72바이트를 넘으면 500" 항목은 이것으로 해결됐다.
 
 로그인 실패 문구를 하나로 통일하는 것(T019, `LOGIN_FAILED` "이메일 또는 비밀번호가 맞지 않습니다.")도 같은 흐름의 방어다. "없는 이메일"과 "비밀번호 틀림"을 구분해 알려 주면, 공격자가 어떤 이메일이 가입돼 있는지 알아낸다.
+
+### 5.6 (스텝 4) 실제 코드: `PasswordRule`과 로그인
+
+**규칙**: `auth/domain/PasswordRule.java`
+
+```java
+public final class PasswordRule {
+
+    public static final int MIN_LENGTH = 8;
+    public static final int MAX_BYTES = 72;
+
+    private static final Pattern LETTER = Pattern.compile("[A-Za-z]");
+    private static final Pattern DIGIT = Pattern.compile("\\d");
+
+    private PasswordRule() {
+    }
+
+    /** 규칙에 맞지 않으면 400 VALIDATION_FAILED(field)를 던진다. */
+    public static void check(String field, String password) {
+        if (password == null || password.length() < MIN_LENGTH
+                || !LETTER.matcher(password).find() || !DIGIT.matcher(password).find()) {
+            throw BusinessException.invalidField(field, "비밀번호는 8자 이상, 영문과 숫자를 함께 써 주세요.");
+        }
+        if (password.getBytes(StandardCharsets.UTF_8).length > MAX_BYTES) {
+            throw BusinessException.invalidField(field, "비밀번호가 너무 깁니다.");
+        }
+    }
+
+}
+```
+
+- `find()`: 문자열 **어딘가에** 영문이 하나라도 있는지. `matches()`는 문자열 **전체**가 패턴과 같아야 하므로 여기서 쓰면 안 된다.
+- 길이 검사가 두 번이다: 최소는 **글자 수**(`length()`), 최대는 **바이트 수**(`getBytes(UTF_8).length`). bcrypt가 세는 것은 바이트이기 때문이다(4.3). 영문이면 72자, 한글이 섞이면 더 짧아진다.
+- 결과는 400 `VALIDATION_FAILED`에 `fieldErrors: [{field: "password", ...}]`. 화면이 비밀번호 칸 아래에 문구를 띄운다.
+- 요청 DTO의 `@NotBlank` 대신 이 클래스에 규칙을 모은 이유: 나중에 비밀번호 변경(AUTH-05)과 재설정(OWN-02)도 같은 규칙을 써야 한다. 한 곳에 있으면 규칙이 바뀌어도 한 곳만 고친다. 가입 서비스는 `PasswordRule.check("password", password)`로 부른다([입력 검증](./22-bean-validation.md)).
+- **최대 72바이트는 기술적 한계에서 정한 값이다.** 지원이 확인해(2026-10-08) spec.md AUTH-01, plan.md, contracts의 가입 API에 적었다.
+
+**로그인의 더미 해시**: `auth/application/AuthService.java`
+
+```java
+/** 없는 이메일로 로그인할 때도 비밀번호를 비교해, 응답 시간으로 가입 여부를 알 수 없게 한다. */
+private final String dummyPasswordHash;
+
+public AuthService(..., PasswordEncoder passwordEncoder, ...) {
+    ...
+    this.dummyPasswordHash = passwordEncoder.encode("dummy-password-for-timing-1");
+}
+
+public Member login(String rawEmail, String password) {
+    Optional<Member> found = memberRepository.findByEmail(Emails.normalize(rawEmail));
+    String hash = found.map(Member::getPasswordHash).orElse(null);
+    boolean matches = passwordEncoder.matches(password, hash == null ? dummyPasswordHash : hash);
+    if (hash == null || !matches || found.get().isWithdrawn()) {
+        throw new BusinessException(ErrorCode.LOGIN_FAILED);
+    }
+    Member member = found.get();
+    if (member.isSuspendedAt(LocalDateTime.now(clock))) {
+        throw new BusinessException(ErrorCode.MEMBER_SUSPENDED, suspensionDetails.of(member));
+    }
+    return member;
+}
+```
+
+- 더미 해시는 서비스가 만들어질 때 **한 번** 계산한다(앱 시작이 그만큼 느려진다). 요청마다 `encode`하면 bcrypt 두 번이라 오히려 시간이 달라진다.
+- 회원이 없거나 소셜 가입 회원(해시 null)이면 더미 해시와 비교한다. 결과는 버리고 `hash == null`로 실패 처리한다.
+- `matches()`를 **조건 검사보다 먼저** 부르는 것이 핵심이다. `if (hash == null) throw`를 먼저 쓰면 bcrypt를 건너뛰어 다시 빨라진다.
+- 정지 안내(403)는 비밀번호가 맞은 **뒤에만** 준다. 비밀번호 없이 정지 여부를 알 수 있으면 그것도 정보가 새는 것이다. 흐름 전체는 [가입과 로그인](./21-signup-login.md)에 있다.
+
+**테스트로 확인한 것**
+
+- `SignupIntegrationTest.passwordNeedsEightCharsWithLettersAndDigits`: `"pass123"`(7자), `"password"`(숫자 없음), `"12345678"`(영문 없음), `"가나다라마바사아1a".repeat(4)`(40자, 한글 32자라 100바이트가 넘음)이 모두 400이고 `fieldErrors[0].field`가 `password`, 회원이 만들어지지 않는다.
+- `LoginIntegrationTest.wrongPasswordAndUnknownEmailGetSameAnswer`: 틀린 비밀번호와 없는 이메일이 같은 401 `LOGIN_FAILED`와 같은 문구를 받는다. 그리고 `"a1".repeat(50)`(100바이트) 비밀번호로 로그인해도 500이 아니라 401이다. 로그인은 `PasswordRule`을 거치지 않으므로, 이 테스트가 통과한다는 것은 이 버전의 `BCryptPasswordEncoder.matches()`가 72바이트 넘는 입력에 예외를 던지지 않고 불일치로 끝낸다는 뜻이다(`encode()`는 예외, 5.4).
 
 ## 6. 자주 하는 실수와 함정
 
@@ -259,7 +345,9 @@ tasks.md T018: "비밀번호 8자+영문+숫자, bcrypt". 해시와 규칙은 �
 | 비밀번호를 로그에 남김(요청 본문 로깅 등) | 해시가 소용없어짐 |
 | 해시를 응답 JSON에 포함(엔티티를 그대로 반환) | 대입 공격 재료를 넘겨줌 → 응답 DTO에서 뺀다 |
 | 개발용 관리자 비밀번호로 운영 배포 | 저장소를 본 누구나 관리자 로그인 |
-| 72바이트 넘는 입력을 검사 없이 encode | 예외 → 500. 가입 단계에서 400으로 막아야 함 |
+| 72바이트 넘는 입력을 검사 없이 encode | 예외 → 500. 가입 단계에서 400으로 막아야 함(스텝 4 `PasswordRule`) |
+| 최대 길이를 글자 수(`@Size(max = 72)`)로 검사 | 한글 25자는 글자 수로는 통과하고 바이트로는 75라 encode에서 500 |
+| 없는 이메일이면 bcrypt 없이 바로 실패 | 응답 시간 차이로 가입된 이메일을 골라낼 수 있음(타이밍 공격) |
 | cost를 너무 높게(예: 16) | 로그인 한 번에 수 초, 로그인 폭주 시 서버 CPU 고갈(이것 자체가 서비스 거부 공격 수단) |
 | 접두사 있는/없는 해시를 섞음 | 위임 인코더에서 예외 |
 
@@ -287,13 +375,25 @@ tasks.md T018: "비밀번호 8자+영문+숫자, bcrypt". 해시와 규칙은 �
 3. **72바이트 제한**
    - `encoder.encode("가".repeat(24))`(72바이트)와 `encoder.encode("가".repeat(25))`(75바이트)를 각각 실행해 본다.
 
-4. **DB의 해시 보기**
+4. **(스텝 4) 규칙 테스트 돌려 보기**
+   - `./mvnw test -Dtest='SignupIntegrationTest#passwordNeedsEightCharsWithLettersAndDigits,LoginIntegrationTest#wrongPasswordAndUnknownEmailGetSameAnswer'`
+   - `PasswordRule`의 바이트 검사(`getBytes(...).length > MAX_BYTES`) 블록을 지우고 첫 테스트를 다시 돌려 보자. 한글 40자 비밀번호가 `encode`까지 가서 예외 → 500이 되어 실패한다. 되돌린다.
+
+5. **(스텝 4) 타이밍 차이 재 보기**
+   - 서버를 띄우고 가입한 이메일과 없는 이메일로 각각 틀린 비밀번호 로그인을 몇 번 보내 시간을 비교한다.
+     ```bash
+     curl -s -o /dev/null -w '%{time_total}\n' -H 'Host: blog.test' -H 'X-Requested-With: XMLHttpRequest' \
+       -H 'Content-Type: application/json' -d '{"email":"nobody@example.com","password":"wrong1234"}' localhost:8080/api/auth/login
+     ```
+   - 둘이 비슷한지 본다. 그다음 `AuthService.login`에서 `matches` 줄 앞에 `if (hash == null) throw new BusinessException(ErrorCode.LOGIN_FAILED);`를 넣고 다시 재 보면 없는 이메일 쪽이 눈에 띄게 빨라진다. 되돌린다.
+
+6. **DB의 해시 보기**
    ```bash
    docker exec blog-mysql mysql -ublog -pblog blog -e "SELECT email, password_hash, LENGTH(password_hash) FROM member"
    ```
    관리자 행의 해시가 60자인지 본다.
 
-5. **관리자 계정 테스트 따라가기**
+7. **관리자 계정 테스트 따라가기**
    - `./mvnw test -Dtest=AdminAccountMigrationTest`
    - 테스트의 `"admin1234!"`를 다른 문자열로 바꾸면 실패하는 것을 보고 되돌린다.
 
@@ -324,6 +424,12 @@ tasks.md T018: "비밀번호 8자+영문+숫자, bcrypt". 해시와 규칙은 �
 
 8. 로그인 실패 문구를 "없는 이메일"과 "비밀번호 틀림"으로 나누지 않는 이유는?
    <details><summary>답</summary>나누면 공격자가 어떤 이메일이 가입돼 있는지 알아낼 수 있다(계정 열거). 하나의 문구(LOGIN_FAILED)로 통일한다.</details>
+
+9. (스텝 4) `PasswordRule`이 최소 길이는 `length()`로, 최대 길이는 `getBytes(UTF_8).length`로 재는 이유는?
+   <details><summary>답</summary>최소 길이 규칙(8자)은 사람이 보는 글자 수 기준이고, 최대 길이는 bcrypt가 입력을 바이트로 세어 72바이트까지만 받기 때문이다. 한글은 한 글자가 3바이트라 글자 수로 검사하면 72바이트를 넘는 입력이 통과해 encode에서 500이 난다.</details>
+
+10. (스텝 4) 로그인에서 없는 이메일인데도 `dummyPasswordHash`와 `matches()`를 부르는 이유는?
+   <details><summary>답</summary>있는 이메일은 bcrypt 비교 시간만큼 느리게, 없는 이메일은 바로 실패하면 응답 시간 차이로 가입 여부를 알아낼 수 있다(타이밍 공격). 두 경우 모두 bcrypt를 한 번씩 돌려 시간 차이를 줄인다.</details>
 
 ## 9. 더 읽을거리
 

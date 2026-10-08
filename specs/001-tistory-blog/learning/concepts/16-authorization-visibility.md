@@ -1,6 +1,6 @@
 # 16. 인가와 가시성 판단: 누가 무엇을 볼 수 있나
 
-> 관련 스텝: [스텝 3](../step-03.md) (T011, T050) · 관련 개념: [12-spring-security-filter-chain](./12-spring-security-filter-chain.md), [15-subdomain-host-routing](./15-subdomain-host-routing.md), [06-jpa-entity-mapping](./06-jpa-entity-mapping.md), [08-pagination](./08-pagination.md), [18-spa-server-routing](./18-spa-server-routing.md)
+> 관련 스텝: [스텝 3](../step-03.md) (T011, T050), [스텝 4](../step-04.md) (블로그 화면 목록·글 수·사이드바, 블로그 수정) · 관련 개념: [22-bean-validation](./22-bean-validation.md), [12-spring-security-filter-chain](./12-spring-security-filter-chain.md), [15-subdomain-host-routing](./15-subdomain-host-routing.md), [06-jpa-entity-mapping](./06-jpa-entity-mapping.md), [08-pagination](./08-pagination.md), [18-spa-server-routing](./18-spa-server-routing.md)
 
 ## 1. 이 문서로 배우는 것
 
@@ -13,6 +13,7 @@
 - 글 하나를 볼 때(상세)와 목록을 볼 때 같은 규칙을 지키게 하는 방법(`PostSpecifications`)
 - 블로그 가시성(이용 제한, 주인 정지), 주인 검사(`BlogOwnerGuard`), 구독자 공개 글의 예외
 - 시간에 따라 바뀌는 판단을 테스트하려고 `Clock`을 주입하는 이유
+- (스텝 4) 블로그 화면 목록 조건 `listedIn`, 글 수·카테고리 글 수·사이드바가 한 조건을 쓰게 하는 법, 403이 400보다 먼저 나가게 하는 법
 
 **먼저 알면 좋은 것**: HTTP 상태 코드 401/403/404, JPA 엔티티 연관관계, Spring 빈 주입.
 
@@ -76,6 +77,8 @@
 왜 404가 401보다 먼저인가? 401을 먼저 주면, 비회원이 `/api/posts/15`를 부를 때 "로그인하세요(401)"와 "없음(404)"이 갈려서 "15번은 있구나"를 알 수 있다. 404를 먼저 판단하면 비회원에게도 정보가 새지 않는다.
 
 입력 검증(400)이 마지막인 이유도 같다. 남의 글에 이상한 값을 보냈을 때 400이 먼저 나가면 "그 글이 있고, 내 입력만 틀렸구나"를 알게 된다.
+
+그런데 Spring MVC에서 요청 본문에 `@Valid`를 붙이면 **컨트롤러 메서드에 들어가기 전**(인자를 만들 때) 검증이 끝난다. 주인 검사는 메서드 안에서 하므로, 남의 블로그에 틀린 값을 보내면 403보다 400이 먼저 나가 버린다. 스텝 4의 블로그 수정은 그래서 `@Valid`를 쓰지 않고 주인 검사 **뒤에** 직접 검증한다(5.7 ④, [입력 검증](./22-bean-validation.md)).
 
 ### 3.4 정책 객체(Policy)
 
@@ -194,7 +197,18 @@ postRepository.findAll(
 
 내부에서는 JPA **Criteria API**로 조건을 만든다. `root`는 조회 대상(Post), `cb`(CriteriaBuilder)는 조건을 만드는 도구, `query`는 서브쿼리 등을 만들 때 쓴다. Repository가 `JpaSpecificationExecutor<Post>`를 상속하면 `findAll(spec, pageable)`을 쓸 수 있다.
 
-## 5. 이 프로젝트에서는
+### 4.4 (스텝 4) 블로그 화면의 목록은 무엇을 보여 주나
+
+스텝 3에는 목록 조건이 두 개였다: 남이 보는 `visibleTo`, 주인이 보는 `ownerView`(삭제 안 된 **모든** 글). 블로그 메인 목록을 만들면서 `ownerView`를 그대로 쓰면 주인의 블로그 메인에 **임시저장 글**이 섞인다. 임시저장 글은 발행 시각(`published_at`)이 없어 최신순 정렬에서도 자리가 없다. 블로그 메인은 "발행된 글을 보여 주는 곳"이고, 임시저장·예약 글은 관리 화면의 글 관리(MNG-01)에서 본다.
+
+그래서 블로그 화면용 조건 `listedIn`을 따로 두었다.
+
+| 보는 사람 | 블로그 화면(메인, 카테고리, 사이드바, 글 수)에 나오는 글 |
+| --- | --- |
+| 블로그 주인 | 삭제 안 된 **발행** 글 전부. 비공개·구독자 공개·숨긴 글 포함. 임시저장·예약 글은 빠짐 |
+| 그 밖의 사람 | `visibleTo`와 같음(남이 볼 수 있는 글만) |
+
+data-model.md는 "주인이 자기 블로그를 볼 때만 ④를 건너뛴다"고만 적었다. ④에는 "발행됨"도 들어 있어서, 글자 그대로면 임시저장 글도 나와야 한다. `listedIn`은 이것을 블로그 화면에 맞게 **"발행됨"은 남기고 나머지 ④(숨김·공개 범위·이용 제한·정지)만 건너뛰는 것**으로 좁혀 해석했다. 지원이 이 해석을 확인했고(2026-10-08), data-model.md 글 가시성 판단 절과 spec.md 결정 표에 적었다.
 
 ### 5.1 PostVisibilityPolicy: 표를 코드로
 
@@ -411,6 +425,8 @@ public LoginMember requireOwner(Blog blog, LoginMember member) {
 
 통합 테스트 `CurrentBlogIntegrationTest.ownerGuardOrder401Then403`이 비회원 401, 남 403, 주인 200을 확인하고, `missingBlogIs404BeforeLoginCheck`가 없는 블로그에서는 로그인하지 않아도 401이 아니라 404가 먼저 나가는 것을 확인한다.
 
+스텝 4에서 이 검사가 처음으로 실제 API에 쓰였다: `PATCH /api/blog`(블로그 이름·소개 수정). 코드는 5.7 ④.
+
 ### 5.6 화면과 API에서 결과를 어떻게 쓰나
 
 | 결과 | 화면 주소 `/{id}` (`SpaForwardController`) | 글 상세 API (스텝 6 예정) |
@@ -420,6 +436,98 @@ public LoginMember requireOwner(Blog blog, LoginMember member) {
 | `Owner` | 200 | 200, 숨김이면 사유 포함 |
 | `Visible` | 200 | 200 |
 | `SubscribersOnly` | 200 (화면이 API 응답으로 안내) | 403 `SUBSCRIBERS_ONLY` + 블로그 정보 |
+
+### 5.7 (스텝 4) 블로그 화면: 목록·글 수·사이드바가 한 조건을 쓴다
+
+**① `listedIn`**: `global/visibility/PostSpecifications.java`
+
+```java
+public static Specification<Post> listedIn(Blog blog, Long viewerId, LocalDateTime now) {
+    return (root, query, cb) -> listedIn(root, query, cb, blog, viewerId, now);
+}
+
+/** listedIn을 다른 엔티티의 조인(댓글 → 글 등)에 쓸 때. post는 Root이거나 Join이다. */
+public static Predicate listedIn(From<?, Post> post, CriteriaQuery<?> query, CriteriaBuilder cb, Blog blog,
+                                 Long viewerId, LocalDateTime now) {
+    Predicate inBlog = cb.equal(post.get("blog").get("id"), blog.getId());
+    if (blog.isOwnedBy(viewerId)) {
+        return cb.and(inBlog, cb.isNull(post.get("deletedAt")),
+                cb.equal(post.get("status"), PostStatus.PUBLISHED));
+    }
+    return cb.and(inBlog, visibleTo(post, query, cb, viewerId, now));
+}
+```
+
+- 블로그 조건(`inBlog`)이 안에 들어 있어, 부르는 쪽이 `inBlog`를 따로 붙이다 빠뜨릴 일이 없다.
+- 주인 쪽에 블로그 삭제 조건이 없는 이유: 이 조건을 쓰는 API는 모두 `@CurrentBlog`를 거쳐, 삭제된 블로그면 이미 404가 났다.
+- `From<?, Post>` 버전이 있어 댓글 → 글 조인에도 쓴다(아래 ③, [JPA](./06-jpa-entity-mapping.md) 5.9 ④).
+
+**② 이 조건을 쓰는 곳**
+
+| 숫자·목록 | 코드 | 비회원이 비공개 글 1개 + 공개 글 1개인 블로그를 볼 때 |
+| --- | --- | --- |
+| 블로그 정보의 `postCount` | `BlogQueryService.detail` → `postRepository.count(listedIn(...))` | 1 |
+| 블로그 메인 글 목록과 `totalElements` | `PostQueryService.blogPosts` → `findAll(listedIn(...), pageable)` | 공개 글 1개 |
+| 카테고리 트리의 글 수, 전체 글, 미분류 | `CategoryTreeService.tree` → `countByCategory(listedIn(...))` | 합계 1 |
+| 사이드바 최근 글 5 | `SidebarService.recentPosts` | 공개 글 1개 |
+| 사이드바 최근 댓글 5 | `SidebarService.recentComments`(댓글 JOIN 글에 같은 조건) | 공개 글의 댓글만 |
+
+다섯 군데가 같은 조건을 쓰므로 "목록에는 3개인데 글 수는 4"처럼 숫자가 어긋나지 않고, 비공개 글의 제목이 사이드바 최근 글에 새지 않는다. 테스트: `BlogInfoIntegrationTest.blogInfoCountsOnlyPostsTheViewerCanSee`, `BlogPostListIntegrationTest.othersSeeOnlyVisiblePostsAndOwnerSeesAllPublished`, `SidebarIntegrationTest.categoriesInOrderWithVisiblePostCounts`, `recentCommentsSkipHiddenPostsAndMaskSecretOrBlinded`.
+
+**③ 최근 댓글: 볼 수 있는 글의 댓글이라도 내용은 가린다**: `blog/application/SidebarService.java`
+
+```java
+private static Sidebar.RecentComment toRecentComment(Comment comment) {
+    Sidebar.CommentState state = comment.isBlinded() ? Sidebar.CommentState.BLINDED
+            : comment.isSecret() ? Sidebar.CommentState.SECRET
+            : Sidebar.CommentState.NORMAL;
+    boolean shown = state == Sidebar.CommentState.NORMAL;
+    return new Sidebar.RecentComment(comment.getId(), comment.getPost().getId(),
+            shown ? comment.getContent() : null, shown ? comment.getMember().getNickname() : null, state);
+}
+```
+
+- 글 단위 가시성(볼 수 없는 글의 댓글은 아예 빠짐)과 댓글 단위 가림(비밀·숨김 댓글은 `state`만)이 두 겹이다. 지운 댓글(`deleted_at`)은 쿼리에서 뺀다.
+- 사이드바에서는 주인에게도 비밀댓글 내용을 주지 않는다(rest-api.md "사이드바 응답"). 글 상세의 댓글 목록(스텝 6)은 글 주인·작성자에게 비밀댓글 내용을 보여 주므로 규칙이 다르다.
+
+**④ 비공개 카테고리**: 주인이 아니면 트리와 목록에서 없는 카테고리다.
+
+```java
+// category/application/CategoryTreeService.tree
+// 주인이 아니면 비공개 카테고리(CAT-05)는 없는 것처럼, 그 아래 카테고리도 함께 뺀다
+List<Category> categories = categoryRepository.findByBlogIdOrderBySortOrderAscIdAsc(blog.getId()).stream()
+        .filter(category -> owner || !category.isPrivateCategory())
+        .toList();
+```
+
+```java
+// post/application/PostQueryService.inCategory
+// 다른 블로그의 카테고리, 주인이 아닌 사람에게 비공개 카테고리는 없는 것과 같다
+Category category = categoryRepository.findById(categoryId)
+        .filter(found -> found.getBlog().getId().equals(blog.getId()))
+        .filter(found -> !found.isPrivateCategory() || blog.isOwnedBy(viewerId))
+        .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+```
+
+- 다른 블로그의 카테고리 번호를 붙여도, 비공개 카테고리 번호를 붙여도 똑같이 404다. "그 번호가 있긴 하다"를 알려 주지 않는다(3.2).
+- 트리 응답의 `isPrivate`는 주인에게만 준다(`CategoryTreeResponse`가 주인이 아니면 null로 두고 JSON에서 뺀다).
+- 아직 남은 점: 비공개 카테고리 기능(CAT-05)은 백로그라 지금은 `is_private`를 바꿀 API가 없다. 그래서 (가) 주인이 아닌 사람의 `totalCount`에는 비공개 카테고리 글도 세어지고 (나) 비공개 상위 카테고리 아래의 공개 하위 카테고리 번호로 목록을 직접 요청하면 열린다. CAT-05를 만들 때 글 조건에 카테고리 공개 여부를 넣어 함께 고친다.
+
+**⑤ 주인 검사 뒤에 입력 검증**: `blog/presentation/BlogController.java`
+
+```java
+/** 주인만. 비회원 401, 남의 블로그 403, 그다음 입력 오류 400 순서다. */
+@PatchMapping("/api/blog")
+public BlogResponse update(@CurrentBlog Blog blog, @AuthenticationPrincipal LoginMember member,
+                           @RequestBody BlogUpdateRequest request) {
+    blogOwnerGuard.requireOwner(blog, member);
+    requestValidator.validate(request);
+    Blog updated = blogService.updateInfo(blog.getAddress(), request.name(), request.description());
+    return BlogResponse.from(blogQueryService.detail(updated, member.id()));
+}
+```
+
+순서: `@CurrentBlog`(인자 해석, 404) → `requireOwner`(401 → 403) → `requestValidator.validate`(400). `@RequestBody`에 `@Valid`가 없다는 점이 핵심이다. 테스트 `BlogInfoIntegrationTest.onlyOwnerCanUpdateAndPermissionComesBeforeInputErrors`가 51자 이름을 보내 비회원 401, 남 403, 주인 400을 확인한다. `RequestValidator`의 동작은 [입력 검증](./22-bean-validation.md)에 있다. 다만 JSON 자체가 깨진 본문(파싱 실패)은 인자를 만들 수 없어 여전히 400이 먼저 나간다.
 
 ## 6. 자주 하는 실수와 함정
 
@@ -432,6 +540,9 @@ public LoginMember requireOwner(Blog blog, LoginMember member) {
 7. **`switch`에 `default` 넣기**: sealed/enum의 "빠뜨리면 컴파일 오류" 보호가 사라진다.
 8. **`LocalDateTime.now()` 직접 호출**: 시간 관련 판단을 테스트하기 어려워진다. `Clock`을 주입한다.
 9. **지연 로딩 예외**: 정책에 넘기는 `Post`가 블로그·주인을 읽지 않은 상태면 `LazyInitializationException`. `findWithBlogById`로 읽은 것을 넘긴다.
+10. **(스텝 4) 숫자마다 조건을 따로 쓰기**: 글 수는 `countByBlogId`, 목록은 `listedIn`처럼 나누면 비공개 글이 글 수에만 세어진다. 블로그 화면의 모든 목록·개수는 `listedIn` 하나로.
+11. **(스텝 4) 주인 화면이라고 `ownerView`를 쓰기**: 임시저장 글이 블로그 메인에 섞인다. 블로그 화면은 `listedIn`, 관리 화면의 글 관리(스텝 9 MNG-01)가 `ownerView` 쪽이다.
+12. **(스텝 4) 주인 검사가 있는 API에 `@Valid`**: 남의 블로그에 틀린 값을 보내면 403 대신 400이 나간다.
 
 ## 7. 직접 해 보기
 
@@ -461,7 +572,19 @@ IntelliJ에서 테스트 메서드 이름을 보면 표의 결과와 1:1로 대�
 ./mvnw test -Dtest='CurrentBlogIntegrationTest#missingBlogIs404BeforeLoginCheck+ownerGuardOrder401Then403'
 ```
 
-**실습 5. 만들어지는 SQL 보기**
+**실습 5. (스텝 4) 블로그 화면의 숫자가 같은 조건을 쓰는지**
+
+```bash
+./mvnw test -Dtest='BlogInfoIntegrationTest,BlogPostListIntegrationTest,SidebarIntegrationTest'
+```
+
+그다음 `PostSpecifications.listedIn`의 주인 쪽에서 `cb.equal(post.get("status"), PostStatus.PUBLISHED)`를 지우고 다시 돌린다. 기대: 주인이 볼 때 임시저장 글까지 세어져 `blogInfoCountsOnlyPostsTheViewerCanSee`(주인 postCount 2)와 `othersSeeOnlyVisiblePostsAndOwnerSeesAllPublished`가 실패한다. 되돌린다.
+
+**실습 6. (스텝 4) 403과 400의 순서**
+
+`BlogController.update`의 파라미터를 `@Valid @RequestBody BlogUpdateRequest request`로 바꾸고 `requestValidator.validate(request);` 줄을 지운 뒤 `BlogInfoIntegrationTest#onlyOwnerCanUpdateAndPermissionComesBeforeInputErrors`를 돌린다. 기대: 남의 회원이 51자 이름을 보낸 경우 403이 아니라 400이 나와 실패한다. 되돌린다.
+
+**실습 7. 만들어지는 SQL 보기**
 
 `application-dev.yml`에 잠깐 `spring.jpa.show-sql: true`를 넣고 테스트를 돌리면, `listConditionMatchesDetailDecision`이 실행하는 SQL에서 `exists (select ... from subscription ...)`를 볼 수 있다. 확인 후 지운다.
 
@@ -490,6 +613,15 @@ IntelliJ에서 테스트 메서드 이름을 보면 표의 결과와 1:1로 대�
 
 8. 정지 종료 시각 판단에 `LocalDateTime.now()` 대신 `LocalDateTime.now(clock)`을 쓰는 이유는?
 <details><summary>답</summary>테스트에서 <code>Clock</code>을 고정된 시계로 바꿔 "지금"을 마음대로 정할 수 있어서, 시간이 실제로 지나지 않아도 정지 해제 같은 시간 판단을 검증할 수 있기 때문이다.</details>
+
+9. (스텝 4) 블로그 주인이 자기 블로그 메인을 볼 때 나오는 글과 나오지 않는 글은?
+<details><summary>답</summary>삭제되지 않은 발행 글은 비공개·구독자 공개·숨긴 글까지 모두 나온다. 임시저장·예약 글과 삭제한 글은 나오지 않는다(<code>listedIn</code>의 주인 쪽 조건). 임시저장·예약 글은 관리 화면의 글 관리에서 본다.</details>
+
+10. (스텝 4) 블로그 정보의 글 수, 카테고리 트리의 글 수, 사이드바 최근 글이 모두 `listedIn`을 쓰는 이유는?
+<details><summary>답</summary>같은 사람에게 보이는 숫자와 목록이 서로 맞아야 하고(목록 3개인데 글 수 4 같은 어긋남 방지), 비공개 글이 개수나 사이드바 제목으로 새지 않게 하려는 것이다. 조건이 한 곳에 있으면 규칙을 바꿀 때도 한 곳만 고친다.</details>
+
+11. (스텝 4) `PATCH /api/blog`에서 `@Valid`를 쓰지 않고 `requestValidator.validate(request)`를 주인 검사 뒤에 부르는 이유는?
+<details><summary>답</summary><code>@Valid</code>는 컨트롤러 메서드에 들어가기 전에 검증해서, 남의 블로그에 틀린 값을 보내면 403보다 400이 먼저 나간다. 상태 코드 순서(404 → 401 → 403 → 400)를 지키려면 주인 검사를 먼저 하고 그다음 검증해야 한다.</details>
 
 ## 9. 더 읽을거리
 
