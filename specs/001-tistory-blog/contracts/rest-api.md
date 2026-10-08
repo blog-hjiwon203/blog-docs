@@ -12,6 +12,8 @@
 - 오류 본문(형식은 확정 전): `{ "code": "BLOG_ADDRESS_TAKEN", "message": "...", "fieldErrors": [{ "field": "address", "reason": "..." }] }`. 내부 정보는 담지 않는다(COM-02).
 - 페이지 응답: `{ content, page, size, totalElements, totalPages }`. 커서 응답: `{ content, nextCursor }` (`nextCursor` = 마지막 글의 `publishedAt,id`).
 - 연타 방지: 발행·댓글 POST는 `Idempotency-Key` 헤더(R-09 기본값).
+- 블로그 차단(MNG-04): 그 블로그에서 차단된 회원이 댓글·방명록 작성이나 구독을 요청하면 403 `BLOCKED_BY_BLOG`("이 블로그에는 쓸 수 없습니다"). 금칙어가 든 댓글·방명록은 400 `BANNED_WORD`.
+- 제재 사유(ADMIN-02·03·05): 요청과 응답 모두 코드 `reason`(SPAM, ADULT, ABUSE, COPYRIGHT, ETC)과 ETC일 때만 `reasonDetail`. 화면 문구는 서버 enum이 정한다.
 
 ## AUTH (플랫폼)
 
@@ -19,7 +21,7 @@
 | --- | --- | --- | --- |
 | POST | /api/auth/email-verifications | 인증 코드 발송 | OWN-01 |
 | POST | /api/auth/signup | 이메일·코드·비밀번호·닉네임 → 회원 생성 | AUTH-01 |
-| POST | /api/auth/login | 로그인, `.blog.com` 쿠키 발급. 정지면 403 + 사유·기한 | AUTH-01, ADMIN-02 |
+| POST | /api/auth/login | 로그인, `.blog.com` 쿠키 발급. 정지면 403 + 사유(최신 SUSPEND 관리 이력)·기한 | AUTH-01, ADMIN-02 |
 | POST | /api/auth/logout | 쿠키 삭제, 모든 블로그 주소에서 로그아웃 | AUTH-02 |
 | GET | /api/auth/oauth/{provider}/authorize?redirect= | state 생성, 제공사로 이동 | AUTH-01 (P1) |
 | GET | /api/auth/oauth/{provider}/callback | state 검증, 로그인 또는 닉네임 확인 단계 | AUTH-01 (P1) |
@@ -74,10 +76,10 @@
 | 메서드 | 경로 | 설명 | ID |
 | --- | --- | --- | --- |
 | GET | /api/posts/{id}/comments?cursor= | 작성순 20, 답글 포함 | CMT-01 |
-| POST | /api/posts/{id}/comments | `{ content, parentId?, secret? }` | CMT-01, CMT-05, CMT-06 |
+| POST | /api/posts/{id}/comments | `{ content, parentId?, secret? }`. 차단 회원 403, 금칙어 400 | CMT-01, CMT-05, CMT-06, MNG-04 |
 | PATCH | /api/comments/{id} | 본인만 | CMT-03 |
 | DELETE | /api/comments/{id} | 본인 또는 블로그 주인 | CMT-01, CMT-02 |
-| GET/POST | /api/guestbook | 방명록 페이지 20 | CMT-04 |
+| GET/POST | /api/guestbook | 방명록 페이지 20. 작성 시 차단 회원 403, 금칙어 400 | CMT-04, MNG-04 |
 | DELETE | /api/guestbook/{id} | 본인 또는 주인 | CMT-04 |
 | PUT/DELETE | /api/posts/{id}/like | 공감·취소 (멱등) → `{ liked, likeCount }` | SOC-01 |
 | PUT/DELETE | /api/posts/{id}/bookmark | 저장·취소 (멱등) → `{ bookmarked }` | SOC-03 |
@@ -87,7 +89,7 @@
 
 | 메서드 | 경로 | 설명 | ID |
 | --- | --- | --- | --- |
-| PUT/DELETE | /api/blogs/{blogId}/subscription | 구독·해제 (멱등) | SUB-01 |
+| PUT/DELETE | /api/blogs/{blogId}/subscription | 구독·해제 (멱등). 그 블로그에서 차단된 회원은 403 | SUB-01, MNG-04 |
 | GET | /api/feed?cursor= | 구독 피드 20 | SUB-02 |
 | GET | /api/search?q=&page= | 블로그 내 검색 (블로그 Host) | SRCH-01 |
 | GET | /api/search?q=&type=post\|blog | 전체 검색 (플랫폼 Host) | SRCH-02 |
@@ -103,19 +105,26 @@
 
 | 메서드 | 경로 | 설명 | ID |
 | --- | --- | --- | --- |
-| GET | /api/manage/posts?status=&categoryId=&q=&page= | 내 글 관리 20, 블라인드 사유 포함 | MNG-01 |
+| GET | /api/manage/posts?status=&categoryId=&q=&page= | 내 글 관리 20, 블라인드 사유(최신 BLIND 관리 이력) 포함 | MNG-01 |
 | PATCH/DELETE | /api/manage/posts (일괄) | 공개 범위 변경·삭제 | MNG-01 |
 | GET | /api/manage/comments?page= | 받은 댓글·방명록 | MNG-02 |
-| GET | /api/manage/stats | 오늘·어제·누적 방문자 | MNG-03 |
+| GET | /api/manage/stats | 관리 홈: 오늘·어제·누적 방문자, 최근 댓글·글 요약 | MNG-03 |
+| GET | /api/manage/stats/visitors?unit=day\|week\|month&from=&to= | 방문자 그래프 (주·월은 일별 합) | MNG-03 |
+| GET | /api/manage/stats/popular-posts?range=all\|7d | 인기 글 순위 (누적 조회수 / 최근 7일) | MNG-03 |
+| GET | /api/manage/stats/referrers?from=&to= | 유입 경로: 종류별·사이트별 방문 수 | MNG-03 |
+| GET/POST | /api/manage/blocked-members | 차단 회원 목록·차단 `{ memberId, memo? }` (기존 구독 삭제, 중복 409) | MNG-04 |
+| DELETE | /api/manage/blocked-members/{memberId} | 차단 해제 | MNG-04 |
+| GET/POST | /api/manage/banned-words | 금칙어 목록·추가 `{ word }` (30자, 블로그당 100개, 중복 409) | MNG-04 |
+| DELETE | /api/manage/banned-words/{id} | 금칙어 삭제 | MNG-04 |
 
 ## ADMIN (플랫폼 Host, hasRole ADMIN)
 
 | 메서드 | 경로 | 설명 | ID |
 | --- | --- | --- | --- |
 | GET | /api/admin/members?q=&status= | 회원 조회 | ADMIN-02 |
-| POST/DELETE | /api/admin/members/{id}/suspension | 정지(7/30일/영구 + 사유)·해제 | ADMIN-02 |
-| POST/DELETE | /api/admin/posts/{id}/blind, /api/admin/comments/{id}/blind | 블라인드·해제 (사유 필수) | ADMIN-03 |
-| POST/DELETE | /api/admin/blogs/{id}/restriction | 블로그 제한·해제 | ADMIN-05 |
+| POST/DELETE | /api/admin/members/{id}/suspension | 정지 `{ period: 7D\|30D\|PERMANENT, reason, reasonDetail? }`·해제 | ADMIN-02 |
+| POST/DELETE | /api/admin/posts/{id}/blind, /api/admin/comments/{id}/blind | 블라인드 `{ reason, reasonDetail? }`·해제 | ADMIN-03 |
+| POST/DELETE | /api/admin/blogs/{id}/restriction | 블로그 제한 `{ reason, reasonDetail? }`·해제 | ADMIN-05 |
 | POST | /api/reports | 회원 신고 (중복 409) | ADMIN-04 |
 | GET/POST | /api/admin/reports, /api/admin/reports/{targetKey}/resolve | 대상별 묶음, 결과 선택 | ADMIN-04 |
 | GET | /api/admin/moderation-logs | 조회만 | ADMIN-06 |

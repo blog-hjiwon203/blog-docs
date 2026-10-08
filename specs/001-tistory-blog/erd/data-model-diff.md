@@ -1,6 +1,8 @@
-# ERD와 data-model.md의 차이
+# ERD 반영 이력: data-model.md와 달랐던 점
 
-> **이 문서는?** Crowfoot ERD 문서 "티스토리 클론 블로그 (지원)"이 [data-model.md](../data-model.md)와 어디가 다른지 정리한 것이다.
+> **이 문서는?** Crowfoot ERD 문서 "티스토리 클론 블로그 (지원)"이 원래 [data-model.md](../data-model.md)와 어디가 달랐는지 정리한 것이다.
+>
+> 2026-10-08에 [data-model.md](../data-model.md)를 ERD에 맞췄다. 지금은 두 문서가 같은 내용이고, 이 문서는 ERD를 설계하며 원래 data-model.md에서 무엇을 왜 바꿨는지 남긴 기록이다.
 
 - Crowfoot 문서: https://crowfoot.java21.net/workspaces/49/models/665 (MySQL, 테이블 25개, 관계 37개)
 - 요구사항 79건 = 기능 코드 77개(코드 하나당 1건, COM-01 포함) + 공통 규칙 2건. 확정 76건은 모두 테이블에 반영됨, 제외 2건(OWN-04, SUB-05), 검토 중 1건(OWN-06). 2026-10-08: MNG-03·MNG-04도 확정해 ERD에 넣음(data-model.md에는 아직 없음). 2026-10-08: 원본 "계획 없음"이던 SOC-03, SUB-06, HOME-04, HOME-05를 확정(PR #3).
@@ -33,9 +35,9 @@
 - Idempotency-Key(발행·댓글): Redis에 두므로 테이블 없음.
 - 인기 글·인기 블로거 순위 스냅숏(HOME-02·04·05, SUB-06): Redis라 테이블 없음.
 
-## 3. 명세에는 있는데 data-model에도 ERD에도 없는 것
+## 3. 명세에는 있었는데 data-model에 없던 것
 
-- **MNG-03 방문자 수·통계, MNG-04 스팸·차단 (P2)**: 2026-10-08 ERD에는 넣었다(위 1장 표). data-model.md와 tasks.md에는 아직 없다.
+- **MNG-03 방문자 수·통계, MNG-04 스팸·차단 (P2)**: 2026-10-08 ERD에 넣었다(위 1장 표). 같은 날 data-model.md와 tasks.md에도 반영했다.
 
 ## 4. 외래 키 동작
 

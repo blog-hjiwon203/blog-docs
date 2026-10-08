@@ -5,7 +5,7 @@
 - 기준: Crowfoot 문서 버전 62 (2026-10-08), MySQL
 - 테이블 25개, 관계 37개, 영역 6개
 - 실행 가능한 DDL: [schema.sql](./schema.sql)
-- [data-model.md](../data-model.md)와 달라진 점: [data-model-diff.md](./data-model-diff.md)
+- [data-model.md](../data-model.md)는 이 ERD와 같은 내용으로 맞춰 두었다. 원래 data-model.md에서 무엇을 왜 바꿨는지는 [data-model-diff.md](./data-model-diff.md)
 - 다이어그램 표기: `||` 정확히 하나, `|o` 없거나 하나, `|{` 하나 이상. 관계 이름은 자식 쪽 외래 키 컬럼이다. 키 표시는 PK(기본 키), FK(외래 키), UK(유니크 키에 포함)
 
 ## 목차
