@@ -64,9 +64,13 @@
 
 인덱스: (blog_id, status, visibility, published_at DESC, id DESC), (status, visibility, published_at DESC, id DESC) — 홈 커서.
 
-**view_log**: post_id, viewer_key(회원 id 또는 익명 식별자), viewed_at. 같은 viewer_key가 5분 안에 다시 열면 기록하지 않는다(Q2). 최근 1시간 인기 점수 집계에 사용.
+**view_log**: post_id, viewer_key(회원 id 또는 익명 식별자), viewed_at. 같은 viewer_key가 5분 안에 다시 열면 기록하지 않는다(Q2). 최근 1시간 인기 점수와 최근 7일 블로그 점수 집계에 사용.
 
-**인기 점수** (HOME-02, HOME-03): 최근 1시간 안의 `view_log` 수×1 + `post_like` 수(created_at 기준)×3 + 삭제·숨김 안 된 `comment` 수×5. 5분마다 계산해 Redis 캐시에 둔다. 가중치는 설정값으로 둔다.
+**인기 점수** (HOME-02, HOME-03): 최근 1시간 안의 `view_log` 수×1 + `post_like` 수(created_at 기준)×3 + 삭제·숨김 안 된 `comment` 수×5. 5분마다 계산해 Redis에 상위 100개 스냅숏(순위, 점수, 계산 시각)으로 둔다. 홈은 상위 10개, 랭킹 전체보기(HOME-05)는 같은 스냅숏을 이어서 본다. 가중치는 설정값으로 둔다.
+
+**블로그 점수** (HOME-04, SUB-06, HOME-05): 최근 7일 동안 그 블로그의 볼 수 있는 글이 받은 `view_log` 수×1 + `post_like` 수×3 + `comment` 수×5 + 그 블로그의 새 `subscription` 수×10. 공개 글이 없는 블로그, 삭제·이용 제한 블로그, 주인이 정지·탈퇴한 블로그는 뺀다. 1시간마다 계산해 Redis에 상위 100개 스냅숏으로 둔다. 추천 블로그(SUB-06)는 이 스냅숏에서 자기 블로그와 구독 중인 블로그를 뺀 5개. 기간·가중치는 설정값.
+
+**view_log 보관**: 블로그 점수가 7일치를 쓰므로 7일보다 오래된 행은 매일 지운다.
 
 **image**: path(`./uploads/{uuid}.{ext}`), original_name, size, uploader_id, thumbnail_path.
 
@@ -83,6 +87,8 @@
 **post_like**: member_id, post_id. UNIQUE(member_id, post_id) — 연타 방지 겸용.
 
 **subscription**: member_id, blog_id. UNIQUE(member_id, blog_id). 자기 블로그 구독은 서비스에서 거절.
+
+**post_bookmark** (SOC-03): member_id, post_id, title_snapshot(varchar 200), blog_name_snapshot(varchar 50), created_at. UNIQUE(member_id, post_id) — 연타 방지 겸용. 저장 목록은 (member_id, created_at DESC, id DESC) 커서. 글이 삭제돼도 행은 남기고(볼 수 없는 글로 표시), 탈퇴하면 그 회원의 행을 지운다. 볼 수 없는 글은 `title_snapshot`·`blog_name_snapshot`만 내려 주고 저장 취소에 쓸 글 번호 외에 지금 제목·본문은 내려 주지 않는다(헌법 원칙 II 예외).
 
 **notification** (P2): receiver_id, type(COMMENT, REPLY, LIKE, SUBSCRIBE, SANCTION), target 정보, read_at.
 
@@ -115,4 +121,4 @@
 
 ## 탈퇴 처리 (AUTH-06, Q1)
 
-한 트랜잭션으로: member.status=WITHDRAWN, withdrawn_at, email·password_hash 비우기, social_account 삭제 → 그 회원의 blog.deleted_at, post.deleted_at, comment·guestbook.deleted_at 기록 → 그 회원의 post_like, subscription 삭제(공감 수·구독자 수 갱신). 블로그 주소는 행이 남아 영구 예약된다.
+한 트랜잭션으로: member.status=WITHDRAWN, withdrawn_at, email·password_hash 비우기, social_account 삭제 → 그 회원의 blog.deleted_at, post.deleted_at, comment·guestbook.deleted_at 기록 → 그 회원의 post_like, subscription, post_bookmark 삭제(공감 수·구독자 수 갱신). 블로그 주소는 행이 남아 영구 예약된다.

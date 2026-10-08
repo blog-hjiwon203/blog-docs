@@ -80,6 +80,8 @@
 | GET/POST | /api/guestbook | 방명록 페이지 20 | CMT-04 |
 | DELETE | /api/guestbook/{id} | 본인 또는 주인 | CMT-04 |
 | PUT/DELETE | /api/posts/{id}/like | 공감·취소 (멱등) → `{ liked, likeCount }` | SOC-01 |
+| PUT/DELETE | /api/posts/{id}/bookmark | 저장·취소 (멱등) → `{ bookmarked }` | SOC-03 |
+| GET | /api/me/bookmarks?cursor= | 저장한 글 20 (본인만). 볼 수 없는 글은 `{ postId, visible: false, titleSnapshot, blogNameSnapshot, savedAt }`만 | SOC-03 |
 
 ## SUB · SRCH · HOME (플랫폼 범위 포함)
 
@@ -90,7 +92,10 @@
 | GET | /api/search?q=&page= | 블로그 내 검색 (블로그 Host) | SRCH-01 |
 | GET | /api/search?q=&type=post\|blog | 전체 검색 (플랫폼 Host) | SRCH-02 |
 | GET | /api/home/latest?cursor= | 홈 최신 글 20 | HOME-01 |
-| GET | /api/home/popular | 인기 점수(최근 1시간 조회×1 + 공감×3 + 댓글×5) 상위 10 (캐시 5분) | HOME-02 |
+| GET | /api/home/popular | 인기 점수(최근 1시간 조회×1 + 공감×3 + 댓글×5) 상위 10 (스냅숏 5분) | HOME-02 |
+| GET | /api/home/bloggers | 인기 블로거 상위 5 (블로그 점수, 스냅숏 1시간) | HOME-04 |
+| GET | /api/recommend/blogs | 추천 블로그 5 (인기 블로거에서 자기·구독 중 블로그 제외) | SUB-06 |
+| GET | /api/ranking/{posts\|bloggers}?snapshotAt=&offset= | 랭킹 전체보기 100위까지 20개씩. `snapshotAt`이 지금 스냅숏과 다르면 `409` + 새 스냅숏 시각 | HOME-05 |
 | GET | /api/home/topics/{topic} | 주제별 인기 점수 순 6, 모자라면 최신 글 | HOME-03 |
 | GET | /api/notices | 공지 | ADMIN-06 |
 
