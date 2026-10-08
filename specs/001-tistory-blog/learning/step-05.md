@@ -52,6 +52,8 @@ PostWritePage (alpha.blog.test/manage/write)
 
 ## 이 스텝을 이해하려면 (읽는 순서)
 
+Thymeleaf로 화면을 만들어 봤고 React는 처음이라면 [28 Thymeleaf에서 React로](./concepts/28-thymeleaf-to-react.md)를 먼저 읽는다. 컨트롤러가 JSON만 주는 이유, 빌드 스크립트가 필요한 이유가 여기 있다.
+
 | 순서 | 개념 문서 | 이 스텝에서 그 개념이 쓰인 곳 |
 | --- | --- | --- |
 | 1 | [26 WYSIWYG 에디터와 Tiptap](./concepts/26-wysiwyg-editor-tiptap.md) | `Editor.tsx`, 서버 허용 목록과 맞춘 서식, 이중 정화 |

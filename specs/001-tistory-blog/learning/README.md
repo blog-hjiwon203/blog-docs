@@ -62,6 +62,7 @@
 | [16 인가와 가시성 판단](./concepts/16-authorization-visibility.md) | 인증과 인가, 존재를 숨기는 404, 정책 객체, sealed 타입과 switch |
 | [17 멱등성과 Redis](./concepts/17-idempotency-redis.md) | 멱등성, 중복 요청, Idempotency-Key, Redis 기초와 `SET NX` |
 | [18 SPA와 서버 라우팅](./concepts/18-spa-server-routing.md) | History API, 서버 폴백, 301/302, Vite 개발 서버와 빌드 |
+| [28 Thymeleaf에서 React로](./concepts/28-thymeleaf-to-react.md) | 서버 렌더링과 클라이언트 렌더링, 같은 화면 두 가지 구현, 빌드가 하는 일, 개발 서버와 빌드 스크립트 (Thymeleaf를 알면 React 문서보다 먼저) |
 | [19 React Router와 API 클라이언트](./concepts/19-react-router-api-client.md) | React 기초, React Router 7, fetch, TypeScript, Vitest |
 | [24 계층 구조와 DTO](./concepts/24-layered-architecture-dto.md) | presentation/application/domain, 엔티티 대신 DTO, `open-in-view`와 지연 로딩 |
 | [25 React 폼과 데이터 불러오기](./concepts/25-react-forms-data.md) | 제어 컴포넌트, 폼 제출과 칸별 오류, `useEffect`와 커스텀 훅, 중첩 라우트 |
