@@ -76,14 +76,36 @@
 
 ## Claude Code에서 쓰는 법
 
-`/speckit-specify`(기능 명세), `/speckit-plan`(구현 계획), `/speckit-tasks`(작업 목록)는 이미 끝난 상태다.
+`/speckit-specify`(기능 명세), `/speckit-plan`(구현 계획), `/speckit-tasks`(작업 목록)는 이미 끝난 상태다. 구현은 이 저장소가 아니라 코드 저장소 [AIP-1/blog-basic-AIGJ_01_017-blog](https://github.com/AIP-1/blog-basic-AIGJ_01_017-blog)에 한다.
 
-1. 저장소를 클론하고 루트에서 Claude Code를 연다.
-2. 처음 한 번은 기능 폴더를 알려 준다: `SPECIFY_FEATURE_DIRECTORY=specs/001-tistory-blog` 환경 변수를 주거나, 첫 스킬을 실행할 때 폴더를 말해 준다. (`.specify/feature.json`은 Spec Kit 기본 설정상 git에서 빠진다.)
-3. [지원이 확인할 것](specs/001-tistory-blog/review.md)의 B(Claude가 정한 것)를 확인한다. 미결정 질문은 없어서 `/speckit-clarify`는 새 질문이 생길 때만 쓴다
-4. `/speckit-analyze`: 기능 명세·구현 계획·작업 목록이 서로 맞는지 점검
-5. `/speckit-implement`: 작업 목록 순서대로 구현
-6. 다 만들면 기능 명세의 수용 시나리오와 빠른 시작으로 확인한다
+### 폴더 배치 (지원 컴퓨터)
+
+```
+~/IdeaProjects/
+├── blog/         # 코드 저장소 클론 (IntelliJ 프로젝트). 여기서 Claude Code를 연다
+└── blog-docs/    # 이 문서 저장소 클론. Claude Code가 읽기만 한다
+```
+
+`~/Documents/blog_project/docs`는 원본 기능명세서 보관용이라 구현에 쓰지 않는다.
+
+### 처음 한 번
+
+```bash
+cd ~/IdeaProjects
+git clone https://github.com/blog-hjiwon203/blog-docs.git
+cp blog-docs/specs/001-tistory-blog/code-repo-CLAUDE.md blog/CLAUDE.md
+cd blog && git add CLAUDE.md && git commit -m "docs: CLAUDE.md 추가" && git push
+```
+
+### 스텝마다
+
+1. 문서가 바뀌었으면 `cd ~/IdeaProjects/blog-docs && git pull`
+2. IntelliJ 터미널에서 `cd ~/IdeaProjects/blog && claude --add-dir ../blog-docs`
+3. "스텝 1 진행해"처럼 [작업 목록의 구현 스텝](specs/001-tistory-blog/tasks.md#구현-스텝과-검토-포인트) 번호를 준다
+4. Claude Code가 멈추고 정리해 주면 표의 "확인할 것"으로 확인하고, push → PR → 병합
+5. 다음 스텝
+
+`--add-dir`로 연 폴더의 `.claude/skills/`는 같이 읽히므로 코드 저장소에서도 `/speckit-analyze` 같은 Spec Kit 스킬을 쓸 수 있다. 반대로 이 저장소의 CLAUDE.md는 읽히지 않으니, 코드 작업 규칙은 코드 저장소의 CLAUDE.md에 둔다.
 
 ## 폴더 구성
 

@@ -6,14 +6,15 @@
 
 ## R-01 버전과 테스트 도구 (기본값)
 
-- **결정**: Java 17, Spring Boot 3.x, React 18 + Vite. 테스트는 JUnit 5, Spring Boot Test, MockMvc, 프론트는 Vitest 최소.
-- **이유**: 원본에 버전·테스트 도구가 없어 Spring Boot 3 기본 조합으로 둠. 바꾸면 이 항목만 고친다.
+- **결정**: **Java 21**, Spring Boot 4.1(코드 저장소 pom.xml 기준 4.1.1), **빌드는 Maven**(Maven Wrapper 포함), React 18 + Vite. Java 21과 Maven은 2026-10-08 지원 결정. 테스트는 JUnit 5, Spring Boot Test, MockMvc, Testcontainers(MySQL), 프론트는 Vitest 최소.
+- **이유**: 원본에 버전·테스트 도구가 없어 Spring Boot 기본 조합으로 둠. Spring Boot 버전은 지원이 Initializr로 만든 프로젝트(4.1.1)를 따른다. 바꾸면 이 항목만 고친다.
 
 ## R-02 운영 저장소 (2026-10-07 확정)
 
-- **결정**: 주 DB는 MySQL(개발 H2). **Redis 사용**: Spring Cache 저장소(인기 글·주제별 글 TTL 5분), 연타 방지 Idempotency-Key 저장(R-09). 정지 회원 토큰 차단·로그아웃 토큰 처리도 R-03 확정 시 Redis 후보. **PostgreSQL + pgvector**: 비슷한 글 추천(OWN-06) 전용, 2주 안에 도전(도전 과제).
+- **결정**: 주 DB는 MySQL. 개발도 docker compose의 MySQL 8을 쓴다(2026-10-08 변경, 아래 "개발 DB"). **Redis 사용**: Spring Cache 저장소(인기 글·주제별 글 TTL 5분), 연타 방지 Idempotency-Key 저장(R-09). 정지 회원 토큰 차단·로그아웃 토큰 처리도 R-03 확정 시 Redis 후보. **PostgreSQL + pgvector**: 비슷한 글 추천(OWN-06) 전용, 2주 안에 도전(도전 과제).
 - **이유**: 개발에 AI를 쓰므로 2주 안에 벡터 검색까지 가능하다고 판단(지원). 단, 주 데이터는 MySQL 하나로 두고 PostgreSQL에는 글 id와 임베딩만 저장해 일정이 밀리면 기능째 뺄 수 있게 한다.
-- **로컬 개발**: Redis와 PostgreSQL(pgvector)은 docker compose로 띄운다. Redis가 없을 때 테스트는 embedded/Testcontainers 또는 ConcurrentMap 캐시로 대체.
+- **개발 DB (2026-10-08 변경)**: 원래 개발은 H2(MySQL 호환 모드)였는데, ERD에서 내보낸 `erd/schema.sql`이 H2에서 실행되지 않는다(`blog.primary_owner_id`의 `GENERATED ALWAYS AS … STORED`에서 문법 오류, H2 2.3.232로 확인). 스키마를 두 벌 관리하지 않으려고 개발·테스트도 MySQL 8로 맞춘다. 개발은 docker compose, 테스트는 Testcontainers. 스키마는 Flyway가 만든다.
+- **로컬 개발**: MySQL, Redis, PostgreSQL(pgvector, 도전 과제)은 docker compose로 띄운다. Redis가 없을 때 테스트는 embedded/Testcontainers 또는 ConcurrentMap 캐시로 대체.
 - **미결정**: 임베딩 생성 방법(외부 임베딩 API 또는 로컬 모델), 임베딩 갱신 시점(발행·수정 시 비동기).
 
 ## R-03 인증 (2026-10-07 확정: 상위 도메인 쿠키)
