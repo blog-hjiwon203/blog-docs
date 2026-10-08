@@ -12,7 +12,7 @@
 
 ## 기술 맥락 (Technical Context)
 
-**언어/버전**: Java 17+ (Spring Boot 3.x, **Maven**, Maven Wrapper `mvnw` 포함), TypeScript/JavaScript (React 18) — 버전은 [research.md R-01](./research.md) 기본값
+**언어/버전**: Java 21 (Spring Boot 3.x, **Maven**, Maven Wrapper `mvnw` 포함), TypeScript/JavaScript (React 18) — 버전은 [research.md R-01](./research.md) 기본값
 
 **주요 의존성**: Spring Boot (Web, Security, Data JPA, Validation, Cache, Data Redis), Flyway, JWT 라이브러리, OWASP Java HTML Sanitizer, jsoup / React, React Router, Vite, Tiptap, DOMPurify
 

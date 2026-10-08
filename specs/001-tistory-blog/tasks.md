@@ -54,7 +54,7 @@ description: "지원 서비스 구현 작업 (2주 일정 기준)"
 
 ## 1단계: 프로젝트 준비 (Setup)
 
-- [ ] T001 [W1] Maven Spring Boot 프로젝트 생성, Maven Wrapper 포함 (Web, Security, Data JPA, Validation, Cache, Data Redis, Flyway(flyway-mysql), MySQL 드라이버, Testcontainers MySQL) in `backend/pom.xml`
+- [ ] T001 [W1] Maven Spring Boot 프로젝트 생성(Java 21, `java.version` 21), Maven Wrapper 포함 (Web, Security, Data JPA, Validation, Cache, Data Redis, Flyway(flyway-mysql), MySQL 드라이버, Testcontainers MySQL) in `backend/pom.xml`
 - [ ] T002 [P] [W1] Vite + React + TypeScript 프로젝트, `/api` → 8080 프록시 in `frontend/vite.config.ts`
 - [ ] T003 [P] [W1] `application.yml` 프로필 분리(dev: docker compose MySQL, prod: MySQL), `jpa.hibernate.ddl-auto=validate`, `TZ=Asia/Seoul`, `erd/schema.sql`을 `db/migration/V1__init.sql`로 복사 in `backend/src/main/resources/` (R-02)
 - [ ] T004 [P] [W1] 프론트 빌드 결과를 `backend/src/main/resources/static`으로 복사하는 빌드 스크립트
