@@ -2,7 +2,7 @@
 
 > **이 문서는?** 지원 서비스의 테이블·컬럼·제약과 글 가시성 판단 순서다. 기능 명세의 핵심 엔티티를 실제 저장 구조로 옮긴 것이다. 전체 문서 안내는 [README](../../README.md)에 있다.
 
-원본 ERD 탭은 예전 ID 기준이라, 이 문서는 원본 본문(4~6장)과 기능 명세 핵심 개체에서 다시 뽑았다. 지금 기능 코드 기준이다([지원이 확인할 것](./review.md) 16). 2026-10-08에 Crowfoot ERD(문서 버전 74)와 맞췄다. 컬럼 타입·인덱스·DDL 전체는 [ERD](./erd/README.md)와 [schema.sql](./erd/schema.sql)에 있고, 둘이 다르면 Crowfoot ERD가 맞다.
+원본 ERD 탭은 예전 ID 기준이라, 이 문서는 원본 본문(4~6장)과 기능 명세 핵심 개체에서 다시 뽑았다. 지금 기능 코드 기준이다([지원이 확인할 것](./review.md) 16). 2026-10-08에 Crowfoot ERD(문서 버전 74)와 맞췄고, 2026-10-09 `post.content_text`를 더했다(버전 79). 컬럼 타입·인덱스·DDL 전체는 [ERD](./erd/README.md)와 [schema.sql](./erd/schema.sql)에 있고, 둘이 다르면 Crowfoot ERD가 맞다.
 
 공통 규칙(아래 표에서는 생략):
 
@@ -72,6 +72,7 @@
 | category_id | FK category, NULL | NULL = 미분류 |
 | title | varchar(200) | |
 | content_html | mediumtext | 서버 정화 후 저장 |
+| content_text | mediumtext | 본문에서 HTML 태그를 뺀 글자(jsoup). 블로그 안 검색(SRCH-01)이 제목·태그 이름과 함께 이 칸을 본다. 2026-10-09 지원 결정으로 추가(Flyway V3) |
 | summary | varchar | jsoup으로 태그 제거한 요약 |
 | thumbnail_image_id | FK image, NULL | 미지정 시 첫 이미지 |
 | status | enum DRAFT, PUBLISHED, SCHEDULED | |
@@ -95,7 +96,7 @@
 
 **view_log 보관**: 블로그 점수가 7일치를 쓰므로 7일보다 오래된 행은 매일 지운다.
 
-**image**: path(`./uploads/{uuid}.{ext}`), thumbnail_path, original_name, content_type(jpg/png/gif/webp), size(CHECK ≤ 10MB), uploader_id. `uploader_id`는 회원 ↔ 이미지 순환 참조를 피하려고 외래 키 없이 두고(인덱스만), 서버가 로그인 회원으로 채운다.
+**image**: path(`/uploads/{uuid}.{ext}`), thumbnail_path(`/uploads/t_{uuid}.jpg` 또는 `.png`, 400px), original_name, content_type(jpg/png/gif/webp), size(CHECK ≤ 10MB), uploader_id. path·thumbnail_path에는 화면이 그대로 쓰는 주소를 저장하고, 실제 파일은 설정값 `app.upload.dir` 폴더에 같은 파일 이름으로 둔다(R-15). `uploader_id`는 회원 ↔ 이미지 순환 참조를 피하려고 외래 키 없이 두고(인덱스만), 서버가 로그인 회원으로 채운다.
 
 **category**: blog_id, parent_id(NULL 또는 1단계 상위), name(30), sort_order, is_private(P2). 계산 컬럼 `parent_key = IFNULL(parent_id, 0)`과 UNIQUE(blog_id, parent_key, name). MySQL UNIQUE는 NULL끼리 중복을 허용해서 (blog_id, parent_id, name)만으로는 최상위 이름 중복을 못 막기 때문이다. '전체 글'·'미분류'는 행이 아니라 가상 항목.
 

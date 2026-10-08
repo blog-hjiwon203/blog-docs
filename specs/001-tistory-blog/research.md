@@ -107,3 +107,16 @@
 - **결정**: 방문할 때 `blog_visit`에 (블로그, 날짜, 방문자) 한 행을 UNIQUE로 넣어 하루 한 번만 센다. 매일 새벽 스케줄러가 전날 행을 `blog_daily_stat`(방문자·조회 수)과 `blog_referrer_daily`(유입 종류·사이트별 수)로 모으고 `blog.total_visitor_count`에 더한 뒤, 7일 지난 방문 기록을 지운다. 오늘 방문자는 `blog_visit`에서 바로 센다.
 - **이유**: 방문 기록을 그대로 쌓으면 그래프·누적 계산이 매번 무거워진다. 일별로 모아 두면 일·주·월 그래프가 일별 행을 더하는 것으로 끝난다. 방문자 식별은 조회 기록(view_log)과 같은 visitor_key를 써서 회원·비회원을 같은 방식으로 센다.
 - **대안**: Redis HyperLogLog로 하루 방문자를 세기(유입 경로를 따로 둬야 해서 테이블이 더 단순함), 외부 분석 도구(Google Analytics) 붙이기(블로그 주인별 화면을 따로 만들어야 함).
+
+## R-15 이미지 처리 (2026-10-09 지원 결정, T036)
+
+- **결정**: Thumbnailator(리사이즈·썸네일, JPEG EXIF 방향 보정) + TwelveMonkeys `imageio-webp`(WebP 읽기). 외부 프로그램(ImageMagick 등) 없이 JVM 안에서 처리한다.
+- **원본**: 긴 변이 1920px보다 크면 1920px로 줄여 같은 형식으로 저장한다. EXIF 방향은 이때 픽셀에 반영한다. **GIF는 애니메이션을 지키려고 원본 그대로**, WebP도 Java로 쓸 수 없어 원본 그대로 둔다.
+- **썸네일**: 긴 변 400px. 투명도가 있을 수 있는 PNG·GIF·WebP는 PNG, JPEG는 JPG로 저장한다(`t_{uuid}.png|jpg`). contracts 예시의 `t_a1.webp`는 예시일 뿐이다.
+- **검사**: 확장자와 Content-Type만 믿지 않고 파일 앞부분(매직 넘버)으로 실제 형식을 확인한다. 이미지로 읽히지 않으면 400 `UNSUPPORTED_IMAGE`, 10MB 초과는 400 `IMAGE_TOO_LARGE`.
+- **대안**: 리사이즈 없이 썸네일만(원본이 무겁고 방향 보정이 원본에 안 됨), ImageMagick 호출(서버에 설치 필요).
+
+## R-16 블로그 안 검색 (2026-10-09 지원 결정, T047)
+
+- **결정**: `post.content_text`(본문에서 HTML 태그를 뺀 글자, 저장할 때 jsoup으로 만든다)를 더하고, 제목·`content_text`·태그 이름에서 `LIKE '%검색어%'`로 찾는다. 대소문자는 DB 정렬 규칙(`utf8mb4_0900_ai_ci`)으로 무시한다. 기존 글은 Flyway V3에서 채운다.
+- **대안**: `content_html`에 LIKE(HTML 태그 이름까지 걸림), MySQL FULLTEXT ngram(빠르지만 한 글자 검색 불가 등 규칙이 복잡). 글이 많아져 느려지면 FULLTEXT로 옮긴다.

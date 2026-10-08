@@ -185,7 +185,7 @@
 ```json
 {
   "id": 1532, "title": "Spring Security 정리", "summary": "필터 체인부터...",
-  "thumbnailUrl": "/uploads/t_a1.webp",
+  "thumbnailUrl": "/uploads/t_a1.jpg",
   "blog": { "id": 3, "address": "jiwon", "name": "지원의 기록" },
   "category": { "id": 11, "name": "Spring" }, "topic": "IT_DEV",
   "publishedAt": "2026-10-08T09:00:00+09:00", "likeCount": 5, "commentCount": 2
@@ -364,7 +364,7 @@
 | `SCHEDULED` | 예약 발행 | `scheduledAt`(지금보다 뒤) 필수. 그 시각에 서버가 `PUBLISHED`·`PUBLIC`으로 바꾸고 그 시각이 `publishedAt` |
 
 - `categoryId`가 `null`이면 미분류. `topic`이 `null`이면 주제 없음.
-- `tagNames` 최대 10개(넘으면 400 `TOO_MANY_TAGS`). 블로그에 없는 이름은 새 태그가 된다(TAG-01).
+- `tagNames` 최대 10개(넘으면 400 `TOO_MANY_TAGS`). 블로그에 없는 이름은 새 태그가 된다(TAG-01). 이름은 앞뒤 공백과 앞의 `#`을 떼고 30자까지, `/`가 들어 있으면 400(`fieldErrors[].field = tagNames`). 대소문자·악센트만 다른 이름은 같은 태그다.
 - `thumbnailImageId`는 본문에 들어간 이미지 중 하나. `null`이면 본문 첫 이미지(POST-07).
 - `visibility`: `PUBLIC`·`PRIVATE`·`SUBSCRIBERS`. SUB-01이 생기기 전에는 `SUBSCRIBERS`를 400으로 막는다(review C-7).
 - 발행한 글을 `DRAFT`로 되돌릴 수는 없다(400). 예약 글은 `DRAFT`로 되돌려 예약을 취소한다.
