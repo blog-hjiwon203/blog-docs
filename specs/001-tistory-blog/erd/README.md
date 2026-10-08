@@ -2,7 +2,7 @@
 
 > **이 문서는?** Crowfoot에서 설계한 지원 블로그 서비스의 ERD를 정리한 것이다. 원본은 Crowfoot 문서 [티스토리 클론 블로그 (지원)](https://crowfoot.java21.net/workspaces/49/models/665)이고, 이 파일은 그 내용을 옮긴 사본이다. 설계를 바꿀 때는 Crowfoot을 먼저 고치고 이 파일을 다시 만든다.
 
-- 기준: Crowfoot 문서 버전 74 (2026-10-08), MySQL
+- 기준: Crowfoot 문서 버전 74 (2026-10-08), MySQL. 버전 79 (2026-10-09)에서 `post.content_text`(검색용 본문 글자, R-16)를 더했다.
 - 테이블 26개, 관계 38개, 영역 6개
 - 실행 가능한 DDL: [schema.sql](./schema.sql)
 - [data-model.md](../data-model.md)는 이 ERD와 같은 내용으로 맞춰 두었다. 원래 data-model.md에서 무엇을 왜 바꿨는지는 [data-model-diff.md](./data-model-diff.md)
@@ -424,6 +424,7 @@ erDiagram
         BIGINT thumbnail_image_id FK "대표 이미지"
         VARCHAR_200 title "제목"
         MEDIUMTEXT content_html "본문"
+        MEDIUMTEXT content_text "본문 글자"
         VARCHAR_300 summary "요약"
         VARCHAR_20 status "상태"
         VARCHAR_20 visibility "공개 범위"
@@ -479,6 +480,7 @@ erDiagram
 | `deleted_at` | 삭제 시각 | DATETIME | Y |  |  |  |
 | `created_at` | 생성 일시 | DATETIME(6) | N | CURRENT_TIMESTAMP(6) |  |  |
 | `updated_at` | 수정 시각 | DATETIME(6) | N | CURRENT_TIMESTAMP(6) |  |  |
+| `content_text` | 본문 글자 | MEDIUMTEXT | N |  |  | 본문에서 HTML 태그를 뺀 글자. 블로그 안 검색(SRCH-01). 버전 79에서 추가 |
 
 - 인덱스 `idx_post_blog_feed`: (blog_id, status, visibility, published_at DESC, id DESC)
 - 인덱스 `idx_post_home_feed`: (status, visibility, published_at DESC, id DESC)

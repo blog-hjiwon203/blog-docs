@@ -1,4 +1,4 @@
--- Crowfoot 문서 665 버전 75 (2026-10-08)에서 내보낸 MySQL DDL. 직접 고치지 말고 Crowfoot을 고친 뒤 다시 내보낸다.
+-- Crowfoot 문서 665 버전 79 (2026-10-09)에서 내보낸 MySQL DDL. 직접 고치지 말고 Crowfoot을 고친 뒤 다시 내보낸다.
 -- https://crowfoot.java21.net/workspaces/49/models/665
 
 CREATE TABLE member (
@@ -118,6 +118,7 @@ CREATE TABLE post (
     deleted_at DATETIME COMMENT '삭제 시각',
     created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT '생성 일시',
     updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6) COMMENT '수정 시각',
+    content_text MEDIUMTEXT NOT NULL COMMENT '본문 글자-----본문에서 HTML 태그를 뺀 글자. 블로그 안 검색(SRCH-01)에 쓴다. 저장할 때 서버가 jsoup으로 만든다',
     PRIMARY KEY (id),
     CONSTRAINT ck_post_status CHECK (status IN ('DRAFT', 'PUBLISHED', 'SCHEDULED')),
     CONSTRAINT ck_post_visibility CHECK (visibility IN ('PUBLIC', 'PRIVATE', 'SUBSCRIBERS')),
