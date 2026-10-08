@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>블로그 개설 목업</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans+KR:wght@400;600;700&display=swap">
+<link rel="stylesheet" href="assets/mock.css">
+</head>
+<body>
+<div class="wrap">
+  <div class="mockbar"><a class="back" href="index.html">← 화면 목록</a><h1>블로그 개설</h1><span class="url">blog.com/blogs/new</span><div class="codes"><span class="code">BLOG-01</span><span class="code">AUTH-04</span></div></div>
+  <p class="lead">블로그가 없는 회원이 글쓰기를 누르거나 가입 직후 오는 화면. 주소는 바꿀 수 없다고 미리 알린다.</p>
+  <div class="frame"><div class="frame-top"><div class="dots"><i></i><i></i><i></i></div><div class="addr">https://blog.com/blogs/new</div></div>
+  <header class="site-head"><a class="logo" href="home.html">blog.com</a><nav class="nav-links"><a href="home.html" class="">홈</a><a href="feed.html" class="">구독 피드</a><a href="ranking.html" class="">랭킹</a><a href="notices.html" class="">공지</a></nav><form class="search-box" role="search" onsubmit="return false"><input type="search" id="gsearch" placeholder="글·블로그 검색" aria-label="전체 검색"><a class="btn" href="search.html">검색</a></form><span class="grow"></span><div class="row"><a class="btn ghost" href="notifications.html" aria-label="알림">알림 <span class="chip brand num">2</span> <a class="pin" href="#api-B" title="API B">B</a></a><a class="btn primary" href="manage-write.html">글쓰기</a><a class="row" href="mypage.html" style="text-decoration:none"><span class="avatar"></span><a class="pin" href="#api-A" title="API A">A</a></a></div></header><main class="page">
+<div class="page narrow" style="padding:0">
+  <h2 style="font-size:22px">블로그 만들기</h2>
+  <label class="field"><span>블로그 주소</span><div class="row" style="flex-wrap:nowrap"><input type="text" id="baddr" value="jiwon"><span class="muted">.blog.com</span></div>
+    <span class="ok">쓸 수 있는 주소입니다. <a class="pin" href="#api-1" title="API 1">1</a></span><span class="hint">영문 소문자·숫자·하이픈 4~32자. <b>개설한 뒤에는 주소를 바꿀 수 없습니다.</b></span></label>
+  <label class="field"><span>블로그 이름</span><input type="text" id="bname" value="지원의 기록"><span class="hint">1~50자, 나중에 바꿀 수 있습니다</span></label>
+  <label class="field"><span>소개 (선택)</span><textarea id="bdesc">백엔드 공부와 여행 메모</textarea></label>
+  <button class="btn primary" type="button">만들기 <a class="pin" href="#api-2" title="API 2">2</a></button>
+</div></main>
+  </div>
+  <section class="section"><h2>다른 상태</h2><div class="states"><div class="state"><span class="state-label">주소 확인 결과</span><p class="err">이미 쓰는 주소입니다. (TAKEN, 삭제된 블로그 주소 포함)</p><p class="err">쓸 수 없는 주소입니다. (RESERVED: www, api, admin…)</p><p class="err">영문 소문자·숫자·하이픈만, 하이픈으로 시작하거나 끝날 수 없습니다. (INVALID)</p></div><div class="state"><span class="state-label">6번째 (409 BLOG_LIMIT_EXCEEDED)</span><p class="err">블로그는 5개까지 만들 수 있습니다.</p></div></div></section>
+  <section class="api"><h2>이 화면이 부르는 API</h2><p class="small muted">화면의 파란 번호가 아래 줄이다. 글자 번호(A, B, C)는 같은 틀의 화면이 모두 부르는 공통 API다. 경로와 응답은 <a href="../contracts/rest-api.md">REST API 명세</a>를 따른다.</p><div class="table-wrap"><table><thead><tr><th>#</th><th>언제</th><th>요청</th><th>메모</th></tr></thead><tbody><tr id="api-A"><td><a class="pin" href="#api-A" title="API A">A</a></td><td>화면 열 때</td><td><span class="method">GET</span> /api/me</td><td>로그인 상태·닉네임·대표 블로그. 401이면 비회원 머리글</td></tr><tr id="api-B"><td><a class="pin" href="#api-B" title="API B">B</a></td><td>화면 열 때(회원)</td><td><span class="method">GET</span> /api/me/notifications/unread-count</td><td>종 아이콘의 읽지 않은 알림 수</td></tr><tr id="api-1"><td><a class="pin" href="#api-1" title="API 1">1</a></td><td>주소 입력 후</td><td><span class="method">GET</span> /api/blogs/address-availability?address=</td><td>{ available, reason }</td></tr><tr id="api-2"><td><a class="pin" href="#api-2" title="API 2">2</a></td><td>만들기</td><td><span class="method">POST</span> /api/blogs</td><td>201 후 새 블로그 관리 홈(jiwon.blog.com/manage)으로</td></tr></tbody></table></div></section>
+  
+</div>
+</body>
+</html>

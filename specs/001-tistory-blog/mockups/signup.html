@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>회원가입 목업</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans+KR:wght@400;600;700&display=swap">
+<link rel="stylesheet" href="assets/mock.css">
+</head>
+<body>
+<div class="wrap">
+  <div class="mockbar"><a class="back" href="index.html">← 화면 목록</a><h1>회원가입</h1><span class="url">blog.com/signup</span><div class="codes"><span class="code">AUTH-01</span><span class="code">OWN-01</span></div></div>
+  <p class="lead">이메일 인증 코드를 확인해야 가입 버튼이 켜진다. 인증 전에는 회원이 만들어지지 않는다.</p>
+  <div class="frame"><div class="frame-top"><div class="dots"><i></i><i></i><i></i></div><div class="addr">https://blog.com/signup</div></div>
+  <header class="site-head"><a class="logo" href="home.html">blog.com</a><nav class="nav-links"><a href="home.html" class="">홈</a><a href="feed.html" class="">구독 피드</a><a href="ranking.html" class="">랭킹</a><a href="notices.html" class="">공지</a></nav><form class="search-box" role="search" onsubmit="return false"><input type="search" id="gsearch" placeholder="글·블로그 검색" aria-label="전체 검색"><a class="btn" href="search.html">검색</a></form><span class="grow"></span><div class="row"><a class="btn" href="login.html">로그인</a><a class="btn primary" href="signup.html">회원가입</a> <a class="pin" href="#api-A" title="API A">A</a></div></header><main class="page">
+<div class="page narrow" style="padding:0">
+  <h2 style="font-size:22px">회원가입</h2>
+  <label class="field"><span>이메일</span><div class="row" style="flex-wrap:nowrap"><input type="email" id="semail" value="jiwon@example.com"><button class="btn" type="button">코드 받기 <a class="pin" href="#api-1" title="API 1">1</a></button></div><span class="ok">인증 코드를 보냈습니다. 10분 안에 입력해 주세요.</span></label>
+  <label class="field"><span>인증 코드</span><div class="row" style="flex-wrap:nowrap"><input type="text" id="scode" value="482913" inputmode="numeric"><button class="btn" type="button">확인 <a class="pin" href="#api-2" title="API 2">2</a></button></div><span class="ok">이메일이 확인되었습니다.</span></label>
+  <label class="field"><span>비밀번호</span><input type="password" id="spw" value="password1"><span class="hint">8자 이상, 영문과 숫자를 함께</span></label>
+  <label class="field"><span>닉네임</span><input type="text" id="snick" value="지원"><span class="ok">쓸 수 있는 닉네임입니다. <a class="pin" href="#api-3" title="API 3">3</a></span></label>
+  <button class="btn primary" type="button">가입하기 <a class="pin" href="#api-4" title="API 4">4</a></button>
+</div></main>
+  </div>
+  <section class="section"><h2>다른 상태</h2><div class="states"><div class="state"><span class="state-label">이미 가입한 이메일 (409 EMAIL_TAKEN)</span><p class="err">이미 가입한 이메일입니다. 로그인하거나 비밀번호를 재설정해 주세요.</p></div><div class="state"><span class="state-label">코드 오류</span><p class="err">인증 코드가 맞지 않습니다.</p><p class="err">인증 코드가 만료되었습니다. 코드를 다시 받아 주세요.</p></div><div class="state"><span class="state-label">1분 안에 다시 받기 (429)</span><p class="err">잠시 후 다시 시도해 주세요. (42초)</p></div></div></section>
+  <section class="api"><h2>이 화면이 부르는 API</h2><p class="small muted">화면의 파란 번호가 아래 줄이다. 글자 번호(A, B, C)는 같은 틀의 화면이 모두 부르는 공통 API다. 경로와 응답은 <a href="../contracts/rest-api.md">REST API 명세</a>를 따른다.</p><div class="table-wrap"><table><thead><tr><th>#</th><th>언제</th><th>요청</th><th>메모</th></tr></thead><tbody><tr id="api-A"><td><a class="pin" href="#api-A" title="API A">A</a></td><td>화면 열 때</td><td><span class="method">GET</span> /api/me</td><td>로그인 상태·닉네임·대표 블로그. 401이면 비회원 머리글</td></tr><tr id="api-1"><td><a class="pin" href="#api-1" title="API 1">1</a></td><td>코드 받기</td><td><span class="method">POST</span> /api/auth/email-verifications</td><td>{ email } → 202</td></tr><tr id="api-2"><td><a class="pin" href="#api-2" title="API 2">2</a></td><td>코드 확인</td><td><span class="method">POST</span> /api/auth/email-verifications/verify</td><td>{ email, code } → 200. 화면 단계 확인</td></tr><tr id="api-3"><td><a class="pin" href="#api-3" title="API 3">3</a></td><td>닉네임 입력 후</td><td><span class="method">GET</span> /api/auth/nickname-availability?nickname=</td><td>{ available }</td></tr><tr id="api-4"><td><a class="pin" href="#api-4" title="API 4">4</a></td><td>가입하기</td><td><span class="method">POST</span> /api/auth/signup</td><td>{ email, code, password, nickname } → 201 + 쿠키. 블로그 개설로 이동</td></tr></tbody></table></div></section>
+  
+</div>
+</body>
+</html>
