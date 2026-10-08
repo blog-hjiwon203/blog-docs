@@ -39,7 +39,9 @@
 | GET | /api/members/me/blogs | 내 블로그 목록 | BLOG-08 |
 | GET | /api/blog | 현재 Host 블로그 정보 | BLOG-03 |
 | PATCH | /api/blog | 이름·소개·프로필 (주인) | BLOG-02 |
-| GET | /api/blog/sidebar | 카테고리 트리·글 수, 태그, 최근 글 5, 최근 댓글 5 | BLOG-04 |
+| GET | /api/blog/sidebar | 보이는 모듈만 순서대로: 이름·소개, 카테고리 트리·글 수, 태그, 최근 글 5, 최근 댓글 5 | BLOG-04 |
+| GET | /api/blog/sidebar/modules | 모듈 5개의 순서·표시 여부 (주인) | BLOG-05 |
+| PUT | /api/blog/sidebar/modules | `[{ moduleType, isVisible }]` 5개를 원하는 순서로 전체 교체. 5종이 정확히 한 번씩이 아니거나 PROFILE을 숨기면 400 (주인) | BLOG-05 |
 | POST | /api/blog/move-posts | `{ postIds, targetBlogId }` | BLOG-06 |
 | PUT | /api/blog/moved-to | 이사 대상 지정 | BLOG-06 |
 | PUT | /api/members/me/primary-blog | 대표 지정 | BLOG-08 |

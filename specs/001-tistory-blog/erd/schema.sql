@@ -1,4 +1,4 @@
--- Crowfoot 문서 665 버전 65 (2026-10-08)에서 내보낸 MySQL DDL. 직접 고치지 말고 Crowfoot을 고친 뒤 다시 내보낸다.
+-- Crowfoot 문서 665 버전 69 (2026-10-08)에서 내보낸 MySQL DDL. 직접 고치지 말고 Crowfoot을 고친 뒤 다시 내보낸다.
 -- https://crowfoot.java21.net/workspaces/49/models/665
 
 CREATE TABLE member (
@@ -295,6 +295,18 @@ CREATE TABLE blog_banned_word (
     PRIMARY KEY (id),
     CONSTRAINT uk_blog_banned_word_blog_id_word UNIQUE (blog_id, word)
 ) COMMENT='금칙어-----블로그별 금칙어. 최대 100개, 대소문자 무시 포함 검사';
+CREATE TABLE blog_sidebar_module (
+    id BIGINT NOT NULL AUTO_INCREMENT COMMENT '사이드바 모듈 ID',
+    blog_id BIGINT NOT NULL COMMENT '블로그 ID',
+    module_type VARCHAR(20) NOT NULL COMMENT '모듈 종류',
+    sort_order INT NOT NULL DEFAULT 0 COMMENT '순서',
+    is_visible TINYINT(1) NOT NULL DEFAULT 1 COMMENT '표시 여부-----PROFILE은 항상 1',
+    updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6) COMMENT '수정 일시',
+    PRIMARY KEY (id),
+    CONSTRAINT uk_blog_sidebar_module_blog_id_module_type UNIQUE (blog_id, module_type),
+    CONSTRAINT ck_blog_sidebar_module_module_type CHECK (module_type IN ('PROFILE', 'CATEGORY', 'TAG', 'RECENT_POST', 'RECENT_COMMENT')),
+    CONSTRAINT ck_blog_sidebar_module_profile_visible CHECK (module_type <> 'PROFILE' OR is_visible = 1)
+) COMMENT='사이드바 모듈-----블로그 사이드바의 모듈 순서와 표시 여부. 블로그를 만들 때 기본 5개 행을 함께 만든다. 모듈별 개수는 고정(최근 글·댓글 5개)';
 
 ALTER TABLE social_account ADD CONSTRAINT fk_social_account_member FOREIGN KEY (member_id) REFERENCES member (id);
 ALTER TABLE password_reset_token ADD CONSTRAINT fk_password_reset_token_member FOREIGN KEY (member_id) REFERENCES member (id);
@@ -333,6 +345,7 @@ ALTER TABLE blog_referrer_daily ADD CONSTRAINT fk_blog_referrer_daily_blog FOREI
 ALTER TABLE blog_blocked_member ADD CONSTRAINT fk_blog_block_blog FOREIGN KEY (blog_id) REFERENCES blog (id);
 ALTER TABLE blog_blocked_member ADD CONSTRAINT fk_blog_block_blocked_member FOREIGN KEY (blocked_member_id) REFERENCES member (id);
 ALTER TABLE blog_banned_word ADD CONSTRAINT fk_blog_banned_word_blog FOREIGN KEY (blog_id) REFERENCES blog (id);
+ALTER TABLE blog_sidebar_module ADD CONSTRAINT fk_blog_sidebar_module_blog FOREIGN KEY (blog_id) REFERENCES blog (id);
 
 CREATE INDEX idx_email_verification_email_created_at ON email_verification (email ASC, created_at DESC);
 CREATE INDEX idx_image_uploader_id ON image (uploader_id ASC);
