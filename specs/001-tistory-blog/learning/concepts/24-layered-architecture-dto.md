@@ -1,6 +1,6 @@
 # 24. 계층 구조와 DTO: 엔티티를 화면까지 보내지 않는 이유
 
-> 관련 스텝: [스텝 4](../step-04.md) (T018, T022, T023, T024, T025) · 관련 개념: [06-jpa-entity-mapping](./06-jpa-entity-mapping.md), [07-spring-mvc-exception-handling](./07-spring-mvc-exception-handling.md), [16-authorization-visibility](./16-authorization-visibility.md), [23-transactions-locking](./23-transactions-locking.md)
+> 관련 스텝: [스텝 4](../step-04.md) (T018, T022, T023, T024, T025), [스텝 6](../step-06.md) (T041, T042, T044) · 관련 개념: [29-comments-design](./29-comments-design.md), [06-jpa-entity-mapping](./06-jpa-entity-mapping.md), [07-spring-mvc-exception-handling](./07-spring-mvc-exception-handling.md), [16-authorization-visibility](./16-authorization-visibility.md), [23-transactions-locking](./23-transactions-locking.md)
 
 ## 1. 이 문서로 배우는 것
 
@@ -151,7 +151,7 @@ Jackson → JSON
 
 | 방법 | 어떻게 | 이 프로젝트에서 |
 | --- | --- | --- |
-| ① 미리 같이 읽기 | `join fetch`, `@EntityGraph`로 연관까지 한 SQL에 읽음 | `BlogRepository.findByAddress`(주인·이사 대상), `PostRepository.findAll(spec, pageable)`의 `@EntityGraph("category")` |
+| ① 미리 같이 읽기 | `join fetch`, `@EntityGraph`, FluentQuery `project(...)`로 연관까지 한 번에 읽음 | `BlogRepository.findByAddress`(주인·이사 대상), `PostRepository.findAll(spec, pageable)`의 `@EntityGraph("category")`, (스텝 6) `findWithBlogById`의 `left join fetch p.category`, 홈의 `project("blog", "category")`, 댓글의 `project("member")` |
 | ② 트랜잭션 안에서 값만 옮기기 | 서비스 안에서 엔티티를 읽어 필요한 값만 record로 옮김 | `SidebarService.toRecentComment`가 댓글 작성자 닉네임을 꺼내 `Sidebar.RecentComment`에 담음 |
 | ③ 초기화가 필요 없는 값만 쓰기 | 프록시의 `getId()`는 SQL 없이 됨 | `comment.getPost().getId()`, `category.getParent().getId()` |
 
@@ -498,6 +498,91 @@ public final class DateTimes {
 - 응답 DTO의 필드 타입을 `OffsetDateTime`으로 두면 Jackson이 `+09:00`을 포함해 쓴다. 테스트 `latestFirstTenPerPageAndTieBrokenById`가 `"2026-10-01T20:00:00+09:00"`을 확인한다.
 - 이 변환은 **응답 모양**의 일이라 엔티티가 아니라 응답 DTO에서 부른다.
 
+### 5.11 (스텝 6) 여러 기능이 같이 쓰는 부품, 그리고 상세·홈·댓글의 두 겹
+
+**PrimaryBlogAddresses: application 부품으로 뽑기.** `MemberSummary.primaryBlogAddress`(닉네임을 누르면 갈 대표 블로그 주소)는 블로그 주인(스텝 4), 글쓴이(글 상세), 댓글 작성자(댓글)에게 모두 필요하다. 스텝 4에서는 `BlogQueryService` 안의 `private` 메서드였는데, 스텝 6에서 글과 댓글도 필요해져 **여러 서비스가 함께 쓰는 application 부품**으로 뽑았다.
+
+`src/main/java/com/nhnacademy/blog/blog/application/PrimaryBlogAddresses.java`
+
+```java
+@Transactional(readOnly = true)
+public String ofOwner(Blog blog, Long viewerId) {
+    if (blog.isPrimary()) {
+        return blog.getAddress();
+    }
+    return of(List.of(blog.getMember().getId()), viewerId).get(blog.getMember().getId());
+}
+
+@Transactional(readOnly = true)
+public Map<Long, String> of(Collection<Long> memberIds, Long viewerId) {
+    if (memberIds.isEmpty()) {
+        return Map.of();
+    }
+    return blogRepository.findPrimaryByMemberIds(memberIds).stream()
+            .filter(blog -> blogVisibilityPolicy.canView(blog, viewerId))
+            .collect(Collectors.toMap(blog -> blog.getMember().getId(), Blog::getAddress));
+}
+```
+
+- `ofOwner`: 블로그 하나의 주인. 이 블로그가 대표면 쿼리 없이 바로 답한다.
+- `of`: **회원 여러 명을 쿼리 한 번에**. 댓글 20개의 작성자 주소를 댓글마다 하나씩 조회하면 쿼리 20개(N+1)가 나간다. 작성자 id를 모아(`distinct()`) `where b.member.id in (...)` 한 번으로 읽는다.
+- 볼 수 없는 대표 블로그(이용 제한, 주인 정지)는 `canView`로 걸러 맵에서 뺀다. 맵에 없으면 응답에서 `null`이다.
+- 같이 쓰는 곳: `BlogQueryService.detail`, `PostReadService.detail`, `CommentService.list`·`write`. 같은 규칙을 세 곳에 복사하지 않고 한 곳에 두었다.
+- 위치가 `global/`이 아니라 `blog/application/`인 이유: 블로그 기능의 규칙(대표 블로그, 블로그 가시성)이라서다. 다른 기능(post, comment)의 application이 blog의 application을 부르는 것은 같은 계층끼리라 의존 방향 규칙(presentation → application → domain)에 어긋나지 않는다.
+
+**application 결과 → presentation 응답 (스텝 6)**
+
+| application 결과 | 담는 것 | presentation 응답 |
+| --- | --- | --- |
+| `PostView(post, owner, authorPrimaryBlogAddress, blind, prev, next)` | 글(블로그·주인·카테고리가 읽혀 있음), 주인 여부, 이웃 글 | `PostDetailResponse.from` |
+| `CommentView(comment, state, authorPrimaryBlogAddress, canDelete, blind)` | 보는 사람 기준의 댓글 상태(NORMAL·SECRET·BLINDED) | `CommentResponse.from` |
+| `CommentPage(fetched, totalCount)` | 하나 더 읽은 댓글 목록과 전체 수 | `CommentListResponse` (컨트롤러가 커서를 만들어 담음) |
+
+`CommentView.state`는 서비스가 정한다. "누가 무엇을 볼 수 있나"는 규칙이므로 application의 일이고, 응답 DTO는 `state`가 `NORMAL`이 아니면 `content`·`author`를 `null`로 쓰는 **모양**만 책임진다(`CommentResponse.from`의 `shows ? ... : null`). 댓글 상태의 규칙은 [29](./29-comments-design.md).
+
+**트랜잭션 밖 매핑을 위해 미리 읽기 (방법 ①).**
+
+글 상세: `PostRepository.findWithBlogById`
+
+```java
+@Query("select p from Post p join fetch p.blog b join fetch b.member left join fetch p.category where p.id = :id")
+Optional<Post> findWithBlogById(@Param("id") Long id);
+```
+
+스텝 3에서는 가시성 판단에 필요한 블로그와 주인만 읽었다. 스텝 6의 글 상세 응답은 카테고리 이름도 내보내므로 `left join fetch p.category`를 더했다. `left`인 이유는 미분류 글(카테고리 `null`)도 나와야 하기 때문이다(그냥 `join`이면 미분류 글이 결과에서 빠진다). 이것이 없으면 `PostDetailResponse.from`이 트랜잭션 밖에서 `category.getName()`을 읽을 때 `LazyInitializationException`이 난다.
+
+홈과 댓글: Spring Data JPA의 FluentQuery `project(...)`
+
+```java
+// HomeService.latest
+return postRepository.findBy(condition,
+        query -> query.sortBy(LATEST).project("blog", "category").limit(LATEST_SIZE + 1).all());
+
+// CommentService.list
+List<Comment> comments = commentRepository.findBy(condition,
+        query -> query.sortBy(WRITTEN_ORDER).project("member").limit(PAGE_SIZE + 1).all());
+```
+
+- 홈은 여러 블로그의 글이 섞여 있어서, 블로그 메인처럼 "요청한 블로그"를 넘길 수 없다(5.9). 그래서 글마다 `post.getBlog()`를 읽어야 하고, `project("blog", "category")`로 블로그·카테고리를 함께 읽게 했다.
+- 댓글은 작성자 닉네임이 필요해 `project("member")`.
+- `project`에 연관 이름을 주면 Spring Data JPA가 그 연관을 함께 읽도록 쿼리를 만든다. 확인은 테스트로 했다. `HomeLatestIntegrationTest`는 응답의 `blog.address`를 확인하는데, 연관을 함께 읽지 않았다면 컨트롤러가 트랜잭션 밖에서 `post.getBlog().getAddress()`를 읽을 때 예외가 나 500이 됐을 것이다.
+
+**"고친 적 없음"을 판단하기: `PostDetailResponse.editedAt`**
+
+```java
+private static LocalDateTime editedAt(Post post) {
+    return post.getUpdatedAt() == null || post.getUpdatedAt().equals(post.getCreatedAt())
+            ? null : post.getUpdatedAt();
+}
+```
+
+명세는 "발행 뒤 고친 적이 없으면 `updatedAt`은 `null`"이다. 별도 컬럼 없이 판단하는 방법이다.
+
+- 처음 저장할 때 Spring Data Auditing이 `created_at`과 `updated_at`에 같은 값을 넣는다. 테스트 `PostDetailIntegrationTest#anyoneReadsPublicPost`가 방금 저장한 글의 `updatedAt`이 응답에 없는 것으로 이를 확인한다.
+- 작성자가 고치면(`PUT`) 변경 감지로 `updated_at`만 새 시각이 된다 → 둘이 달라진다(`editedPostHasUpdatedAt`).
+- 작성자가 고치지 않은 변경(카테고리 삭제로 미분류가 됨, 댓글 수 갱신)은 일괄 UPDATE에서 `p.updatedAt = p.updatedAt`으로 수정 시각을 지킨다([27](./27-soft-delete-bulk-update.md)). 그래서 댓글이 달려도 "수정됨"이 붙지 않는다(`CommentIntegrationTest#memberWritesCommentAndCountGoesUp`).
+- 이 판단은 응답에 무엇을 보여 줄지의 일이라 응답 DTO 안에 두었다.
+
 ## 6. 자주 하는 실수와 함정
 
 1. **엔티티를 컨트롤러에서 그대로 return**: 비밀번호 해시 노출, 순환 참조, LAZY 예외. 항상 응답 DTO로 바꾼다.
@@ -509,6 +594,9 @@ public final class DateTimes {
 7. **"숨길 값"을 응답 DTO에서 지우면 된다고 생각함**: 비밀댓글 내용은 서비스에서 애초에 record에 담지 않았다(`shown ? ... : null`). 담아 두면 다른 응답이 실수로 내보낼 수 있다.
 8. **LocalDateTime을 그대로 응답**: 시간대 정보가 없어 프론트가 UTC로 해석하면 9시간이 어긋날 수 있다. `DateTimes.toOffset`.
 9. **원시형 `boolean`으로 "없음"을 표현하려 함**: `boolean`은 `null`이 될 수 없다. 없을 수 있으면 `Boolean`.
+10. **(스텝 6) 목록의 각 줄에서 따로 조회하기**: 댓글마다 작성자의 대표 블로그를 조회하면 쿼리가 댓글 수만큼 늘어난다(N+1). id를 모아 한 번에 읽는다(`PrimaryBlogAddresses.of`).
+11. **(스텝 6) 선택적인 연관을 `join fetch`로 읽기**: 카테고리처럼 없을 수 있는 연관을 그냥 `join`하면 미분류 글이 결과에서 빠진다. `left join fetch`.
+12. **(스텝 6) 같은 규칙을 서비스마다 복사하기**: 대표 블로그 주소처럼 여러 기능이 쓰는 규칙은 application 부품 하나로 뽑아 함께 쓴다.
 
 ## 7. 직접 해 보기
 
@@ -552,6 +640,14 @@ logging:
 
 `CategoryTreeResponse.Node`의 `@JsonInclude`를 지우고 `categoriesInOrderWithVisiblePostCounts`를 돌리면 `isPrivate").doesNotExist()` 확인이 실패한다(`null`로 나오므로). 되돌린다.
 
+**실습 5. (스텝 6) N+1을 눈으로 보기**
+
+실습 3처럼 SQL 로그를 켜고 댓글이 여러 개 달린 글의 `GET /api/posts/{id}/comments`를 부른다. 작성자 대표 블로그를 읽는 `select ... from blog ... where member_id in (...)`가 **한 번**만 나가는지 본다. 그다음 `CommentService.list`에서 `primaryBlogAddresses.of(...)` 대신 댓글마다 `primaryBlogAddresses.of(List.of(작성자 id), viewerId)`를 부르게 잠시 바꾸면 같은 쿼리가 댓글 수만큼 나간다. 되돌린다.
+
+**실습 6. (스텝 6) `left join`과 `join`의 차이**
+
+`PostRepository.findWithBlogById`의 `left join fetch p.category`를 `join fetch p.category`로 바꾸고 `./mvnw test -Dtest=PostDetailIntegrationTest`를 돌린다. 미분류 글(카테고리 없음)이 조회되지 않아 404가 되면서 여러 테스트가 실패한다. 되돌린다.
+
 ## 8. 확인 문제
 
 1. 이 프로젝트의 세 계층과 각자 모르는 것을 하나씩 말하라.
@@ -578,12 +674,22 @@ logging:
 8. 블로그 메인 목록에서 `PostSummaryResponse.of(post, blog)`가 `post.getBlog()`를 읽지 않는 이유는?
 <details><summary>답</summary>목록의 글은 모두 요청한 블로그 소속이라 이미 가진 블로그를 쓰면 되고, post.getBlog()는 LAZY라 트랜잭션 밖에서 읽으면 예외가 나기 때문이다.</details>
 
+9. (스텝 6) 대표 블로그 주소를 구하는 코드를 `BlogQueryService`의 `private` 메서드에서 `PrimaryBlogAddresses`로 뽑은 이유는?
+<details><summary>답</summary>글 상세(글쓴이)와 댓글(작성자)도 같은 규칙이 필요해졌기 때문이다. 한 곳에 두면 규칙을 바꿀 때 한 곳만 고치고, 여러 회원을 쿼리 한 번에 읽는 방식(N+1 방지)도 모두가 같이 쓴다.</details>
+
+10. (스텝 6) `findWithBlogById`에 카테고리를 `join fetch`가 아니라 `left join fetch`로 더한 이유는?
+<details><summary>답</summary>미분류 글은 카테고리가 <code>null</code>이다. 그냥 <code>join</code>은 짝이 없는 행을 결과에서 빼서 미분류 글을 못 찾게 된다. <code>left join</code>은 카테고리가 없어도 글을 돌려준다.</details>
+
+11. (스텝 6) 별도 컬럼 없이 "발행 뒤 고친 적 없음"을 판단하는 방법과, 댓글이 달려도 "수정됨"이 붙지 않는 이유는?
+<details><summary>답</summary>처음 저장 때 Auditing이 <code>created_at</code>과 <code>updated_at</code>에 같은 값을 넣으므로 둘이 같으면 고친 적이 없다(<code>editedAt</code>). 댓글 수 갱신은 일괄 UPDATE에서 <code>p.updatedAt = p.updatedAt</code>으로 수정 시각을 그대로 두기 때문에 두 값이 여전히 같다.</details>
+
 ## 9. 더 읽을거리
 
 - Martin Fowler, "Patterns of Enterprise Application Architecture"의 Layering, Data Transfer Object
 - Java 언어 명세 / JEP 395 "Records"
 - Spring Boot 레퍼런스, `spring.jpa.open-in-view` 속성 설명
 - Hibernate ORM 사용자 가이드, "Fetching", 프록시와 `LazyInitializationException`
+- Spring Data JPA 레퍼런스, "Query by Specification"의 Fluent API(`findBy`, `project`, `limit`)
 - Jackson 애노테이션 `@JsonInclude` 문서
 - `java.time` 패키지: `LocalDateTime`, `ZonedDateTime`, `OffsetDateTime` 차이
 - plan.md 구조 결정(2026-10-08 계층 나누기), contracts/rest-api.md 주요 응답 객체

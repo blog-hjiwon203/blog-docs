@@ -1,6 +1,6 @@
 # 17. 멱등성과 Redis: 같은 요청이 두 번 와도 한 번만
 
-> 관련 스텝: [스텝 3](../step-03.md) (T016), [스텝 1](../step-01.md) (T016a Redis), [스텝 5](../step-05.md) (글 발행 API에 처음 적용) · 관련 개념: [04-docker-compose](./04-docker-compose.md), [07-spring-mvc-exception-handling](./07-spring-mvc-exception-handling.md), [11-jwt](./11-jwt.md), [12-spring-security-filter-chain](./12-spring-security-filter-chain.md), [19-react-router-api-client](./19-react-router-api-client.md)
+> 관련 스텝: [스텝 3](../step-03.md) (T016), [스텝 1](../step-01.md) (T016a Redis), [스텝 5](../step-05.md) (글 발행 API에 처음 적용), [스텝 6](../step-06.md) (댓글 작성 API, 화면 연타 버그) · 관련 개념: [04-docker-compose](./04-docker-compose.md), [07-spring-mvc-exception-handling](./07-spring-mvc-exception-handling.md), [11-jwt](./11-jwt.md), [12-spring-security-filter-chain](./12-spring-security-filter-chain.md), [19-react-router-api-client](./19-react-router-api-client.md)
 
 ## 1. 이 문서로 배우는 것
 
@@ -426,6 +426,72 @@ const idempotencyKey = useRef(newIdempotencyKey())
 
 **남은 점: 키 검사가 권한 검사보다 먼저다.** 인터셉터의 `preHandle`은 컨트롤러 메서드보다 먼저 실행된다(4장 그림). 그래서 비회원이나 남의 블로그 주인이 **키 없이** 발행을 부르면, 401·403보다 400 `IDEMPOTENCY_KEY_REQUIRED`가 먼저 나간다. 상태 코드 순서(404 → 401 → 403 → 400, [16](./16-authorization-visibility.md) 3.3)와 어긋난다. `@CurrentBlog` 같은 인자 해석도 `preHandle` 뒤에 일어나므로, 없는 블로그 주소에 키 없이 보내도 404가 아니라 400이다. 다만 블로그가 있든 없든 똑같이 400이라 존재가 드러나지는 않는다(헌법 원칙 II는 지켜진다). 정상 화면은 늘 키를 보내므로 사용자가 볼 일이 거의 없어 지금은 그대로 둔다. 고친다면 인터셉터에서 로그인 여부를 먼저 보거나, 키 검사를 컨트롤러 안으로 옮겨야 한다.
 
+### 5.8 (스텝 6) 댓글 작성과 "서버엔 하나, 화면엔 둘"
+
+`src/main/java/com/nhnacademy/blog/comment/presentation/CommentController.java`
+
+```java
+/** 회원만. Idempotency-Key가 필수이고 같은 키로 두 번 오면 처음 응답을 준다(연타해도 댓글 하나). */
+@Idempotent
+@PostMapping("/api/posts/{postId}/comments")
+@ResponseStatus(HttpStatus.CREATED)
+public CommentResponse write(@CurrentBlog Blog blog, @AuthenticationPrincipal LoginMember member,
+                             @PathVariable Long postId, @RequestBody CommentRequest request) {
+    commentService.writablePost(blog, postId, member);
+    requestValidator.validate(request);
+    return CommentResponse.from(commentService.write(blog, postId, member, request.content()));
+}
+```
+
+- 댓글은 3.3에서 본 대로 UNIQUE로 중복을 막을 수 없는 대표적인 경우라 키로 막는다(CMT-01 "연달아 눌러도 댓글은 하나").
+- 응답은 201과 본문(Comment JSON)이다. 같은 키의 두 번째 요청은 컨트롤러를 거치지 않고 **첫 응답 본문을 그대로** 받는다. 같은 `id`의 같은 댓글이다.
+- 테스트 `CommentIntegrationTest.doubleClickMakesOneComment`: 같은 키로 두 번 → 둘 다 201, `post.comment_count` 1, 목록 `totalCount` 1.
+
+**프론트의 키 관리** (`frontend/src/components/Comments.tsx`)
+
+```tsx
+// 등록 한 번에 키 하나. 실패해 다시 누르면 같은 키로, 성공하면 다음 댓글을 위해 새 키로
+const idempotencyKey = useRef(newIdempotencyKey())
+...
+const created = await api<Comment>(`/api/posts/${postId}/comments`, {
+  method: 'POST', body: { content: content.trim() }, idempotencyKey: idempotencyKey.current,
+})
+idempotencyKey.current = newIdempotencyKey()
+```
+
+글쓰기 화면(5.7)과 다른 점: 글쓰기는 화면 하나에 글 하나라 키도 하나였다. 댓글은 한 화면에서 **여러 개**를 쓴다. 그래서 성공하면 다음 댓글을 위해 새 키로 바꾸고, 실패하면 그대로 둬서 재시도가 같은 요청으로 묶이게 한다(서버는 실패한 키를 지우므로 다시 처리된다, 5.3 ⑦).
+
+**실제로 겪은 버그.** 헤드리스 Chrome에서 등록 버튼을 `click(); click()`으로 빠르게 두 번 눌렀더니:
+
+```
+댓글 수 표시: 댓글 1
+댓글들: B가 쓴 댓글입니다 | B가 쓴 댓글입니다     ← 화면
+totalCount 1 ['B가 쓴 댓글입니다']                 ← API
+```
+
+서버는 이 문서대로 정확히 동작했다. 두 요청이 같은 키를 들고 갔고, 두 번째는 첫 응답을 받았다. 문제는 **화면이 같은 응답을 두 번 받아 두 번 붙인 것**이다. 버튼은 `disabled={submitting}`이었지만 `setSubmitting(true)`는 다음 그리기에서야 반영되어, 그 사이 두 번째 클릭이 `submit`을 한 번 더 실행했다.
+
+고친 것:
+
+```tsx
+// 버튼은 다음 그리기에서야 꺼지므로, 그 사이 두 번째 클릭은 ref로 바로 막는다
+const inFlight = useRef(false)
+...
+if (inFlight.current) {
+  return
+}
+inFlight.current = true
+...
+// 같은 키의 재시도면 서버가 같은 댓글을 다시 돌려주므로, 이미 있는 댓글은 붙이지 않는다
+if (!nextCursor && !comments.some((comment) => comment.id === created.id)) {
+  setComments((previous) => [...previous, created])
+```
+
+- `inFlight`(ref)는 바꾸는 즉시 바뀐다. 처리 중 두 번째 클릭은 첫 줄에서 돌아간다.
+- id 확인은 그래도 같은 응답이 두 번 오는 경우(네트워크 재시도 등)를 막는다.
+
+정리: **Idempotency-Key는 서버의 데이터를 지키고, 화면은 화면 상태를 따로 지켜야 한다.** "같은 키 → 같은 응답"은 정상 동작이고, 그 응답을 화면에 몇 번 반영할지는 화면 책임이다. 자세한 설계는 [29](./29-comments-design.md).
+
 ## 6. 자주 하는 실수와 함정
 
 1. **확인과 저장을 두 명령으로**: `GET` 후 `SET`은 동시 요청에 뚫린다. `SET NX` 한 명령.
@@ -437,6 +503,8 @@ const idempotencyKey = useRef(newIdempotencyKey())
 7. **서버가 처리 중에 죽음**: 키가 `PENDING`으로 남아, 같은 키로 다시 보내면 TTL(10분)이 끝날 때까지 429를 받는다. 사용자가 새로 누르면 새 키라 괜찮지만, 같은 키로 자동 재시도하는 클라이언트는 10분을 기다려야 한다.
 8. **replay는 일부 헤더만 되살린다**: 상태, Content-Type, Location, 본문만 저장한다. 첫 응답에 `Set-Cookie` 같은 다른 헤더가 있었다면 두 번째 응답에는 없다. 지금 대상 API(글·댓글 생성)에는 그런 헤더가 없다.
 9. **운영 Redis에서 `KEYS *`**: 키가 많으면 Redis 전체가 멈춘다. 운영에서는 `SCAN`을 쓴다.
+10. **서버가 막았으니 화면은 괜찮다고 생각**: 같은 키의 두 요청은 같은 응답을 받는다. 화면이 두 응답을 다 반영하면 화면에는 두 개가 보인다(5.8). 화면은 처리 중 클릭을 막고 같은 id를 거른다.
+11. **여러 번 쓰는 화면에서 키를 안 바꿈**: 댓글처럼 한 화면에서 여러 개를 만들 때 성공 뒤에도 같은 키를 쓰면, 두 번째 댓글이 첫 댓글 응답으로 바뀌어 저장되지 않는다(10분 동안).
 
 ## 7. 직접 해 보기
 
@@ -504,6 +572,16 @@ docker exec blog-redis redis-cli GET 'idempotency:...'     # 저장된 응답 JS
 docker exec blog-redis redis-cli --scan --pattern 'auth:*' # 로그인하면 생기는 토큰 키
 ```
 
+**실습 6. (스텝 6) 화면 연타 버그 다시 만들기**
+
+`frontend/src/components/Comments.tsx`에서 `if (inFlight.current) { return }`와 `!comments.some(...)` 조건을 지우고 `npm run dev`로 글 상세를 연다. 로그인한 상태로 댓글을 입력하고 개발자 도구 콘솔에서
+
+```js
+const b = [...document.querySelectorAll('#comments button')].find(x => x.textContent === '등록'); b.click(); b.click()
+```
+
+를 실행한다. 화면엔 같은 댓글이 둘, 새로고침하면 하나다. Network 탭에서 두 요청의 `Idempotency-Key`가 같은지 본다. 되돌린다.
+
 ## 8. 확인 문제
 
 1. PUT은 멱등이고 POST는 아닌 이유를 공감 켜기와 글 발행으로 설명하라.
@@ -535,6 +613,12 @@ docker exec blog-redis redis-cli --scan --pattern 'auth:*' # 로그인하면 생
 
 10. (스텝 5) 비회원이 키 없이 `POST /api/posts`를 보내면 401이 아니라 400이 나온다. 왜인가?
 <details><summary>답</summary><code>IdempotencyInterceptor.preHandle</code>이 컨트롤러 메서드보다 먼저 실행되어, 주인 검사(<code>BlogOwnerGuard</code>)에 닿기 전에 키가 없다며 400을 던지기 때문이다. 상태 코드 순서와 어긋나는 남은 점이다.</details>
+
+11. (스텝 6) 댓글 등록을 빠르게 두 번 눌렀더니 DB에는 하나인데 화면에는 두 개가 보였다. 서버가 잘못한 것인가?
+<details><summary>답</summary>아니다. 같은 키의 두 번째 요청에 첫 응답을 그대로 주는 것은 정상이다. 화면이 같은 응답을 두 번 목록에 붙인 것이 문제다. 처리 중 클릭을 즉시 막는 ref(inFlight)와 같은 id를 거르는 확인으로 고쳤다.</details>
+
+12. (스텝 6) 글쓰기 화면은 키를 화면당 하나만 쓰는데, 댓글은 성공할 때마다 새 키로 바꾸는 이유는?
+<details><summary>답</summary>글쓰기 화면은 글 하나를 만들고 떠나지만, 댓글 칸에서는 여러 댓글을 연달아 쓴다. 성공 뒤에도 같은 키를 쓰면 두 번째 댓글이 첫 댓글의 저장된 응답으로 처리되어 만들어지지 않는다. 실패했을 때는 재시도가 같은 요청이 되도록 키를 그대로 둔다.</details>
 
 ## 9. 더 읽을거리
 

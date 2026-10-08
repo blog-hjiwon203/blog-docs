@@ -1,6 +1,6 @@
 # 25. React 폼과 데이터 불러오기
 
-> 관련 스텝: [스텝 4](../step-04.md) (T026), [스텝 5](../step-05.md) (T035 글쓰기·수정, 카테고리 관리) · 관련 개념: [19-react-router-api-client](./19-react-router-api-client.md), [14-xss-sanitize-csp](./14-xss-sanitize-csp.md), [16-authorization-visibility](./16-authorization-visibility.md), [18-spa-server-routing](./18-spa-server-routing.md), [15-subdomain-host-routing](./15-subdomain-host-routing.md)
+> 관련 스텝: [스텝 4](../step-04.md) (T026), [스텝 5](../step-05.md) (T035 글쓰기·수정, 카테고리 관리), [스텝 6](../step-06.md) (T045 홈·글 상세·댓글, T051 오류 화면·관리자 영역) · 관련 개념: [28-thymeleaf-to-react](./28-thymeleaf-to-react.md), [29-comments-design](./29-comments-design.md), [19-react-router-api-client](./19-react-router-api-client.md), [14-xss-sanitize-csp](./14-xss-sanitize-csp.md), [16-authorization-visibility](./16-authorization-visibility.md), [18-spa-server-routing](./18-spa-server-routing.md), [15-subdomain-host-routing](./15-subdomain-host-routing.md)
 
 ## 1. 이 문서로 배우는 것
 
@@ -17,6 +17,8 @@
 - React Router: 중첩 `Routes`, `NavLink`, `useParams`, `useSearchParams`, `navigate`와 `window.location.assign`의 차이
 - 화면의 권한 검사는 안내용이라는 원칙, React의 자동 이스케이프
 - 페이지 번호 묶음 계산(`pageGroup`)과 Vitest, macOS 파일 이름 대소문자 문제
+- (스텝 6) 댓글 목록·더보기·쓰기·지우기, `useRef`로 연타를 즉시 막기, 상태 갱신 함수 안에서 부모 콜백을 부르지 않기
+- (스텝 6) 판별 유니온으로 화면 상태 나누기(불러오는 중·성공·404·구독 안내·오류)와 오류 화면
 
 **먼저 알면 좋은 것**: [19](./19-react-router-api-client.md)의 컴포넌트·JSX·props, `api()` 래퍼와 `ApiError`, `async`/`await`.
 
@@ -495,7 +497,7 @@ const page = Math.max(Number(params.get('page')) || 1, 1)
 
 ### 5.7 화면의 권한 검사는 안내용
 
-`ManagePage`는 `blog.viewer.isOwner`가 `false`면 "권한이 없습니다"를 그린다. 그렇다고 이게 보안은 아니다. 브라우저 개발자 도구로 코드를 바꾸거나 `curl`로 `PATCH /api/blog`를 직접 부를 수 있다. **진짜 검사는 서버**(`BlogOwnerGuard.requireOwner` → 401/403)가 한다(헌법 원칙 IV, [16](./16-authorization-visibility.md)). 화면 검사는 주인이 아닌 사람에게 쓸모없는 버튼을 보여 주지 않는 **친절**이다.
+`ManagePage`는 `blog.viewer.isOwner`가 `false`면 403 오류 화면("접근 권한이 없습니다", 스텝 6부터 `ErrorPage`)을 그린다. 그렇다고 이게 보안은 아니다. 브라우저 개발자 도구로 코드를 바꾸거나 `curl`로 `PATCH /api/blog`를 직접 부를 수 있다. **진짜 검사는 서버**(`BlogOwnerGuard.requireOwner` → 401/403)가 한다(헌법 원칙 IV, [16](./16-authorization-visibility.md)). 화면 검사는 주인이 아닌 사람에게 쓸모없는 버튼을 보여 주지 않는 **친절**이다.
 
 ### 5.8 React는 글자를 자동으로 이스케이프한다
 
@@ -629,6 +631,127 @@ useEffect(() => {
 
 블로그 머리글에는 주인에게만 "글쓰기" 버튼(`/manage/write`)이 보인다. 5.7과 같이 이것은 안내이고, 남이 이 주소를 직접 열어도 서버가 편집용 조회(`GET /api/manage/posts/{id}`)에서 403·404로 막는다.
 
+### 5.11 (스텝 6) 댓글, 글 상세, 홈, 오류 화면
+
+**Thymeleaf에 빗대 보기.** 지금까지와 같은 대응이다([28](./28-thymeleaf-to-react.md)).
+
+| 하는 일 | Thymeleaf | 이 프로젝트 (React) |
+| --- | --- | --- |
+| 댓글 목록 그리기 | 컨트롤러가 `model.addAttribute("comments", ...)`, 템플릿이 `th:each="c : ${comments}"` | `useEffect`에서 `/api/posts/{id}/comments`를 불러 `comments` 상태에 넣고 `comments.map((comment) => <CommentItem .../>)` |
+| 댓글 쓰기 | `<form method="post">` → 서버가 저장 → `redirect:/posts/{id}` (페이지 전체를 새로 받음) | `fetch` POST → 응답으로 받은 댓글 하나를 목록 상태에 붙임 (페이지는 그대로) |
+| 댓글 더보기 | 다음 페이지 링크(`?page=2`)로 새 페이지 | 받은 `nextCursor`로 다음 묶음을 불러와 기존 목록 뒤에 이어 붙임 |
+| 없는 글 | 컨트롤러가 404 상태와 오류 템플릿 | API 404를 받으면 `ErrorPage status={404}` 컴포넌트를 그림 |
+
+**Comments: 목록·더보기·쓰기·지우기** (`frontend/src/components/Comments.tsx`)
+
+```tsx
+const [comments, setComments] = useState<Comment[]>([])
+const [nextCursor, setNextCursor] = useState<string | null>(null)
+const [totalCount, setTotalCount] = useState(0)
+const [content, setContent] = useState('')
+const [error, setError] = useState<string | null>(null)
+const [submitting, setSubmitting] = useState(false)
+// 버튼은 다음 그리기에서야 꺼지므로, 그 사이 두 번째 클릭은 ref로 바로 막는다
+const inFlight = useRef(false)
+// 등록 한 번에 키 하나. 실패해 다시 누르면 같은 키로, 성공하면 다음 댓글을 위해 새 키로
+const idempotencyKey = useRef(newIdempotencyKey())
+```
+
+- 처음 묶음은 `useEffect`에서 `active` 플래그와 함께 불러온다(5.5와 같은 모양). 더보기(`loadMore`)는 버튼을 누를 때 부르는 일반 함수라 효과가 아니다.
+- 비회원에게는 쓰기 칸 대신 "로그인하고 댓글 쓰기" 링크(`loginUrl()`)를 보여 준다. 로그인하면 `redirect`로 이 글에 돌아온다(spec US3 시나리오 6).
+- 지우기 버튼은 서버가 준 `viewer.canDelete`가 참일 때만 보인다. 작성자와 블로그 주인만 참이다. 이것도 안내이고 서버가 다시 검사한다(5.7).
+- 비밀댓글·숨긴 댓글은 서버가 `state`로 알려 주고 내용을 `null`로 보낸다. 화면은 `state`를 보고 "비밀댓글입니다." 같은 문구만 그린다([29](./29-comments-design.md)).
+
+**`useRef`로 연타를 즉시 막기: 실제로 난 버그**
+
+```tsx
+async function submit(event: FormEvent) {
+  event.preventDefault()
+  ...
+  if (inFlight.current) {
+    return
+  }
+  inFlight.current = true
+  setSubmitting(true)
+  ...
+  try {
+    const created = await api<Comment>(`/api/posts/${postId}/comments`, {
+      method: 'POST', body: { content: content.trim() }, idempotencyKey: idempotencyKey.current,
+    })
+    idempotencyKey.current = newIdempotencyKey()
+    setContent('')
+    // 같은 키의 재시도면 서버가 같은 댓글을 다시 돌려주므로, 이미 있는 댓글은 붙이지 않는다
+    if (!nextCursor && !comments.some((comment) => comment.id === created.id)) {
+      setComments((previous) => [...previous, created])
+      setTotalCount(totalCount + 1)
+      onCountChange(totalCount + 1)
+    }
+  } finally {
+    inFlight.current = false
+    setSubmitting(false)
+  }
+}
+```
+
+처음에는 `submitting` 상태로 등록 버튼을 끄는 것(3.4)만 있었다. 헤드리스 Chrome으로 등록 버튼을 **빠르게 두 번** 눌러 확인해 보니 이랬다.
+
+| | 서버 | 화면 |
+| --- | --- | --- |
+| 고치기 전 | 댓글 **하나**(같은 연타 방지 키라 두 번째 요청은 첫 응답을 그대로 받음, [17](./17-idempotency-redis.md)) | 같은 댓글이 **두 줄** |
+
+원인은 상태가 바뀌는 시점이다. `setSubmitting(true)`는 값을 바로 바꾸지 않고 "다음에 그릴 때 true로" 예약한다. 두 클릭이 같은 그리기 사이에 들어오면, 두 번째 클릭이 실행될 때도 버튼은 아직 켜져 있고 `submitting`도 아직 `false`다. 그래서 요청이 두 번 나갔고, 두 응답(같은 댓글)이 둘 다 목록에 붙었다.
+
+고친 방법 두 가지:
+1. `useRef`: `ref.current`는 **바꾸는 즉시** 바뀐 값이 읽힌다(다시 그리기를 기다리지 않는다). 그래서 두 번째 클릭은 `inFlight.current`가 `true`인 것을 보고 바로 돌아간다. 화면에 보일 값(버튼 꺼짐)은 상태, 즉시 판단할 값은 ref로 나눴다.
+2. 같은 `id`의 댓글이 이미 있으면 붙이지 않는다. 같은 키로 재시도해 같은 응답이 온 경우까지 막는 두 번째 안전장치다.
+
+고친 뒤 같은 확인에서 서버·화면 모두 댓글 하나였다.
+
+**상태 갱신 함수 안에서 부모 콜백을 부르지 않기.** 처음에는 이렇게 썼다.
+
+```tsx
+// 처음 코드 (고침)
+setTotalCount((count) => {
+  onCountChange(count + 1)   // 부모(글 상세)의 댓글 수도 갱신
+  return count + 1
+})
+```
+
+`setX(이전값 => 새값)`에 넘기는 함수는 **새 값을 계산만 하는 함수**여야 한다. React는 개발 모드의 StrictMode에서 이런 함수를 일부러 두 번 불러 부작용이 있는지 드러낸다. 그 안에서 부모 상태를 바꾸는 콜백을 부르면 그것도 두 번 불린다. 그래서 새 값을 먼저 계산하고(`totalCount + 1`), `setTotalCount`와 `onCountChange`를 따로 부르게 고쳤다.
+
+**글 상세: 판별 유니온으로 화면 상태 나누기** (`frontend/src/pages/post/PostPage.tsx`)
+
+```tsx
+type PostState = { status: 'loading' } | { status: 'ok'; post: PostDetail } | { status: 'notFound' }
+  | { status: 'subscribersOnly'; blogName: string } | { status: 'error' }
+```
+
+```tsx
+if (error instanceof ApiError && error.code === 'SUBSCRIBERS_ONLY') {
+  setState({ status: 'subscribersOnly', blogName: String(error.detail?.blogName ?? '') })
+} else if (error instanceof ApiError && error.status === 404) {
+  setState({ status: 'notFound' })
+} else {
+  setState({ status: 'error' })
+}
+```
+
+- 3.7의 판별 유니온을 화면 상태 다섯 가지로 넓혔다. `status`로 갈라 놓으면 `post`는 `'ok'`일 때만, `blogName`은 `'subscribersOnly'`일 때만 존재해서, "글이 없는데 글 제목을 그리는" 실수를 TypeScript가 막는다.
+- 서버 오류 코드(16번 문서의 `readable`)가 화면 상태로 1:1 대응한다: 404 → `ErrorPage status={404}`, 403 `SUBSCRIBERS_ONLY` → 구독 안내 상자(제목·본문 없음), 그 밖의 오류 → `ErrorPage status={500}`.
+- 본문은 `dangerouslySetInnerHTML`에 정화 함수를 거쳐 넣는다([14](./14-xss-sanitize-csp.md) 5.6).
+
+**오류 화면** (`frontend/src/components/ErrorPage.tsx`): 401·403·404·500 문구를 한 컴포넌트에 모았다(목업 errors). 401이면 로그인 버튼, 그 밖에는 홈으로 버튼. 블로그 주소에서 본 403에는 "이 블로그 처음으로"도 보인다. `NotFoundPage`도 이제 `<ErrorPage status={404} />` 한 줄이다. 오류 화면에 서버 내부 정보를 보여 줄 일이 없는 것은, 서버가 애초에 응답에 담지 않기 때문이다(COM-02).
+
+**관리자 영역** (`frontend/src/pages/admin/AdminPage.tsx`): 비회원은 `redirectToLogin()`, `me.role`이 `ADMIN`이 아니면 `<ErrorPage status={403} />`. 5.7과 같이 안내용이고, 실제 보호는 서버의 `/api/admin/**`(16번 문서 5.9).
+
+**홈의 글 링크는 `<a href>`** (`frontend/src/pages/home/HomePage.tsx`)
+
+```tsx
+<h3><a href={blogUrl(post.blog.address, `/${post.id}`)}>{post.title}</a></h3>
+```
+
+홈은 플랫폼 주소(`blog.test`)이고 글은 각 블로그 주소(`alpha.blog.test`)에 있다. 다른 호스트라 React Router의 `<Link>`(같은 호스트 안 이동)를 쓸 수 없고, 보통 링크로 페이지를 새로 연다(5.3의 `navigate`와 `window.location.assign`의 차이와 같은 이유).
+
 ## 6. 자주 하는 실수와 함정
 
 1. **폼 안의 버튼에 `type` 안 쓰기**: 기본이 `submit`이라 "코드 받기"를 누를 때 가입이 제출된다. 제출 버튼이 아니면 `type="button"`.
@@ -646,6 +769,9 @@ useEffect(() => {
 13. **(스텝 5) 같은 컴포넌트를 두 라우트에 쓰면서 `key`를 안 줌**: 수정 화면에서 "글쓰기"로 가도 이전 글 내용이 남는다. 라우트마다 다른 `key`.
 14. **(스텝 5) 에디터에 입력 중인 값을 다시 넣기**: 칠 때마다 내용을 통째로 바꿔 커서가 튄다. 불러온 값과 입력 중인 값을 나눈다.
 15. **(스텝 5) 효과의 의존성에 매번 새로 만드는 함수**: `useEffect(..., [load])`의 `load`를 `useCallback` 없이 만들면 무한히 다시 불러온다.
+16. **(스텝 6) 상태만으로 연타를 막으려 함**: 버튼은 다음 그리기에서야 꺼진다. 그 사이의 두 번째 클릭은 `useRef`로 막는다.
+17. **(스텝 6) `setX(이전값 => ...)` 안에서 다른 일을 함**: 갱신 함수는 계산만 한다. StrictMode에서 두 번 불릴 수 있다.
+18. **(스텝 6) 다른 블로그 주소로 `<Link>`**: 같은 호스트 경로로 해석된다. 다른 호스트는 `<a href>`.
 
 ## 7. 직접 해 보기
 
@@ -703,6 +829,19 @@ cd frontend && npm run dev          # 터미널 2
 
 `ManagePage.tsx`의 두 `PostWritePage`에서 `key`를 지우고 `npm run dev`로 띄운다. 블로그 메인에서 글의 "수정"을 눌러 수정 화면을 연 뒤, 왼쪽 메뉴의 "글쓰기"를 누른다. 기대: 제목 칸에 방금 글의 제목이 그대로 남아 있다. `key`를 되돌리면 빈 화면이 된다.
 
+**실습 7. (스텝 6) 연타 버그 되살려 보기**
+
+1. `Comments.tsx`의 `submit`에서 `if (inFlight.current) { return }` 블록과 `comments.some(...)` 조건을 잠시 지운다.
+2. `npm run dev`로 띄워 로그인한 상태로 글 상세를 열고, 개발자 도구 콘솔에서 등록 버튼을 한 번에 두 번 누른다.
+   ```js
+   const b = [...document.querySelectorAll('#comments button')].find(x => x.textContent === '등록'); b.click(); b.click()
+   ```
+3. 기대: 서버에는 댓글이 하나(새로고침하면 하나)인데, 누른 직후 화면에는 두 줄이 보인다. 되돌리고 같은 것을 하면 한 줄이다.
+
+**실습 8. (스텝 6) 오류 화면 보기**
+
+남의 비공개 글 주소(`http://alpha.blog.test:5173/{비공개 글 번호}`)를 로그아웃한 창에서 열면 404 화면, 일반 회원으로 `http://blog.test:5173/admin`을 열면 403 화면이 나온다.
+
 ## 8. 확인 문제
 
 1. 일반 변수 대신 `useState`를 쓰는 이유는?
@@ -726,7 +865,7 @@ cd frontend && npm run dev          # 터미널 2
 7. `safeRedirect`가 `host.endsWith('.blog.test')`처럼 점을 붙여 비교하는 이유는?
 <details><summary>답</summary>evilblog.test처럼 blog.test로 끝나는 남의 도메인을 우리 주소로 오인하지 않으려고. 점을 붙이면 진짜 하위 도메인만 맞는다.</details>
 
-8. `ManagePage`의 "권한이 없습니다" 화면만으로 남의 블로그 설정을 막을 수 없는 이유는?
+8. `ManagePage`의 403 화면("접근 권한이 없습니다")만으로 남의 블로그 설정을 막을 수 없는 이유는?
 <details><summary>답</summary>화면 코드는 사용자가 바꾸거나 건너뛸 수 있고 API를 직접 부를 수 있다. 실제 검사는 서버의 BlogOwnerGuard가 401/403으로 한다.</details>
 
 9. 댓글 내용 `<script>...</script>`가 사이드바에서 실행되지 않는 이유는?
@@ -741,10 +880,20 @@ cd frontend && npm run dev          # 터미널 2
 12. (스텝 5) `CategoriesPage`에서 `load`를 `useCallback`으로 감싸지 않으면 어떻게 되나?
 <details><summary>답</summary>그릴 때마다 새 함수가 만들어져 <code>useEffect(..., [load])</code>가 매번 다시 실행된다. 불러오기 → <code>setTree</code> → 다시 그리기 → 또 불러오기가 끝없이 반복된다.</details>
 
+13. (스텝 6) 등록 버튼을 `submitting` 상태로 꺼 두었는데도 빠른 두 번째 클릭이 요청을 또 보낸 이유와, `useRef`가 이를 막는 이유는?
+<details><summary>답</summary><code>setSubmitting(true)</code>는 다음 그리기에서 반영되므로, 두 클릭이 같은 그리기 사이에 오면 두 번째 클릭 때도 버튼이 켜져 있고 <code>submitting</code>도 false다. <code>ref.current</code>는 바꾸는 즉시 바뀐 값이 읽혀서 두 번째 클릭이 <code>inFlight.current === true</code>를 보고 바로 돌아간다.</details>
+
+14. (스텝 6) 서버는 댓글을 하나만 만들었는데 화면에 두 줄이 보인 이유는?
+<details><summary>답</summary>같은 연타 방지 키라 서버는 두 번째 요청에 첫 응답(같은 댓글)을 그대로 돌려줬고, 화면은 두 응답을 모두 목록에 붙였다. 그래서 같은 <code>id</code>가 이미 있으면 붙이지 않는 확인을 더했다.</details>
+
+15. (스텝 6) 글 상세의 화면 상태를 `{ status: ... }` 판별 유니온으로 둔 이점은?
+<details><summary>답</summary><code>post</code>는 <code>'ok'</code>일 때만, <code>blogName</code>은 <code>'subscribersOnly'</code>일 때만 있어서, 상태를 확인하지 않고 글 제목을 그리려 하면 TypeScript가 막는다. 서버 응답(404, 403 SUBSCRIBERS_ONLY, 그 밖의 오류)을 화면 하나씩에 빠짐없이 대응시킬 수 있다.</details>
+
 ## 9. 더 읽을거리
 
 - React 공식 문서 react.dev: "State: A Component's Memory", "Reacting to Input with State", "Synchronizing with Effects", "You Might Not Need an Effect", "Reusing Logic with Custom Hooks"
 - React 공식 문서: "Sharing State Between Components", 폼 요소(`<input>`, `<form>`) 레퍼런스
+- React 공식 문서: "Referencing Values with Refs"(`useRef`), "Queueing a Series of State Updates", `StrictMode`
 - React Router 공식 문서: `Routes`/`Route`(중첩·index), `NavLink`, `useParams`, `useSearchParams`, `useNavigate`
 - TypeScript 핸드북: "Narrowing", "Discriminated unions"
 - MDN: `Event.preventDefault()`, `HTMLFormElement` `novalidate`, `URLSearchParams`, `Location.assign()`, History API

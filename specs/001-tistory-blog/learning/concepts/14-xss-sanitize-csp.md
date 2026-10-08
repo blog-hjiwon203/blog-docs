@@ -1,6 +1,6 @@
 # XSS 방어: 본문 정화와 CSP
 
-> 관련 스텝: [스텝 2](../step-02.md)(T014), [스텝 5](../step-05.md)(T031·T032 글 발행·수정에서 사용), 스텝 6(글 상세, DOMPurify) · 관련 결정: research.md R-05, spec.md "보안(원본 4.5)"
+> 관련 스텝: [스텝 2](../step-02.md)(T014), [스텝 5](../step-05.md)(T031·T032 글 발행·수정에서 사용), [스텝 6](../step-06.md)(T045 글 상세, DOMPurify) · 관련 결정: research.md R-05, spec.md "보안(원본 4.5)"
 
 ## 1. 이 문서로 배우는 것
 
@@ -161,7 +161,7 @@ HTML을 살려서 넣어야 하는 본문은 `dangerouslySetInnerHTML`을 써야
 
 이 프로젝트의 규칙(R-05, rest-api.md):
 - `dangerouslySetInnerHTML`은 **본문(`contentHtml`)에만** 쓴다.
-- 넣기 전에 **DOMPurify**(브라우저용 HTML 정화 라이브러리)를 한 번 더 거친다(스텝 5).
+- 넣기 전에 **DOMPurify**(브라우저용 HTML 정화 라이브러리)를 한 번 더 거친다(스텝 6, 5.6).
 - 서버 정화가 **필수**이고 DOMPurify는 **보조**다. 서버 정화를 건너뛴 데이터(예: 과거 데이터, 다른 클라이언트)가 있을 수 있어 두 번 막는다.
 
 ### 3.9 CSP (Content-Security-Policy)
@@ -403,6 +403,55 @@ public Post publish(Blog blog, PostCommand command) {
 
 **에디터와 허용 목록 맞추기.** 스텝 5의 Tiptap 에디터는 서버 허용 목록에 있는 서식만 켠다(문단 제목, 굵게·기울임, 목록, 인용, 코드 블록, http/https 링크). 밑줄(`<u>`)·취소선(`<s>`)·구분선(`<hr>`)은 허용 목록에 없어서 에디터에서도 끈다. 켜 두면 에디터에서는 보이는데 저장하면 사라지는 서식이 생긴다. 자세한 설정은 [26](./26-wysiwyg-editor-tiptap.md).
 
+### 5.6 (스텝 6) 화면 쪽 정화: DOMPurify와 dangerouslySetInnerHTML
+
+스텝 6에서 글 상세 화면이 생기면서 4.1 그림의 "2차 방어"가 실제 코드가 됐다. 이로써 이중 정화가 처음부터 끝까지 이어진다.
+
+```
+[에디터] Tiptap: 허용 서식만 켬 (26)          ← 쓰는 사람의 편의, 보안 아님
+   ▼ POST /api/posts
+[서버] HtmlSanitizer로 정화해서 저장 (5.1, 5.5)  ← 1차 방어, 필수
+   ▼ GET /api/posts/{id}
+[화면] sanitizePostHtml(DOMPurify) (이 절)       ← 2차 방어, 보조
+   ▼ dangerouslySetInnerHTML
+[브라우저] CSP: 인라인 스크립트 실행 금지 (5.3)   ← 3차 방어
+```
+
+`frontend/src/app/sanitize.ts`
+
+```ts
+const ALLOWED_TAGS = ['p', 'br', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'strong', 'b', 'em', 'i', 'ul', 'ol', 'li',
+  'blockquote', 'pre', 'code', 'a', 'img']
+const ALLOWED_ATTR = ['href', 'rel', 'src', 'alt', 'class']
+
+export function sanitizePostHtml(html: string): string {
+  return DOMPurify.sanitize(html, {
+    ALLOWED_TAGS,
+    ALLOWED_ATTR,
+    // 링크는 http/https, 이미지는 이 서비스에 올린 파일만 (서버 규칙과 같음)
+    ALLOWED_URI_REGEXP: /^(?:https?:\/\/|\/uploads\/)/i,
+  })
+}
+```
+
+- `ALLOWED_TAGS`, `ALLOWED_ATTR`: 서버 `HtmlSanitizer`의 허용 목록(5.1)과 **같은 태그·속성**만 남긴다. DOMPurify는 기본값으로도 스크립트·이벤트 속성을 지우지만, 기본값은 서버보다 훨씬 넓다(`<table>`, `<span style>` 등). 두 허용 목록이 같아야 "서버가 남긴 것만 화면에 나온다"가 성립한다.
+- `ALLOWED_URI_REGEXP`: `href`·`src` 같은 주소 속성에 허용할 모양. `http://`, `https://`로 시작하는 주소와 `/uploads/`(이 서비스에 올린 이미지)만 통과한다. `javascript:alert(1)`은 여기서 걸러진다. 서버의 `LINK_HREF`, `UPLOADED_IMAGE_SRC` 정규식과 같은 규칙이다.
+- 이 함수는 **본문 한 곳에만** 쓴다. 제목·댓글·닉네임은 HTML이 아니라 글자이므로 정화하지 않고 React의 `{값}`에 맡긴다(3.8).
+
+`frontend/src/pages/post/PostPage.tsx`
+
+```tsx
+<div className="prose" dangerouslySetInnerHTML={{ __html: sanitizePostHtml(post.contentHtml) }} />
+```
+
+- `dangerouslySetInnerHTML`은 React가 이스케이프하지 않고 **HTML로 해석해서** 넣으라는 뜻이다. 이름에 `dangerously`를 붙이고 값을 `{ __html: ... }` 객체로 감싸게 한 것은, 실수로 쓰지 않게 일부러 불편하게 만든 장치다. 코드 리뷰에서 이 이름이 보이면 "여기 들어가는 값이 정화됐나"를 확인하라는 신호다.
+- **Thymeleaf에 빗대면**: `th:text="${post.title}"`은 HTML을 이스케이프해서 글자로 넣고, `th:utext="${post.contentHtml}"`은 이스케이프 없이(unescaped) HTML로 넣는다. React의 `{값}`이 `th:text`, `dangerouslySetInnerHTML`이 `th:utext`에 해당한다. Thymeleaf에서도 `th:utext`에는 정화한 값만 넣어야 했던 것과 같다([28](./28-thymeleaf-to-react.md)).
+- 서버가 이미 정화했는데 또 거르는 이유는 7번 확인 문제와 같다. 정책을 바꾸기 전의 옛 데이터, 서버를 거치지 않은 경로, 서버 정화기 자체의 결함에 대비한다.
+
+**버전 고르기.** 처음에는 나온 지 2주가 넘은 3.4.15를 설치했다. 그런데 `npm audit`이 3.4.15 이하에 보안 권고 두 건을 알렸다. 둘 다 `IN_PLACE` 옵션(정화 결과를 새 문자열로 돌려주지 않고 DOM 노드를 그 자리에서 고치는 모드)에서 생기는 문제였다. 이 프로젝트는 문자열을 받아 문자열을 돌려주는 기본 방식만 써서 해당하지 않지만, 고친 3.4.16도 2주가 지났기에 3.4.16으로 올렸다(`--save-exact`로 버전 고정). 이후 `npm audit`은 0건이다. "오래된 버전이 더 안전하다"가 아니라, **새로 나온 버전을 며칠 피하되 알려진 취약점은 고친 버전을 고른다**는 두 기준을 함께 본다([26](./26-wysiwyg-editor-tiptap.md)의 버전 고르기와 같은 기준).
+
+**확인.** 스텝 6 확인 때 헤드리스 Chrome으로 글 상세를 열어, 서버가 정화해 저장한 본문(제목, 굵게, 링크, 목록, 인용, 코드 블록)이 DOMPurify를 거친 뒤에도 그대로 보이는 것을 봤다. 두 허용 목록이 맞으면 정상 서식은 2차 정화에서 사라지지 않는다.
+
 ---
 
 ## 6. 자주 하는 실수와 함정
@@ -418,6 +467,8 @@ public Post publish(Blog blog, PostCommand command) {
 9. **정화 결과가 입력과 같기를 기대한다.** `=`, `@`, `+` 등은 문자 참조로 바뀐다.
 10. **에디터에서 서버가 지우는 서식을 켜 둔다.** 쓰는 사람은 밑줄이 보였는데 발행하면 사라져 "버그"로 느낀다. 에디터 기능과 서버 허용 목록을 같이 바꾼다(스텝 5, 5.5).
 11. **요약을 정화 전 HTML로 만든다.** 지워질 내용이 목록 요약에 나온다. 정화 → 요약 순서를 지킨다.
+12. **DOMPurify를 기본 설정으로만 쓴다.** 스크립트는 막지만 서버가 지운 태그(`<table>`, `style` 속성 등)는 통과시킨다. 서버 허용 목록과 같게 맞춘다(스텝 6, 5.6).
+13. **`dangerouslySetInnerHTML`에 정화 함수를 빼고 값을 바로 넣는다.** 서버 정화만 믿게 된다. `sanitizePostHtml(...)`을 거친 값만 넣는다.
 
 ---
 
@@ -488,6 +539,18 @@ curl -s --resolve alpha.blog.test:8080:127.0.0.1 -b jar http://alpha.blog.test:8
 
 기대: `contentHtml`이 `<p>안녕</p>`만 남는다. 공개 범위를 비공개로 해 두면 시험 글이 남에게 보이지 않는다.
 
+### 실습 7 (스텝 6): 화면 쪽 정화를 직접 보기
+
+브라우저에서 아무 글 상세를 열고 개발자 도구 콘솔에서 DOMPurify가 하는 일을 흉내 내 본다. 프론트 개발 서버(`npm run dev`)라면 모듈을 바로 불러올 수 있다.
+
+```js
+const { sanitizePostHtml } = await import('/src/app/sanitize.ts')
+sanitizePostHtml('<p onclick="x()">a</p><a href="javascript:alert(1)">b</a><table><tr><td>c</td></tr></table>')
+// 기대: '<p>a</p><a>b</a>c' — onclick, javascript: 주소, 허용 목록에 없는 table 태그가 지워지고 글자는 남는다
+```
+
+그다음 `sanitize.ts`에서 `ALLOWED_TAGS`에 `'table', 'tr', 'td'`를 잠시 넣고 다시 불러 보면 표가 남는다. 서버 허용 목록과 어긋난 상태가 어떤 것인지 보는 실습이다. 끝나면 되돌린다.
+
 ## 8. 확인 문제
 
 1. 저장형, 반사형, DOM 기반 XSS의 차이를 "악성 코드가 어디에 있나"로 설명하라.
@@ -546,6 +609,15 @@ curl -s --resolve alpha.blog.test:8080:127.0.0.1 -b jar http://alpha.blog.test:8
 10. (스텝 5) 에디터에서 밑줄 버튼을 켜 두면 어떻게 되나?
 <details><summary>답</summary>에디터에는 밑줄이 보이지만 서버 허용 목록에 <code>&lt;u&gt;</code>가 없어서 저장할 때 지워진다. 쓰는 사람은 서식이 사라진 것으로 느낀다. 그래서 에디터 기능을 허용 목록에 맞춰 끈다.</details>
 
+11. (스텝 6) React의 `{post.title}`과 `dangerouslySetInnerHTML`은 Thymeleaf의 무엇에 해당하고, 어느 쪽에 정화한 값만 넣어야 하나?
+<details><summary>답</summary><code>{post.title}</code>은 이스케이프하는 <code>th:text</code>, <code>dangerouslySetInnerHTML</code>은 이스케이프하지 않는 <code>th:utext</code>에 해당한다. HTML로 해석되는 <code>dangerouslySetInnerHTML</code>(<code>th:utext</code>)에는 정화한 값만 넣는다. 이 프로젝트는 본문에만 쓰고 <code>sanitizePostHtml</code>을 거친다.</details>
+
+12. (스텝 6) DOMPurify의 허용 태그를 서버 `HtmlSanitizer`와 같게 맞춘 이유는?
+<details><summary>답</summary>DOMPurify 기본값은 서버보다 넓어서, 서버를 거치지 않은 데이터나 옛 데이터에 있는 서버 미허용 태그·속성(<code>&lt;table&gt;</code>, <code>style</code> 등)이 화면에 나올 수 있다. 같게 맞추면 "서버가 허용한 것만 화면에 나온다"가 화면 쪽에서도 지켜지고, 정상 서식은 2차 정화에서 사라지지 않는다.</details>
+
+13. (스텝 6) 3.4.15를 설치했다가 3.4.16으로 바꾼 이유와, 이 프로젝트가 그 권고에 해당하지 않았는데도 올린 이유는?
+<details><summary>답</summary><code>npm audit</code>이 3.4.15 이하에 <code>IN_PLACE</code> 모드 관련 보안 권고 두 건을 알렸다. 이 프로젝트는 문자열을 돌려받는 기본 방식만 써서 직접 해당하지는 않지만, 고친 3.4.16도 나온 지 2주가 지나 "새 버전 피하기" 기준을 함께 만족했기 때문에 알려진 취약점이 없는 버전으로 올렸다.</details>
+
 ## 9. 더 읽을거리
 
 - OWASP, *Cross Site Scripting Prevention Cheat Sheet*: https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html
@@ -554,6 +626,7 @@ curl -s --resolve alpha.blog.test:8080:127.0.0.1 -b jar http://alpha.blog.test:8
 - MDN, *Content Security Policy (CSP)*: https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP
 - MDN, *rel=noopener*, *rel=noreferrer*
 - React 문서, *dangerouslySetInnerHTML*
-- DOMPurify: https://github.com/cure53/DOMPurify
+- DOMPurify: https://github.com/cure53/DOMPurify (설정 옵션 `ALLOWED_TAGS`, `ALLOWED_ATTR`, `ALLOWED_URI_REGEXP`)
+- Thymeleaf 문서, *Unescaped Text* (`th:utext`)
 - jsoup 문서, *Element.text()*
 - 이어서 읽기: [13-csrf-samesite-cors](./13-csrf-samesite-cors.md), [12-spring-security-filter-chain](./12-spring-security-filter-chain.md)
