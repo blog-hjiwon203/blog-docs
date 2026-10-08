@@ -6,7 +6,7 @@
 
 ## R-01 버전과 테스트 도구 (기본값)
 
-- **결정**: **Java 21**, Spring Boot 3.x, **빌드는 Maven**(Maven Wrapper 포함). 둘 다 2026-10-08 지원 결정, React 18 + Vite. 테스트는 JUnit 5, Spring Boot Test, MockMvc, Testcontainers(MySQL), 프론트는 Vitest 최소.
+- **결정**: **Java 21**, Spring Boot 3.x, **빌드는 Maven**(Maven Wrapper 포함), React 18 + Vite. Java 21과 Maven은 2026-10-08 지원 결정. 테스트는 JUnit 5, Spring Boot Test, MockMvc, Testcontainers(MySQL), 프론트는 Vitest 최소.
 - **이유**: 원본에 버전·테스트 도구가 없어 Spring Boot 3 기본 조합으로 둠. 바꾸면 이 항목만 고친다.
 
 ## R-02 운영 저장소 (2026-10-07 확정)
