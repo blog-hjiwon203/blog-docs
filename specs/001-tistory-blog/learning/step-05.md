@@ -1,6 +1,6 @@
 # 스텝 5. 글쓰기
 
-> 작업: T029, T030, T031, T032, T033, T034, T035, T040 · 코드 브랜치: `step-5-write-posts` · 날짜: 2026-10-08
+> 작업: T029, T030, T031, T032, T033, T034, T035, T035a, T040 · 코드 브랜치: `step-5-write-posts` · 날짜: 2026-10-08
 
 ## 한눈에 보기
 
@@ -15,6 +15,9 @@
 | 삭제 (POST-03) | `DELETE /api/posts/{id}` | `PostService.delete`, `CommentRepository.softDeleteByPostId`, `PostRepository.deleteLikes·deleteNotifications` |
 | 공개 범위 (POST-06) | `PATCH /api/posts/{id}/visibility` | `PostService.changeVisibility`, `VisibilityRequest` |
 | 화면 | `{주소}/manage/write`, `/manage/posts/{id}/edit`, `/manage/categories` | `frontend/src/components/editor/Editor.tsx`, `pages/manage/PostWritePage.tsx`, `CategoriesPage.tsx` |
+| 마크다운 입력 (T035a) | API 변화 없음 | `components/editor/markdown.ts`, `Editor.tsx`의 `MarkdownLinkInput`·`handlePaste`, `@tiptap/markdown` |
+
+**T035a는 스텝 5를 병합한 뒤 지원 결정으로 더한 작업이다**(브랜치 `step-5-markdown-input`). WYSIWYG와 마크다운 중 하나를 고르는 것이 아니라 한 에디터에서 섞어 쓴다. `## `, `**굵게**`, `- `, `[글자](https://...)`를 치면 바로 서식이 되고, 마크다운 글을 붙여넣어도 서식으로 바뀐다. 저장은 HTML 그대로다.
 
 ## 요청 흐름
 
@@ -56,7 +59,7 @@ Thymeleaf로 화면을 만들어 봤고 React는 처음이라면 [28 Thymeleaf�
 
 | 순서 | 개념 문서 | 이 스텝에서 그 개념이 쓰인 곳 |
 | --- | --- | --- |
-| 1 | [26 WYSIWYG 에디터와 Tiptap](./concepts/26-wysiwyg-editor-tiptap.md) | `Editor.tsx`, 서버 허용 목록과 맞춘 서식, 이중 정화 |
+| 1 | [26 WYSIWYG 에디터와 Tiptap](./concepts/26-wysiwyg-editor-tiptap.md) | `Editor.tsx`, 서버 허용 목록과 맞춘 서식, 이중 정화, 마크다운 입력 규칙과 붙여넣기(T035a) |
 | 2 | [14 XSS, HTML 정화, CSP](./concepts/14-xss-sanitize-csp.md)의 스텝 5 부분 | 발행·수정이 `HtmlSanitizer`·`SummaryExtractor`를 지나는 곳 |
 | 3 | [16 인가와 가시성 판단](./concepts/16-authorization-visibility.md)의 스텝 5 부분 | `findOwned`의 404/401/403, `POST_BLINDED` 순서 |
 | 4 | [22 입력 검증과 JSON 바인딩](./concepts/22-bean-validation.md)의 스텝 5 부분 | `PostSaveRequest.checkSupported`, `@Null parentId` |
@@ -71,6 +74,7 @@ Thymeleaf로 화면을 만들어 봤고 React는 처음이라면 [28 Thymeleaf�
 - **숨긴 글에 잘못된 본문을 보내면 400이 먼저 남**: 수정 API는 주인 확인 → 입력 검증 → 숨김 확인 순서였다. 상태 코드 순서(403이 400보다 먼저)에 맞게 숨김 확인을 `findEditable`로 빼서 검증보다 앞에 두었다.
 - **카테고리를 지우면 글의 수정 시각이 바뀜**: `post.updated_at`은 MySQL `ON UPDATE CURRENT_TIMESTAMP`라 일괄 수정 때도 바뀐다. 작성자가 고친 것이 아니어서 `p.updatedAt = p.updatedAt`으로 그대로 다시 넣었다([27](./concepts/27-soft-delete-bulk-update.md)).
 - **댓글 일괄 수정 뒤 글이 저장되지 않을 뻔함**: `@Modifying(clearAutomatically = true)`가 영속성 컨텍스트를 비워, 그 전에 읽은 글 엔티티가 더는 관리되지 않는다. 삭제는 일괄 수정 뒤 글을 다시 읽어 지운다.
+- **마크다운 확장이 붙여넣기를 처리하지 않음**: `@tiptap/markdown`은 마크다운을 해석해 주지만 붙여넣기를 스스로 가로채지 않는다. `editorProps.handlePaste`를 직접 달았다. 처리기 안에서 에디터를 쓰려고 ref를 그리는 중에 바꿨다가 oxlint 경고(`react(refs)`)를 받아 `useEffect`로 옮겼다.
 - **8080 포트가 이미 쓰는 중**: 지원이 띄운 서버였다. 끄지 않고 확인용 서버를 `--server.port=8081`로 따로 띄웠다.
 - **카테고리 행의 버튼이 아래로 떨어짐**: `.box`의 `display: grid`가 `.row`의 flex를 덮었다. 목업 CSS의 `.box.row { display: flex; }`를 옮겼다.
 
