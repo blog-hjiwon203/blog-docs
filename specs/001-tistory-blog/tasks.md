@@ -227,7 +227,7 @@ description: "지원 서비스 구현 작업 (2주 일정 기준)"
 
 **Claude Code CLI에 시키는 법**: 코드 저장소(`~/IdeaProjects/blog`)에서 `claude --add-dir ../blog-docs`로 열고 "스텝 3 진행해"처럼 스텝 번호를 준다. `../blog-docs`는 `~/IdeaProjects/blog-docs`다. Claude Code는 코드 저장소의 `CLAUDE.md`([원본](./code-repo-CLAUDE.md))에 따라 그 스텝의 작업만 하고 결과를 정리한 뒤 멈춘다.
 
-**스텝이 끝나면 Claude Code가 보여 줄 것**: 끝낸 작업 번호, `./mvnw test` 결과, 바뀐 파일 목록, 만든 API(contracts/rest-api.md와 다른 점과 이유), 미룬 것, 확인 방법.
+**스텝이 끝나면 Claude Code가 보여 줄 것**: 끝낸 작업 번호, `./mvnw test` 결과, 바뀐 파일 목록, 만든 API(contracts/rest-api.md와 다른 점과 이유), 미룬 것, 확인 방법. 그리고 이 저장소에 [학습 자료](./learning/README.md)를 쓴다(지원 공부용): 새로 쓰인 개념의 개념 문서 `learning/concepts/`(처음부터 상세히, 실습·확인 문제 포함)와 스텝 노트 `learning/step-NN.md`(개념 문서 읽는 순서, 막혔던 점).
 
 **지원이 할 일**: 위 "확인할 것"으로 확인 → push → PR 병합 → 아래 작업 목록의 체크박스를 `[X]`로 → 다음 스텝.
 
