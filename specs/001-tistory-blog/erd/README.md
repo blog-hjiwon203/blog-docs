@@ -2,8 +2,8 @@
 
 > **이 문서는?** Crowfoot에서 설계한 지원 블로그 서비스의 ERD를 정리한 것이다. 원본은 Crowfoot 문서 [티스토리 클론 블로그 (지원)](https://crowfoot.java21.net/workspaces/49/models/665)이고, 이 파일은 그 내용을 옮긴 사본이다. 설계를 바꿀 때는 Crowfoot을 먼저 고치고 이 파일을 다시 만든다.
 
-- 기준: Crowfoot 문서 버전 65 (2026-10-08), MySQL
-- 테이블 25개, 관계 37개, 영역 6개
+- 기준: Crowfoot 문서 버전 74 (2026-10-08), MySQL
+- 테이블 26개, 관계 38개, 영역 6개
 - 실행 가능한 DDL: [schema.sql](./schema.sql)
 - [data-model.md](../data-model.md)는 이 ERD와 같은 내용으로 맞춰 두었다. 원래 data-model.md에서 무엇을 왜 바꿨는지는 [data-model-diff.md](./data-model-diff.md)
 - 다이어그램 표기: `||` 정확히 하나, `|o` 없거나 하나, `|{` 하나 이상. 관계 이름은 자식 쪽 외래 키 컬럼이다. 키 표시는 PK(기본 키), FK(외래 키), UK(유니크 키에 포함)
@@ -62,6 +62,7 @@ erDiagram
     blog ||--|{ blog_blocked_member : "blog_id"
     member ||--|{ blog_blocked_member : "blocked_member_id"
     blog ||--|{ blog_banned_word : "blog_id"
+    blog ||--|{ blog_sidebar_module : "blog_id"
 ```
 
 ## 1. 회원·인증
@@ -228,6 +229,15 @@ erDiagram
         DATETIME updated_at "수정 일시"
         BIGINT primary_owner_id UK "대표 블로그 주인(유니크용)"
         BIGINT total_visitor_count "누적 방문자"
+        VARCHAR_10 accent_color "포인트 색"
+    }
+    blog_sidebar_module {
+        BIGINT id PK "사이드바 모듈 ID"
+        BIGINT blog_id FK,UK "블로그 ID"
+        VARCHAR_20 module_type UK "모듈 종류"
+        INT sort_order "순서"
+        BOOLEAN is_visible "표시 여부"
+        DATETIME updated_at "수정 일시"
     }
     blog_visit {
         BIGINT id PK "블로그 방문 ID"
@@ -273,6 +283,7 @@ erDiagram
     blog ||--|{ blog_blocked_member : "blog_id"
     member ||--|{ blog_blocked_member : "blocked_member_id"
     blog ||--|{ blog_banned_word : "blog_id"
+    blog ||--|{ blog_sidebar_module : "blog_id"
 ```
 
 다른 영역 테이블(`image`, `member`)은 이름만 표시했다.
@@ -299,11 +310,31 @@ erDiagram
 | `updated_at` | 수정 일시 | DATETIME(6) | N | CURRENT_TIMESTAMP(6) |  |  |
 | `primary_owner_id` | 대표 블로그 주인(유니크용) | BIGINT | Y | 계산: `CASE WHEN is_primary = 1 AND deleted_at IS NULL THEN member_id END` | UK | 회원당 대표 블로그 하나를 DB에서 보장하는 계산 컬럼 |
 | `total_visitor_count` | 누적 방문자 | BIGINT | N | 0 |  | 매일 새벽 전날 방문자 수를 더한다. 오늘 방문자는 포함하지 않는다 |
+| `accent_color` | 포인트 색 | VARCHAR(10) | N | BLUE |  | 스킨의 포인트 색. 정해 둔 6색만 |
 
 - 유니크 `uk_blog_address`: (address)
 - 유니크 `uk_blog_primary_owner_id`: (primary_owner_id)
 - CHECK `ck_blog_list_layout`: `list_layout IN ('LIST', 'THUMBNAIL')`
+- CHECK `ck_blog_accent_color`: `accent_color IN ('BLUE', 'GREEN', 'ORANGE', 'PINK', 'PURPLE', 'GRAY')`
 - 근거 기능: AUTH-06, BLOG-01, BLOG-05, BLOG-06, BLOG-07, ADMIN-05, AUTH-04, BLOG-02, BLOG-03, BLOG-04, BLOG-08, SUB-06, SRCH-02, HOME-04, HOME-05, MNG-03
+
+### blog_sidebar_module (사이드바 모듈)
+
+블로그 사이드바의 모듈 순서와 표시 여부. 블로그를 만들 때 8개 행을 함께 만든다(VISITOR·POPULAR_POST·SUBSCRIBE는 숨김). 모듈별 개수는 고정(최근 글·댓글·인기 글 5개)
+
+| 컬럼 | 논리명 | 타입 | NULL | 기본값 | 키 | 설명 |
+| --- | --- | --- | --- | --- | --- | --- |
+| `id` | 사이드바 모듈 ID | BIGINT | N | 자동 증가 | PK |  |
+| `blog_id` | 블로그 ID | BIGINT | N |  | FK,UK |  |
+| `module_type` | 모듈 종류 | VARCHAR(20) | N |  | UK |  |
+| `sort_order` | 순서 | INT | N | 0 |  |  |
+| `is_visible` | 표시 여부 | BOOLEAN | N | 1 |  | PROFILE은 항상 1 |
+| `updated_at` | 수정 일시 | DATETIME(6) | N | CURRENT_TIMESTAMP(6) |  |  |
+
+- 유니크 `uk_blog_sidebar_module_blog_id_module_type`: (blog_id, module_type)
+- CHECK `ck_blog_sidebar_module_module_type`: `module_type IN ('PROFILE', 'CATEGORY', 'TAG', 'RECENT_POST', 'RECENT_COMMENT', 'VISITOR', 'POPULAR_POST', 'SUBSCRIBE')`
+- CHECK `ck_blog_sidebar_module_profile_visible`: `module_type <> 'PROFILE' OR is_visible = 1`
+- 근거 기능: BLOG-05, BLOG-04
 
 ### blog_visit (블로그 방문)
 
