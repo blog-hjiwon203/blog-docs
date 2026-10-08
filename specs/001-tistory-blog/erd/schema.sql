@@ -1,4 +1,4 @@
--- Crowfoot 문서 665 버전 74 (2026-10-08)에서 내보낸 MySQL DDL. 직접 고치지 말고 Crowfoot을 고친 뒤 다시 내보낸다.
+-- Crowfoot 문서 665 버전 75 (2026-10-08)에서 내보낸 MySQL DDL. 직접 고치지 말고 Crowfoot을 고친 뒤 다시 내보낸다.
 -- https://crowfoot.java21.net/workspaces/49/models/665
 
 CREATE TABLE member (
@@ -279,7 +279,7 @@ CREATE TABLE blog_referrer_daily (
     referrer_host VARCHAR(100) NOT NULL DEFAULT '' COMMENT '유입 호스트',
     visit_count INT NOT NULL DEFAULT 0 COMMENT '방문 수',
     PRIMARY KEY (id),
-    CONSTRAINT uk_blog_referrer_daily_blog_id_stat_date_referrer_type_referrer_host UNIQUE (blog_id, stat_date, referrer_type, referrer_host)
+    CONSTRAINT uk_blog_referrer_daily_key UNIQUE (blog_id, stat_date, referrer_type, referrer_host)
 ) COMMENT='블로그 일별 유입 경로-----전날 blog_visit을 유입 종류·호스트별로 센 값';
 CREATE TABLE blog_blocked_member (
     id BIGINT NOT NULL AUTO_INCREMENT COMMENT '차단 회원 ID',
