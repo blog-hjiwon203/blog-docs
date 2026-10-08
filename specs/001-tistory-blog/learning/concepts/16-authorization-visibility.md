@@ -1,6 +1,6 @@
 # 16. 인가와 가시성 판단: 누가 무엇을 볼 수 있나
 
-> 관련 스텝: [스텝 3](../step-03.md) (T011, T050), [스텝 4](../step-04.md) (블로그 화면 목록·글 수·사이드바, 블로그 수정) · 관련 개념: [22-bean-validation](./22-bean-validation.md), [12-spring-security-filter-chain](./12-spring-security-filter-chain.md), [15-subdomain-host-routing](./15-subdomain-host-routing.md), [06-jpa-entity-mapping](./06-jpa-entity-mapping.md), [08-pagination](./08-pagination.md), [18-spa-server-routing](./18-spa-server-routing.md)
+> 관련 스텝: [스텝 3](../step-03.md) (T011, T050), [스텝 4](../step-04.md) (블로그 화면 목록·글 수·사이드바, 블로그 수정), [스텝 5](../step-05.md) (글 수정·삭제·공개 범위, 카테고리 API의 판단 순서) · 관련 개념: [22-bean-validation](./22-bean-validation.md), [12-spring-security-filter-chain](./12-spring-security-filter-chain.md), [15-subdomain-host-routing](./15-subdomain-host-routing.md), [06-jpa-entity-mapping](./06-jpa-entity-mapping.md), [08-pagination](./08-pagination.md), [18-spa-server-routing](./18-spa-server-routing.md)
 
 ## 1. 이 문서로 배우는 것
 
@@ -529,6 +529,86 @@ public BlogResponse update(@CurrentBlog Blog blog, @AuthenticationPrincipal Logi
 
 순서: `@CurrentBlog`(인자 해석, 404) → `requireOwner`(401 → 403) → `requestValidator.validate`(400). `@RequestBody`에 `@Valid`가 없다는 점이 핵심이다. 테스트 `BlogInfoIntegrationTest.onlyOwnerCanUpdateAndPermissionComesBeforeInputErrors`가 51자 이름을 보내 비회원 401, 남 403, 주인 400을 확인한다. `RequestValidator`의 동작은 [입력 검증](./22-bean-validation.md)에 있다. 다만 JSON 자체가 깨진 본문(파싱 실패)은 인자를 만들 수 없어 여전히 400이 먼저 나간다.
 
+### 5.8 (스텝 5) 주인만 다루는 글: PostAccess를 404·401·403으로
+
+글 수정·삭제·공개 범위 변경·편집용 조회(`GET /api/manage/posts/{id}`)는 모두 "이 블로그 주인의 글"이어야 한다. 스텝 3의 `PostVisibilityPolicy`가 주는 결과 6개를 그대로 쓰고, 그 결과를 이 API들의 상태 코드로 바꾸는 곳이 하나 있다.
+
+`src/main/java/com/nhnacademy/blog/post/application/PostService.java`
+
+```java
+public Post findOwned(Blog blog, Long postId, LoginMember member) {
+    Long viewerId = member == null ? null : member.id();
+    return switch (postVisibilityPolicy.decide(postId, blog, viewerId)) {
+        case PostAccess.Owner owner -> owner.post();
+        case PostAccess.NotFound notFound -> throw new BusinessException(ErrorCode.NOT_FOUND);
+        // 블로그 주소 API에서 다른 블로그의 글 번호는 없는 글이다 (301은 화면 주소 단계에서만)
+        case PostAccess.MovedTo movedTo -> throw new BusinessException(ErrorCode.NOT_FOUND);
+        case PostAccess.Visible visible -> throw notOwner(member);
+        case PostAccess.SubscribersOnly subscribersOnly -> throw notOwner(member);
+    };
+}
+
+private static BusinessException notOwner(LoginMember member) {
+    return new BusinessException(member == null ? ErrorCode.UNAUTHORIZED : ErrorCode.FORBIDDEN);
+}
+```
+
+| 판단 결과 | 이 API의 답 | 이유 |
+| --- | --- | --- |
+| `Owner` | 통과, 글을 돌려줌 | 주인이다. 숨긴 글도 여기로 온다(`blinded` 여부는 다음 단계에서 본다) |
+| `NotFound` | **404** | 없거나, 지웠거나, **보는 사람이 볼 수 없는** 글. 비회원이든 회원이든 같다 |
+| `MovedTo` | **404** | 다른 블로그 소속이다. 화면 주소라면 301이지만 API는 Host의 블로그 글만 다룬다(rest-api.md "주소와 Host 범위") |
+| `Visible`, `SubscribersOnly` | 비회원 **401**, 회원 **403** | 볼 수는 있는(존재를 아는) 남의 글이다. 그러니 권한 문제로 답해도 새는 정보가 없다 |
+
+핵심은 "볼 수 없는 남의 글"이 401·403이 아니라 **404**라는 점이다. 남의 비공개 글에 `PUT`을 보냈을 때 403을 주면 "그 번호에 글이 있다"를 알려 주게 된다(3.2). 판단을 정책 하나에 맡겼기 때문에, 이 API들도 상세 화면과 같은 기준으로 존재를 숨긴다.
+
+**같은 주인의 다른 블로그 글도 404.** 주인이 블로그 두 개를 갖고 있어도, `alpha.blog.test/api/posts/{beta의 글}`은 `MovedTo`라 404다. 주인 본인이라도 글을 다룰 때는 그 글이 속한 블로그 주소에서 부른다.
+
+**숨긴 글은 입력 검증보다 먼저 403.** 관리자가 숨긴 글(ADMIN-03)은 주인이 수정할 수 없다(403 `POST_BLINDED`). 수정 API는 이렇게 순서를 잡는다.
+
+```java
+// PostService
+public Post findEditable(Blog blog, Long postId, LoginMember member) {
+    Post post = findOwned(blog, postId, member);
+    if (post.isBlinded()) {
+        throw new BusinessException(ErrorCode.POST_BLINDED, blindReason(post));
+    }
+    return post;
+}
+
+// PostManageController.edit
+postService.findEditable(blog, id, member);              // 404 → 401 → 403 → 403 POST_BLINDED
+requestValidator.validate(request).checkSupported();     // 400
+Post post = postService.edit(blog, id, member, request.toCommand());
+```
+
+`POST_BLINDED`도 403(권한 문제)이라 400보다 먼저다. 숨긴 글에 빈 제목을 보내면 "제목을 입력하세요(400)"가 아니라 "숨긴 글이라 고칠 수 없다(403)"를 받는다. 앞의 것을 고쳐 다시 보내도 어차피 403이 날 것이라 순서가 뒤집히면 헛수고를 시킨다. 삭제는 숨긴 글도 된다(contracts "숨긴 글도 삭제는 됨")라서 `findEditable`이 아니라 `findOwned`를 쓴다.
+
+**카테고리 API의 순서.** 카테고리는 공개 정보라 "존재를 숨길" 필요는 없지만 같은 순서를 지킨다(`category/presentation/CategoryController.java`).
+
+```java
+@PatchMapping("/api/categories/{id}")
+public void rename(@CurrentBlog Blog blog, @AuthenticationPrincipal LoginMember member, @PathVariable Long id,
+                   @RequestBody CategoryRequest request) {
+    categoryService.find(blog, id);              // 1. 이 블로그 카테고리가 아니면 404
+    blogOwnerGuard.requireOwner(blog, member);   // 2. 비회원 401, 남 403
+    requestValidator.validate(request);          // 3. 이름 형식 400
+    categoryService.rename(blog, id, request.name());   // 4. 같은 이름 409 NAME_TAKEN
+}
+```
+
+다른 블로그의 카테고리 번호는 `find`에서 404다(`Category.belongsTo`). 그래서 남의 블로그 카테고리 번호로 이름을 바꾸거나 지울 수 없다.
+
+**테스트** `src/test/.../post/PostWriteIntegrationTest.java`
+
+| 테스트 | 확인하는 것 |
+| --- | --- |
+| `othersGet403OnVisiblePostAnd404OnHiddenPost` | 남의 공개 글 수정: 회원 403, 비회원 401. 남의 **비공개** 글 수정·삭제: 로그인 여부와 상관없이 404. 남의 공개 글 편집용 조회 403. 틀린 본문을 보내도 403이 먼저 |
+| `postOfAnotherBlogIs404OnThisBlogAddress` | 같은 주인의 다른 블로그 글 번호, 없는 번호 → 404 |
+| `blindedPostCannotBeEditedButCanBeDeleted` | 숨긴 글에 빈 제목으로 수정 → 400이 아니라 403 `POST_BLINDED`와 사유, 편집용 조회는 사유와 함께 200, 삭제는 204 |
+
+카테고리 쪽은 `CategoryIntegrationTest.onlyOwnerChangesCategories`(401/403), `categoryOfAnotherBlogIs404`.
+
 ## 6. 자주 하는 실수와 함정
 
 1. **판단을 복사해서 쓰기**: 컨트롤러에 `if (post.isPrivate())`를 직접 쓰기 시작하면 규칙이 흩어진다. 항상 정책에 묻는다.
@@ -543,6 +623,8 @@ public BlogResponse update(@CurrentBlog Blog blog, @AuthenticationPrincipal Logi
 10. **(스텝 4) 숫자마다 조건을 따로 쓰기**: 글 수는 `countByBlogId`, 목록은 `listedIn`처럼 나누면 비공개 글이 글 수에만 세어진다. 블로그 화면의 모든 목록·개수는 `listedIn` 하나로.
 11. **(스텝 4) 주인 화면이라고 `ownerView`를 쓰기**: 임시저장 글이 블로그 메인에 섞인다. 블로그 화면은 `listedIn`, 관리 화면의 글 관리(스텝 9 MNG-01)가 `ownerView` 쪽이다.
 12. **(스텝 4) 주인 검사가 있는 API에 `@Valid`**: 남의 블로그에 틀린 값을 보내면 403 대신 400이 나간다.
+13. **(스텝 5) 주인 검사를 글 조회보다 먼저 하기**: `requireOwner(blog, member)`를 먼저 하면 남의 블로그 글은 언제나 403이라, 볼 수 없는 글에도 403을 줘 존재를 드러낸다. 글을 먼저 판단(`findOwned`)하고 그 결과로 401·403을 정한다.
+14. **(스텝 5) `MovedTo`를 301로 답하기**: API는 Host 블로그의 글만 다룬다. 다른 블로그 글로 보내는 301은 화면 주소 단계(`SpaForwardController`)에서만 한다.
 
 ## 7. 직접 해 보기
 
@@ -588,6 +670,14 @@ IntelliJ에서 테스트 메서드 이름을 보면 표의 결과와 1:1로 대�
 
 `application-dev.yml`에 잠깐 `spring.jpa.show-sql: true`를 넣고 테스트를 돌리면, `listConditionMatchesDetailDecision`이 실행하는 SQL에서 `exists (select ... from subscription ...)`를 볼 수 있다. 확인 후 지운다.
 
+**실습 8. (스텝 5) 볼 수 없는 남의 글은 404**
+
+```bash
+./mvnw test -Dtest='PostWriteIntegrationTest#othersGet403OnVisiblePostAnd404OnHiddenPost+blindedPostCannotBeEditedButCanBeDeleted'
+```
+
+그다음 `PostManageController.edit`의 첫 줄 앞에 `blogOwnerGuard.requireOwner(blog, member);`를 넣고 다시 돌린다. 기대: 남의 비공개 글 수정이 404가 아니라 403이 되어 실패한다. "주인 검사를 먼저 하면 존재가 드러난다"를 눈으로 확인하고 되돌린다.
+
 ## 8. 확인 문제
 
 1. 인증과 인가의 차이를 이 프로젝트 예로 설명하라.
@@ -622,6 +712,12 @@ IntelliJ에서 테스트 메서드 이름을 보면 표의 결과와 1:1로 대�
 
 11. (스텝 4) `PATCH /api/blog`에서 `@Valid`를 쓰지 않고 `requestValidator.validate(request)`를 주인 검사 뒤에 부르는 이유는?
 <details><summary>답</summary><code>@Valid</code>는 컨트롤러 메서드에 들어가기 전에 검증해서, 남의 블로그에 틀린 값을 보내면 403보다 400이 먼저 나간다. 상태 코드 순서(404 → 401 → 403 → 400)를 지키려면 주인 검사를 먼저 하고 그다음 검증해야 한다.</details>
+
+12. (스텝 5) 남의 공개 글을 수정하면 403인데, 남의 비공개 글을 수정하면 404다. 왜 다른가?
+<details><summary>답</summary>공개 글은 누구나 볼 수 있어 존재가 이미 알려져 있으므로 "권한 없음(403)"이라고 해도 새는 정보가 없다. 비공개 글은 볼 수 없는 글이라 403을 주면 "그 번호에 글이 있다"를 알려 주게 되므로, 로그인 여부와 상관없이 404로 존재를 숨긴다. <code>findOwned</code>가 가시성 판단 결과(<code>Visible</code>/<code>NotFound</code>)로 이를 나눈다.</details>
+
+13. (스텝 5) 숨긴 글에 빈 제목으로 수정을 보내면 400과 403 중 무엇이 나가나? 그 순서를 만드는 코드는?
+<details><summary>답</summary>403 <code>POST_BLINDED</code>다. 컨트롤러가 <code>postService.findEditable</code>(숨김 확인)을 먼저 부르고, 그 뒤에 <code>requestValidator.validate</code>(입력 검증)를 부른다.</details>
 
 ## 9. 더 읽을거리
 

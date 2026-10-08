@@ -1,6 +1,6 @@
 # 17. 멱등성과 Redis: 같은 요청이 두 번 와도 한 번만
 
-> 관련 스텝: [스텝 3](../step-03.md) (T016), [스텝 1](../step-01.md) (T016a Redis) · 관련 개념: [04-docker-compose](./04-docker-compose.md), [07-spring-mvc-exception-handling](./07-spring-mvc-exception-handling.md), [11-jwt](./11-jwt.md), [12-spring-security-filter-chain](./12-spring-security-filter-chain.md), [19-react-router-api-client](./19-react-router-api-client.md)
+> 관련 스텝: [스텝 3](../step-03.md) (T016), [스텝 1](../step-01.md) (T016a Redis), [스텝 5](../step-05.md) (글 발행 API에 처음 적용) · 관련 개념: [04-docker-compose](./04-docker-compose.md), [07-spring-mvc-exception-handling](./07-spring-mvc-exception-handling.md), [11-jwt](./11-jwt.md), [12-spring-security-filter-chain](./12-spring-security-filter-chain.md), [19-react-router-api-client](./19-react-router-api-client.md)
 
 ## 1. 이 문서로 배우는 것
 
@@ -181,13 +181,7 @@ public @interface Idempotent {
 - `@Target(METHOD)`: 메서드에만 붙인다.
 - `@Retention(RUNTIME)`: 실행 중에도 애노테이션 정보가 남아, 인터셉터가 `hasMethodAnnotation`으로 읽을 수 있다(기본값 CLASS면 실행 중에 사라진다).
 
-스텝 5부터 글 발행 API에 이렇게 붙인다.
-
-```java
-@Idempotent
-@PostMapping("/api/posts")
-public ResponseEntity<PostResponse> create(...) { ... }
-```
+스텝 5에서 글 발행 API에 처음으로 붙였다(5.7).
 
 ### 5.2 ResponseCachingFilter
 
@@ -387,6 +381,51 @@ Spring Cache(`@Cacheable`)는 메서드 결과를 저장해 두었다가, 같은
 public List<PostSummary> popularPosts() { ... 무거운 계산 ... }
 ```
 
+### 5.7 (스텝 5) 실제 API에 붙이기: 글 발행
+
+스텝 3까지는 테스트 전용 API(`TestIdempotentController`)로만 확인했다. 스텝 5에서 진짜 발행 API에 붙였다.
+
+`src/main/java/com/nhnacademy/blog/post/presentation/PostManageController.java`
+
+```java
+@Idempotent
+@PostMapping("/api/posts")
+public ResponseEntity<PostSavedResponse> publish(@CurrentBlog Blog blog,
+                                                 @AuthenticationPrincipal LoginMember member,
+                                                 @RequestBody PostSaveRequest request,
+                                                 HttpServletRequest httpRequest) {
+    blogOwnerGuard.requireOwner(blog, member);
+    requestValidator.validate(request).checkSupported();
+    Post post = postService.publish(blog, request.toCommand());
+    String url = postUrl(httpRequest, blog, post);
+    return ResponseEntity.created(URI.create(url)).body(PostSavedResponse.of(post, url));
+}
+```
+
+- 메서드가 POST이고 경로가 `/api/`라서 `ResponseCachingFilter`가 응답을 감싼다(6번 함정에 걸리지 않는다).
+- 응답은 201, `Location` 헤더(글 주소), 본문 `{ id, status, url }`이다. 인터셉터는 이 세 가지(상태, Location, 본문)를 저장하므로, 같은 키의 두 번째 요청도 똑같이 201과 같은 글 주소를 받는다.
+- 주인이 아니어서 403이 나거나 제목이 비어 400이 나면 2xx가 아니라 키를 지운다. 사용자가 제목을 채우고 **같은 키로** 다시 눌러도 이번에는 새로 처리된다.
+
+**프론트: 화면 하나에 키 하나** (`frontend/src/pages/manage/PostWritePage.tsx`)
+
+```ts
+// 연타 방지 키는 이 화면에서 한 번 만들어 재시도에도 같은 키를 쓴다. 새 키면 서버가 새 요청으로 본다
+const idempotencyKey = useRef(newIdempotencyKey())
+...
+: await api<PostSaved>('/api/posts', { method: 'POST', body, idempotencyKey: idempotencyKey.current })
+```
+
+- `useRef(값)`은 화면이 다시 그려져도 같은 값을 들고 있는 상자다. `useState`와 달리 바꿔도 다시 그리지 않는다. 글쓰기 화면을 열 때 키를 한 번 만들고, 발행이 실패해 다시 누를 때도, 버튼을 빠르게 두 번 눌러도 같은 키가 간다.
+- 수정(`PUT`)에는 키를 보내지 않는다. PUT은 "이 내용으로 만들어라"라서 두 번 와도 결과가 같다(3.2).
+- `newIdempotencyKey()`가 http 개발 주소에서도 동작하도록 스텝 5에서 고쳤다([19](./19-react-router-api-client.md) 5.4).
+
+**확인한 것**
+
+- 테스트 `PostWriteIntegrationTest.sameIdempotencyKeyCreatesOnePost`: 같은 키로 두 번 발행하면 두 응답 본문이 글자까지 같고, 블로그 글 수는 1이다. 키 없이 보내면 400 `IDEMPOTENCY_KEY_REQUIRED`.
+- 실서버(curl): 같은 `Idempotency-Key`로 두 번 보내 두 번 다 `{"id":6,"status":"PUBLISHED","url":"http://e2e27410.blog.test:8081/6"} [201]`을 받았다.
+
+**남은 점: 키 검사가 권한 검사보다 먼저다.** 인터셉터의 `preHandle`은 컨트롤러 메서드보다 먼저 실행된다(4장 그림). 그래서 비회원이나 남의 블로그 주인이 **키 없이** 발행을 부르면, 401·403보다 400 `IDEMPOTENCY_KEY_REQUIRED`가 먼저 나간다. 상태 코드 순서(404 → 401 → 403 → 400, [16](./16-authorization-visibility.md) 3.3)와 어긋난다. `@CurrentBlog` 같은 인자 해석도 `preHandle` 뒤에 일어나므로, 없는 블로그 주소에 키 없이 보내도 404가 아니라 400이다. 다만 블로그가 있든 없든 똑같이 400이라 존재가 드러나지는 않는다(헌법 원칙 II는 지켜진다). 정상 화면은 늘 키를 보내므로 사용자가 볼 일이 거의 없어 지금은 그대로 둔다. 고친다면 인터셉터에서 로그인 여부를 먼저 보거나, 키 검사를 컨트롤러 안으로 옮겨야 한다.
+
 ## 6. 자주 하는 실수와 함정
 
 1. **확인과 저장을 두 명령으로**: `GET` 후 `SET`은 동시 요청에 뚫린다. `SET NX` 한 명령.
@@ -448,6 +487,17 @@ OK
 
 **실습 5. 서버에서 키 들여다보기** (스텝 5에서 글 발행 API가 생긴 뒤)
 
+발행을 같은 키로 두 번 보낸 뒤 키를 본다(로그인 쿠키는 [21](./21-signup-login.md)의 실습처럼 curl `-c jar`로 받아 둔다).
+
+```bash
+KEY=$(uuidgen)
+for i in 1 2; do
+  curl -s --resolve alpha.blog.test:8080:127.0.0.1 -b jar -X POST http://alpha.blog.test:8080/api/posts \
+    -H 'X-Requested-With: XMLHttpRequest' -H 'Content-Type: application/json' -H "Idempotency-Key: $KEY" \
+    -d '{"title":"연타 시험","contentHtml":"<p>x</p>","visibility":"PUBLIC","status":"PUBLISHED"}'; echo
+done   # 두 줄의 id가 같다
+```
+
 ```bash
 docker exec blog-redis redis-cli --scan --pattern 'idempotency:*'
 docker exec blog-redis redis-cli GET 'idempotency:...'     # 저장된 응답 JSON
@@ -479,6 +529,12 @@ docker exec blog-redis redis-cli --scan --pattern 'auth:*' # 로그인하면 생
 
 8. 이 프로젝트에서 Redis를 쓰는 곳 세 가지는?
 <details><summary>답</summary>멱등성 키(10분), 로그인 토큰 상태(살아 있는 Refresh 토큰, 로그아웃한 Access 토큰), Spring Cache(<code>@Cacheable</code>, 5분).</details>
+
+9. (스텝 5) 글쓰기 화면이 연타 방지 키를 `useRef`에 두는 이유는? 발행 버튼을 누를 때마다 `newIdempotencyKey()`를 부르면 어떻게 되나?
+<details><summary>답</summary><code>useRef</code>는 다시 그려도 같은 값을 유지해서, 그 화면에서 하는 발행 시도(재시도, 연타)가 모두 같은 키를 쓴다. 누를 때마다 새 키를 만들면 서버는 매번 다른 요청으로 보고 글을 여러 개 만든다.</details>
+
+10. (스텝 5) 비회원이 키 없이 `POST /api/posts`를 보내면 401이 아니라 400이 나온다. 왜인가?
+<details><summary>답</summary><code>IdempotencyInterceptor.preHandle</code>이 컨트롤러 메서드보다 먼저 실행되어, 주인 검사(<code>BlogOwnerGuard</code>)에 닿기 전에 키가 없다며 400을 던지기 때문이다. 상태 코드 순서와 어긋나는 남은 점이다.</details>
 
 ## 9. 더 읽을거리
 

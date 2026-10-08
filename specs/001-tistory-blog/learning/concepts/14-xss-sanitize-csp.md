@@ -1,6 +1,6 @@
 # XSS 방어: 본문 정화와 CSP
 
-> 관련 스텝: [스텝 2](../step-02.md)(T014), 스텝 5(글 발행에서 사용, DOMPurify) · 관련 결정: research.md R-05, spec.md "보안(원본 4.5)"
+> 관련 스텝: [스텝 2](../step-02.md)(T014), [스텝 5](../step-05.md)(T031·T032 글 발행·수정에서 사용), 스텝 6(글 상세, DOMPurify) · 관련 결정: research.md R-05, spec.md "보안(원본 4.5)"
 
 ## 1. 이 문서로 배우는 것
 
@@ -363,6 +363,46 @@ public class ContentSecurityPolicyFilter extends OncePerRequestFilter {
 - `SummaryExtractorTest.java`: 태그 제거, 300자 자르기, 이모지 안 깨짐.
 - `ContentSecurityPolicyFilterTest.java`: 응답에 CSP 헤더가 있는지.
 
+### 5.5 (스텝 5) 발행·수정이 정화를 거치는 곳
+
+스텝 2에서 만든 `HtmlSanitizer`와 `SummaryExtractor`를 스텝 5의 글 발행·수정이 실제로 부른다.
+
+`src/main/java/com/nhnacademy/blog/post/application/PostService.java`
+
+```java
+public Post publish(Blog blog, PostCommand command) {
+    String contentHtml = htmlSanitizer.sanitize(command.contentHtml());
+    Post post = Post.published(blog, category(blog, command.categoryId()), command.title().trim(), contentHtml,
+            summaryExtractor.extract(contentHtml), command.visibility(), command.topic(),
+            LocalDateTime.now(clock));
+    return postRepository.save(post);
+}
+```
+
+- 첫 줄에서 요청 본문을 정화하고, **정화된** HTML만 다음 줄로 넘긴다. 원본(`command.contentHtml()`)은 저장되지 않는다.
+- 요약은 정화된 HTML에서 만든다. 정화 전 HTML로 만들면 지워질 `<script>` 안의 글자가 요약에 섞일 수 있다.
+- 수정(`edit`)도 같은 두 줄(`sanitize` → `extract`)을 거친다. 화면(에디터)을 거치지 않고 curl로 직접 보내도 같은 길이다.
+
+**테스트** `src/test/.../post/PostWriteIntegrationTest.publishSanitizesBodyAndReturnsPostUrl`
+
+| 보낸 본문 | 저장된 본문 | 요약 |
+| --- | --- | --- |
+| `<h2>제목</h2><p onclick="x()">본문 <b>굵게</b></p><script>alert(1)</script>` | `<h2>제목</h2><p>본문 <b>굵게</b></p>` | `제목 본문 굵게` |
+
+이벤트 속성(`onclick`)과 `<script>`가 통째로 사라지고, 요약은 태그 없는 글자만 남는다.
+
+**실서버에서 본 결과** (스텝 5 확인, curl로 직접 발행)
+
+| 보낸 것 | 저장된 것 |
+| --- | --- |
+| `<a href="https://spring.io" target="_blank">링크</a>` | `<a href="https://spring.io" rel="nofollow noopener noreferrer">링크</a>` (`target` 지움, `rel` 붙임, 3.6) |
+| `<code class="language-java">int x = 1;</code>` | `<code class="language-java">int x &#61; 1;</code>` (`=`가 문자 참조로, 3.7) |
+| `<img src=x onerror=alert(1)>` | 없음. `src`가 업로드 경로가 아니라 지워지고, `onerror`도 지워져 남는 속성이 없는 `<img>`는 통째로 빠졌다 |
+
+`alt`가 있는 외부 이미지는 `<img alt="..." />`로 남는다(5.1 표). 이 남은 문제는 이미지 업로드를 만드는 스텝 7에서 다룬다.
+
+**에디터와 허용 목록 맞추기.** 스텝 5의 Tiptap 에디터는 서버 허용 목록에 있는 서식만 켠다(문단 제목, 굵게·기울임, 목록, 인용, 코드 블록, http/https 링크). 밑줄(`<u>`)·취소선(`<s>`)·구분선(`<hr>`)은 허용 목록에 없어서 에디터에서도 끈다. 켜 두면 에디터에서는 보이는데 저장하면 사라지는 서식이 생긴다. 자세한 설정은 [26](./26-wysiwyg-editor-tiptap.md).
+
 ---
 
 ## 6. 자주 하는 실수와 함정
@@ -376,6 +416,8 @@ public class ContentSecurityPolicyFilter extends OncePerRequestFilter {
 7. **CSP가 있으니 정화를 느슨하게 한다.** CSP는 두 번째 방어선이다. 오래된 브라우저, 잘못된 설정, 스크립트 외의 공격(가짜 폼, 화면 위장)이 있다.
 8. **`String.length()`로 글자 수를 센다.** 이모지가 깨진다. 코드 포인트로 센다.
 9. **정화 결과가 입력과 같기를 기대한다.** `=`, `@`, `+` 등은 문자 참조로 바뀐다.
+10. **에디터에서 서버가 지우는 서식을 켜 둔다.** 쓰는 사람은 밑줄이 보였는데 발행하면 사라져 "버그"로 느낀다. 에디터 기능과 서버 허용 목록을 같이 바꾼다(스텝 5, 5.5).
+11. **요약을 정화 전 HTML로 만든다.** 지워질 내용이 목록 요약에 나온다. 정화 → 요약 순서를 지킨다.
 
 ---
 
@@ -432,6 +474,20 @@ curl -s -D - -o /dev/null -X POST localhost:8080/api/x | grep -i content-securit
 
 ---
 
+### 실습 6 (스텝 5): API로 위험한 본문을 직접 발행해 보기
+
+서버를 띄우고 로그인 쿠키를 받은 뒤([21](./21-signup-login.md) 실습) 에디터를 거치지 않고 보낸다.
+
+```bash
+curl -s --resolve alpha.blog.test:8080:127.0.0.1 -b jar -X POST http://alpha.blog.test:8080/api/posts \
+  -H 'X-Requested-With: XMLHttpRequest' -H 'Content-Type: application/json' -H "Idempotency-Key: $(uuidgen)" \
+  -d '{"title":"XSS 시험","contentHtml":"<p onmouseover=\"alert(1)\">안녕</p><img src=x onerror=alert(1)>","visibility":"PRIVATE","status":"PUBLISHED"}'
+# 응답의 id로 편집용 글을 열어 저장된 본문을 본다
+curl -s --resolve alpha.blog.test:8080:127.0.0.1 -b jar http://alpha.blog.test:8080/api/manage/posts/{id}
+```
+
+기대: `contentHtml`이 `<p>안녕</p>`만 남는다. 공개 범위를 비공개로 해 두면 시험 글이 남에게 보이지 않는다.
+
 ## 8. 확인 문제
 
 1. 저장형, 반사형, DOM 기반 XSS의 차이를 "악성 코드가 어디에 있나"로 설명하라.
@@ -483,6 +539,12 @@ curl -s -D - -o /dev/null -X POST localhost:8080/api/x | grep -i content-securit
 </details>
 
 ---
+
+9. (스텝 5) 글 요약을 정화하기 전의 HTML에서 만들면 어떤 문제가 생기나?
+<details><summary>답</summary>정화하면 지워질 내용(예: <code>&lt;script&gt;</code> 안의 글자, 이벤트 속성에 넣은 문장)이 목록의 요약에 그대로 나올 수 있다. 그래서 <code>PostService</code>는 정화된 본문으로 요약을 만든다.</details>
+
+10. (스텝 5) 에디터에서 밑줄 버튼을 켜 두면 어떻게 되나?
+<details><summary>답</summary>에디터에는 밑줄이 보이지만 서버 허용 목록에 <code>&lt;u&gt;</code>가 없어서 저장할 때 지워진다. 쓰는 사람은 서식이 사라진 것으로 느낀다. 그래서 에디터 기능을 허용 목록에 맞춰 끈다.</details>
 
 ## 9. 더 읽을거리
 

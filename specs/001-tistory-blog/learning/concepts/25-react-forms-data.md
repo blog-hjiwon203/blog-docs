@@ -1,6 +1,6 @@
 # 25. React 폼과 데이터 불러오기
 
-> 관련 스텝: [스텝 4](../step-04.md) (T026) · 관련 개념: [19-react-router-api-client](./19-react-router-api-client.md), [14-xss-sanitize-csp](./14-xss-sanitize-csp.md), [16-authorization-visibility](./16-authorization-visibility.md), [18-spa-server-routing](./18-spa-server-routing.md), [15-subdomain-host-routing](./15-subdomain-host-routing.md)
+> 관련 스텝: [스텝 4](../step-04.md) (T026), [스텝 5](../step-05.md) (T035 글쓰기·수정, 카테고리 관리) · 관련 개념: [19-react-router-api-client](./19-react-router-api-client.md), [14-xss-sanitize-csp](./14-xss-sanitize-csp.md), [16-authorization-visibility](./16-authorization-visibility.md), [18-spa-server-routing](./18-spa-server-routing.md), [15-subdomain-host-routing](./15-subdomain-host-routing.md)
 
 ## 1. 이 문서로 배우는 것
 
@@ -481,7 +481,7 @@ export function BlogRoutes() {
 - 안쪽 `Routes`의 경로는 **바깥 `/manage/` 기준 상대 경로**다. `index`는 `/manage` 자체, `settings`는 `/manage/settings`.
 - `NavLink`는 지금 주소와 맞으면 `active` 클래스를 붙인다. CSS의 `.manage-nav a.active`가 초록 배경을 칠한다.
 - `end`: `/manage` 링크가 `/manage/settings`에서도 "맞음"으로 보이지 않게, **정확히 같을 때만** active로.
-- `*`: 아직 없는 관리 화면(글쓰기는 스텝 5)은 "준비 중"을 보여 준다.
+- `*`: 아직 없는 관리 화면은 "준비 중"을 보여 준다. 스텝 5에서 글쓰기·수정·카테고리가 이 안에 더해졌다(5.10).
 
 페이지 번호는 주소의 쿼리 `?page=2`에 둔다.
 
@@ -545,6 +545,90 @@ error TS1149: File name '.../components/pagination.ts' differs from already incl
 
 macOS 기본 파일 시스템(APFS)은 **대소문자를 구분하지 않는다**. `Pagination.tsx`(컴포넌트)를 `'../../components/Pagination'`으로, 계산 파일을 `'./pagination'`으로 불렀는데, 확장자를 빼고 보면 두 이름이 대소문자만 다르다. TypeScript가 "같은 파일을 다른 이름으로 부른다"고 보고 막은 것이다(리눅스 CI처럼 구분하는 곳에서는 또 다르게 동작해 더 위험하다). 이름을 겹치지 않게 `pageGroup.ts`로 바꿔 해결했다.
 
+### 5.10 (스텝 5) 글쓰기·수정 한 화면, 카테고리 관리
+
+**라우트 더하기** (`frontend/src/pages/manage/ManagePage.tsx`)
+
+```tsx
+<NavLink to="/manage/write">글쓰기</NavLink>
+...
+<Route path="write" element={<PostWritePage key="new" />} />
+<Route path="posts/:postId/edit" element={<PostWritePage key="edit" />} />
+<Route path="categories" element={<CategoriesPage />} />
+```
+
+새 글과 수정은 거의 같은 화면이라 컴포넌트 하나(`PostWritePage`)로 만들고, `useParams()`의 `postId`가 있으면 수정으로 본다(`const editing = postId !== undefined`).
+
+**`key`를 다르게 준 이유.** React는 같은 자리에 같은 컴포넌트가 다시 오면 **이미 있는 것을 재사용**하고 상태(`useState`)를 그대로 둔다. 수정 화면(`/manage/posts/6/edit`)에서 메뉴의 "글쓰기"를 누르면 같은 `PostWritePage`가 같은 자리에 오므로, `key`가 없으면 방금 보던 글의 제목·본문이 새 글 화면에 그대로 남는다. `key`가 바뀌면 React는 다른 컴포넌트로 보고 **버리고 새로 만든다**. 상태와 연타 방지 키(`useRef`)도 새로 시작한다.
+
+**불러온 본문과 입력 중인 본문을 나눈 이유** (`pages/manage/PostWritePage.tsx`)
+
+```tsx
+const [contentHtml, setContentHtml] = useState('')   // 지금 에디터에 쓰인 본문. 저장할 때 보낸다
+const [loadedHtml, setLoadedHtml] = useState('')     // 서버에서 불러온 본문. 에디터에 한 번 넣을 값
+...
+<Editor initialHtml={loadedHtml} onChange={setContentHtml} />
+```
+
+에디터(Tiptap)는 제목 칸처럼 `value`/`onChange`로 매번 값을 주고받는 **제어 컴포넌트가 아니다**. 내용을 에디터가 스스로 들고 있고, 바뀔 때마다 `onChange`로 알려 줄 뿐이다. 만약 입력 중인 `contentHtml`을 다시 `initialHtml`로 넘기면, 글자를 칠 때마다 에디터 내용을 통째로 다시 넣게 되어 커서가 맨 끝으로 튄다. 그래서 "처음 넣을 값"(`loadedHtml`, 수정 화면에서 불러왔을 때 한 번 바뀜)과 "지금 값"(`contentHtml`)을 따로 둔다. 에디터 쪽은 `initialHtml`이 바뀔 때만 내용을 넣는다.
+
+```tsx
+// components/editor/Editor.tsx
+useEffect(() => {
+  if (editor && initialHtml !== editor.getHTML()) {
+    editor.commands.setContent(initialHtml, { emitUpdate: false })
+  }
+}, [editor, initialHtml])
+```
+
+`emitUpdate: false`는 "프로그램이 넣은 내용은 사용자가 고친 것으로 알리지 마라"다. 에디터 자체는 [26](./26-wysiwyg-editor-tiptap.md).
+
+**삭제 확인 창.** 삭제는 되돌릴 수 없어 한 번 더 묻는다(POST-03 "확인 창을 거쳐").
+
+```tsx
+async function remove() {
+  if (!window.confirm('이 글을 삭제할까요? 댓글과 공감도 함께 사라집니다.')) {
+    return
+  }
+  try {
+    await api(`/api/posts/${postId}`, { method: 'DELETE' })
+    navigate('/')
+  } catch (error) {
+    setErrors({ form: errorMessage(error) })
+  }
+}
+```
+
+`window.confirm`은 브라우저 기본 확인 창으로, 확인이면 `true`, 취소면 `false`를 돌려주고 그동안 화면 코드가 멈춘다. 모양을 꾸밀 수 없지만 따로 만들 것이 없다. 카테고리 삭제도 같은 방식으로 "글 N개가 미분류로 옮겨집니다"를 미리 보여 준다(`CategoriesPage`의 `CategoryRow.remove`).
+
+**카테고리 화면: 다시 불러오기를 함수 하나로** (`pages/manage/CategoriesPage.tsx`)
+
+```tsx
+const load = useCallback(() => {
+  api<CategoryTree>('/api/categories')
+    .then(setTree)
+    .catch((caught: unknown) => setError(errorMessage(caught)))
+}, [])
+
+useEffect(() => {
+  load()
+}, [load])
+...
+<CategoryRow key={category.id} category={category} onChanged={load} onError={setError} />
+```
+
+- 추가·이름 변경·삭제가 끝나면 목록과 글 수가 바뀌므로 서버에서 다시 받는다. 화면에서 직접 고치는 것보다 단순하고, 서버가 계산한 글 수와 어긋나지 않는다.
+- `useCallback(함수, [])`은 다시 그려도 **같은 함수 객체**를 준다. 그냥 `const load = () => ...`로 만들면 그릴 때마다 새 함수가 되어, `useEffect(..., [load])`가 그릴 때마다 다시 실행되고 → 불러와서 `setTree` → 다시 그리기 → 또 불러오기가 끝없이 반복된다.
+- 행 하나(`CategoryRow`)를 컴포넌트로 뺀 이유: "이름 변경 중인가"(`editing`)와 고치는 중인 이름(`name`)은 행마다 따로다. 행 컴포넌트가 자기 상태를 들고, 끝나면 `onChanged`(부모의 `load`)를 부른다.
+
+**주인에게만 보이는 수정 링크** (`pages/blog/BlogMainPage.tsx`)
+
+```tsx
+{owner && <Link className="small" to={`/manage/posts/${post.id}/edit`}>수정</Link>}
+```
+
+블로그 머리글에는 주인에게만 "글쓰기" 버튼(`/manage/write`)이 보인다. 5.7과 같이 이것은 안내이고, 남이 이 주소를 직접 열어도 서버가 편집용 조회(`GET /api/manage/posts/{id}`)에서 403·404로 막는다.
+
 ## 6. 자주 하는 실수와 함정
 
 1. **폼 안의 버튼에 `type` 안 쓰기**: 기본이 `submit`이라 "코드 받기"를 누를 때 가입이 제출된다. 제출 버튼이 아니면 `type="button"`.
@@ -559,6 +643,9 @@ macOS 기본 파일 시스템(APFS)은 **대소문자를 구분하지 않는다*
 10. **화면 검사만 믿음**: 버튼을 숨겨도 API는 열려 있다. 서버가 검사한다.
 11. **대소문자만 다른 파일 이름**: macOS에서는 같은 파일로, 리눅스에서는 다른 파일로 취급된다. 이름 자체를 다르게.
 12. **StrictMode에서 요청이 두 번 보인다고 놀람**: 개발 모드에서만 효과를 한 번 더 실행한다. 정리 함수가 맞으면 문제없다.
+13. **(스텝 5) 같은 컴포넌트를 두 라우트에 쓰면서 `key`를 안 줌**: 수정 화면에서 "글쓰기"로 가도 이전 글 내용이 남는다. 라우트마다 다른 `key`.
+14. **(스텝 5) 에디터에 입력 중인 값을 다시 넣기**: 칠 때마다 내용을 통째로 바꿔 커서가 튄다. 불러온 값과 입력 중인 값을 나눈다.
+15. **(스텝 5) 효과의 의존성에 매번 새로 만드는 함수**: `useEffect(..., [load])`의 `load`를 `useCallback` 없이 만들면 무한히 다시 불러온다.
 
 ## 7. 직접 해 보기
 
@@ -612,6 +699,10 @@ cd frontend && npm run dev          # 터미널 2
 
 `BlogMainPage` 효과 맨 앞에 `setError(null)`을 넣고 `npm run lint`. 경고를 보고 되돌린다.
 
+**실습 6. (스텝 5) `key`를 빼 보기**
+
+`ManagePage.tsx`의 두 `PostWritePage`에서 `key`를 지우고 `npm run dev`로 띄운다. 블로그 메인에서 글의 "수정"을 눌러 수정 화면을 연 뒤, 왼쪽 메뉴의 "글쓰기"를 누른다. 기대: 제목 칸에 방금 글의 제목이 그대로 남아 있다. `key`를 되돌리면 빈 화면이 된다.
+
 ## 8. 확인 문제
 
 1. 일반 변수 대신 `useState`를 쓰는 이유는?
@@ -643,6 +734,12 @@ cd frontend && npm run dev          # 터미널 2
 
 10. `pagination.ts`와 `Pagination.tsx`가 함께 있을 때 TS1149가 난 이유는?
 <details><summary>답</summary>macOS 파일 시스템은 대소문자를 구분하지 않아, 확장자를 뺀 import 경로 './pagination'과 '../../components/Pagination'이 같은 파일로 풀려 TypeScript가 대소문자만 다른 이름으로 같은 파일을 부른다고 막았다.</details>
+
+11. (스텝 5) 글쓰기와 수정 라우트에 같은 `PostWritePage`를 쓰면서 `key="new"`, `key="edit"`를 준 이유는?
+<details><summary>답</summary>React는 같은 자리에 같은 컴포넌트가 오면 재사용해 상태를 남긴다. 수정 화면에서 글쓰기로 옮겨 가도 이전 글의 제목·본문이 남는다. <code>key</code>가 다르면 다른 컴포넌트로 보고 새로 만들어 상태가 처음부터 시작한다.</details>
+
+12. (스텝 5) `CategoriesPage`에서 `load`를 `useCallback`으로 감싸지 않으면 어떻게 되나?
+<details><summary>답</summary>그릴 때마다 새 함수가 만들어져 <code>useEffect(..., [load])</code>가 매번 다시 실행된다. 불러오기 → <code>setTree</code> → 다시 그리기 → 또 불러오기가 끝없이 반복된다.</details>
 
 ## 9. 더 읽을거리
 

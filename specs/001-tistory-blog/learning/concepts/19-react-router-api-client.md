@@ -1,6 +1,6 @@
 # 19. React 화면 나누기와 API 클라이언트
 
-> 관련 스텝: [스텝 3](../step-03.md) (T015), [스텝 1](../step-01.md) (T002), [스텝 4](../step-04.md) (화면 라우트 추가, 본문 없는 2xx 처리) · 관련 개념: [25-react-forms-data](./25-react-forms-data.md), [21-signup-login](./21-signup-login.md), [15-subdomain-host-routing](./15-subdomain-host-routing.md), [18-spa-server-routing](./18-spa-server-routing.md), [13-csrf-samesite-cors](./13-csrf-samesite-cors.md), [17-idempotency-redis](./17-idempotency-redis.md), [07-spring-mvc-exception-handling](./07-spring-mvc-exception-handling.md)
+> 관련 스텝: [스텝 3](../step-03.md) (T015), [스텝 1](../step-01.md) (T002), [스텝 4](../step-04.md) (화면 라우트 추가, 본문 없는 2xx 처리), [스텝 5](../step-05.md) (연타 방지 키 대체 구현, 글쓰기·카테고리 라우트) · 관련 개념: [25-react-forms-data](./25-react-forms-data.md), [21-signup-login](./21-signup-login.md), [15-subdomain-host-routing](./15-subdomain-host-routing.md), [18-spa-server-routing](./18-spa-server-routing.md), [13-csrf-samesite-cors](./13-csrf-samesite-cors.md), [17-idempotency-redis](./17-idempotency-redis.md), [07-spring-mvc-exception-handling](./07-spring-mvc-exception-handling.md)
 
 ## 1. 이 문서로 배우는 것
 
@@ -10,7 +10,7 @@
 - 주소(플랫폼/블로그)에 따라 다른 라우트 묶음을 그리는 방법(`host.ts`, `App.tsx`)
 - `fetch` API 기초: Promise, `async`/`await`, `Response.ok`, `json()`, `credentials`
 - 이 프로젝트의 `api()` 함수를 한 줄씩: 헤더, `ApiError`, 본문 없는 성공(202·204), 401이면 로그인 후 원래 주소로, `allowAnonymous`
-- 연타 방지 키(`crypto.randomUUID`)와 그 함정
+- 연타 방지 키(`crypto.randomUUID`)와 그 함정, 보안 컨텍스트가 아닐 때 `crypto.getRandomValues`로 UUID v4를 직접 만드는 법(스텝 5)
 - TypeScript 기초: `type`/`interface`, 유니온 타입, `unknown`과 타입 단언, 제네릭
 - Vitest로 테스트하기(`vi.fn`, `vi.stubGlobal`), oxlint, 빌드에서 테스트 타입 오류가 났던 사건
 
@@ -267,6 +267,16 @@ export function BlogRoutes() {
 | `{주소}.blog.com/category/:categoryId` | 블로그 메인과 같은 화면, 그 카테고리 글만(`0`은 미분류) | 블로그 |
 | `{주소}.blog.com/manage/*` 안의 `""`(관리 홈), `settings` | 관리 홈, 블로그 설정 | 블로그 (중첩 라우팅) |
 
+스텝 5에서 `/manage/*` 안에 더한 라우트(`ManagePage.tsx`):
+
+| 주소 | 화면 |
+| --- | --- |
+| `{주소}.blog.com/manage/write` | 새 글 쓰기 (`PostWritePage key="new"`) |
+| `{주소}.blog.com/manage/posts/:postId/edit` | 글 수정 (`PostWritePage key="edit"`) |
+| `{주소}.blog.com/manage/categories` | 카테고리 관리 (`CategoriesPage`) |
+
+새 글과 수정이 같은 컴포넌트라, 라우트마다 다른 `key`를 줘서 주소가 바뀌면 화면을 새로 만든다. 자세한 이유는 [25](./25-react-forms-data.md) 5.10.
+
 - 같은 컴포넌트(`BlogMainPage`)를 두 경로에 걸고, 화면 안에서 `useParams()`의 `categoryId`가 있는지로 전체/카테고리를 나눈다.
 - `/category/5`는 두 칸이라 한 칸만 받는 `/:postId`와 겹치지 않는다.
 - `/manage/*` 안의 중첩 `<Routes>`는 `ManagePage.tsx`에 있다(`<Route index ...>`, `<Route path="settings" ...>`). 화면 구성은 [25](./25-react-forms-data.md).
@@ -419,6 +429,8 @@ export function redirectToLogin(returnTo?: string): void {
 
 ### 5.4 연타 방지 키
 
+스텝 3의 처음 모양은 한 줄이었다.
+
 ```ts
 export function newIdempotencyKey(): string {
   return crypto.randomUUID()
@@ -427,15 +439,48 @@ export function newIdempotencyKey(): string {
 
 `crypto.randomUUID()`는 무작위 UUID(버전 4) 문자열을 만든다. 서버는 이 형식(UUID)만 받는다.
 
-쓰는 법(스텝 5 이후):
+**함정: 보안 컨텍스트에서만 동작한다.** 브라우저는 일부 기능을 **보안 컨텍스트(secure context)**에서만 내준다. 보안 컨텍스트는 대략 "HTTPS로 연 페이지, 또는 `localhost`·`127.0.0.1`처럼 내 컴퓨터로 확실한 주소"다. 네트워크 중간에서 내용을 바꿀 수 있는 평문 HTTP 페이지에는 민감한 기능을 주지 않겠다는 규칙이다. `crypto.randomUUID`가 그런 기능이다. 로컬 개발 주소 `http://alpha.blog.test:8080`은 HTTPS도 localhost도 아니라서 `crypto.randomUUID`가 `undefined`이고, 부르면 `TypeError`가 난다. 반면 `crypto.getRandomValues`(무작위 바이트 채우기)는 보안 컨텍스트가 아니어도 있다. 테스트(Vitest, Node 환경)에서는 Node에 `crypto.randomUUID`가 있어 통과하므로 테스트로는 드러나지 않는다.
+
+**스텝 5에서 고친 모양** (`frontend/src/api/client.ts`):
 
 ```ts
-const key = newIdempotencyKey()              // 버튼을 누를 때 한 번
-await api('/api/posts', { method: 'POST', body: draft, idempotencyKey: key })
-// 실패해서 재시도할 때는 같은 key를 다시 쓴다. 새로 만들면 중복 방지가 안 된다
+export function newIdempotencyKey(): string {
+  if (typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID()
+  }
+  const bytes = crypto.getRandomValues(new Uint8Array(16))
+  bytes[6] = (bytes[6] & 0x0f) | 0x40 // 버전 4
+  bytes[8] = (bytes[8] & 0x3f) | 0x80 // RFC 4122 변형
+  const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`
+}
 ```
 
-**함정: 보안 컨텍스트에서만 동작한다.** 브라우저의 `crypto.randomUUID`는 **보안 컨텍스트**(HTTPS, 또는 `localhost`·`127.0.0.1`)에서만 존재한다. 로컬 개발 주소 `http://alpha.blog.test:5173`나 `http://blog.test:8080`은 HTTPS도 localhost도 아니라서 `crypto.randomUUID`가 `undefined`이고, 부르면 `TypeError`가 난다. 운영은 HTTPS라 괜찮지만 개발 중 발행 버튼이 깨진다. 테스트(Vitest, Node 환경)에서는 Node에 `crypto.randomUUID`가 있어 통과하므로 테스트로는 드러나지 않는다. 스텝 5에서 글 발행을 붙이기 전에, 보안 컨텍스트가 아니어도 되는 `crypto.getRandomValues`로 UUID v4를 만드는 방식으로 바꿔야 한다.
+한 줄씩:
+
+- `typeof crypto.randomUUID === 'function'`: 있으면(HTTPS 운영, localhost) 그대로 쓴다. `typeof`로 묻기 때문에 없어도 오류가 나지 않는다.
+- `crypto.getRandomValues(new Uint8Array(16))`: 16바이트(128비트)를 암호학적으로 안전한 난수로 채운다. UUID 하나가 128비트다.
+- `bytes[6] = (bytes[6] & 0x0f) | 0x40`: 7번째 바이트의 위쪽 4비트를 `0100`(=4)으로 바꾼다. UUID 문자열 세 번째 묶음의 첫 글자가 `4`가 되고, 이것이 "무작위로 만든 버전 4"라는 표시다. `& 0x0f`로 위 4비트를 지우고 `| 0x40`으로 `4`를 넣는다.
+- `bytes[8] = (bytes[8] & 0x3f) | 0x80`: 9번째 바이트의 위쪽 2비트를 `10`으로 바꾼다. RFC 4122 형식이라는 "변형(variant)" 표시로, 네 번째 묶음의 첫 글자가 `8`, `9`, `a`, `b` 중 하나가 된다.
+- `toString(16).padStart(2, '0')`: 바이트 하나를 두 자리 16진수로(`0x0a` → `"0a"`). 32글자 16진수가 된다.
+- 마지막 줄: 8-4-4-4-12 자리로 하이픈을 넣는다. 서버의 `UUID.fromString`이 받는 표준 모양이다.
+
+버전·변형 비트를 맞추는 이유: 서버는 형식만 보지만(`UUID.fromString`은 버전을 따지지 않는다), 다른 도구가 이 값을 UUID v4로 읽어도 어긋나지 않게 표준대로 만든다.
+
+**확인한 것**:
+- `client.test.ts`의 새 테스트 `'randomUUID가 없는 주소(HTTP 개발 주소)에서도 UUID v4를 만든다'`는 `crypto`를 `getRandomValues`만 있는 가짜로 바꿔(`vi.stubGlobal('crypto', { getRandomValues: (array) => array.fill(0xab) })`) 결과가 v4 모양 정규식에 맞는지 본다. 모든 바이트가 `0xab`라도 버전 자리는 `4`, 변형 자리는 `a`가 된다.
+- 스텝 5 확인 중 헤드리스 Chrome으로 `http://e2e27410.blog.test:8081/manage/write`를 열어 `typeof crypto.randomUUID`를 물었더니 `'undefined'`였다. 그 화면에서 발행 버튼을 눌러 글이 만들어지고 `/7`로 이동했다. 대체 코드가 실제로 쓰였다는 뜻이다.
+
+쓰는 법(스텝 5, `pages/manage/PostWritePage.tsx`):
+
+```ts
+// 연타 방지 키는 이 화면에서 한 번 만들어 재시도에도 같은 키를 쓴다. 새 키면 서버가 새 요청으로 본다
+const idempotencyKey = useRef(newIdempotencyKey())
+...
+await api<PostSaved>('/api/posts', { method: 'POST', body, idempotencyKey: idempotencyKey.current })
+```
+
+`useRef`는 다시 그려도 값이 바뀌지 않는 상자다. 화면을 열 때 키를 한 번 만들고, 발행이 실패해 다시 누를 때도 같은 키를 보낸다([17](./17-idempotency-redis.md) 5.7).
 
 ### 5.5 Vitest로 테스트하기
 
@@ -549,7 +594,7 @@ const error = (await api('/api/posts').catch((e: unknown) => e)) as ApiError
 3. **`redirect` 값을 그대로 이동**: 오픈 리다이렉트. 우리 도메인인지 확인한다. (스텝 4의 로그인 화면은 `safeRedirect()`로 확인한다, [21](./21-signup-login.md).)
 4. **`encodeURIComponent` 빼먹기**: 돌아올 주소의 쿼리가 깨진다.
 5. **재시도마다 새 연타 방지 키**: 중복 방지가 안 된다.
-6. **`crypto.randomUUID`를 http 개발 주소에서 부르기**: `TypeError`(5.4).
+6. **`crypto.randomUUID`를 http 개발 주소에서 부르기**: `TypeError`(5.4). 스텝 5에서 `getRandomValues`로 대신 만들게 고쳤다. 다른 브라우저 API를 쓸 때도 "보안 컨텍스트에서만"인지 MDN에서 확인한다.
 7. **`as T`를 검사로 착각**: 단언은 실행 중 아무것도 확인하지 않는다.
 8. **훅을 조건문 안에서 부르기**: React가 상태를 엉뚱한 컴포넌트에 연결한다. lint가 막는다.
 9. **`npm test`만 돌리고 커밋**: 타입 오류는 빌드에서만 잡힌다.
@@ -562,7 +607,7 @@ const error = (await api('/api/posts').catch((e: unknown) => e)) as ApiError
 
 ```bash
 cd frontend
-npm test          # 스텝 4 기준 17개 통과(client, host, pageGroup)
+npm test          # 스텝 5 기준 18개 통과(client, host, pageGroup)
 npm run build     # tsc -b && vite build
 npm run lint
 ```
@@ -589,6 +634,13 @@ npm run dev
 ```js
 window.isSecureContext     // localhost: true, blog.test: false
 typeof crypto.randomUUID   // localhost: 'function', blog.test: 'undefined'
+```
+
+스텝 5 이후에는 `blog.test`에서도 연타 방지 키가 만들어진다. 앱 코드를 콘솔에서 바로 부를 수는 없으니, 대신 같은 계산을 쳐 본다.
+
+```js
+const b = crypto.getRandomValues(new Uint8Array(16)); b[6] = (b[6] & 0x0f) | 0x40; b[8] = (b[8] & 0x3f) | 0x80
+Array.from(b, (x) => x.toString(16).padStart(2, '0')).join('')   // 13번째 글자가 항상 4
 ```
 
 **실습 5. 라우트 확인**
@@ -631,11 +683,17 @@ typeof crypto.randomUUID   // localhost: 'function', blog.test: 'undefined'
 10. (스텝 4) `BlogRoutes`가 더는 `address` prop을 받지 않는다. 블로그 화면은 어느 블로그인지 어떻게 아나?
 <details><summary>답</summary>화면이 <code>/api/blog</code>, <code>/api/posts</code>, <code>/api/blog/sidebar</code>를 부르면 서버가 요청 Host(<code>alpha.blog.test</code>)로 블로그를 찾아 준다(<code>@CurrentBlog</code>). 화면은 주소를 들고 다닐 필요가 없다.</details>
 
+11. (스텝 5) `http://alpha.blog.test`에서 `crypto.randomUUID`가 없는 이유와, 대신 키를 만든 방법은?
+<details><summary>답</summary>HTTPS도 localhost도 아닌 평문 HTTP 페이지는 보안 컨텍스트가 아니라서 브라우저가 <code>crypto.randomUUID</code>를 주지 않는다. 보안 컨텍스트가 아니어도 있는 <code>crypto.getRandomValues</code>로 16바이트를 채우고, 버전(4)·변형 비트를 맞춘 뒤 8-4-4-4-12 모양 문자열로 만든다.</details>
+
+12. (스텝 5) `bytes[6] = (bytes[6] & 0x0f) | 0x40`은 무엇을 하나?
+<details><summary>답</summary>7번째 바이트의 위쪽 4비트를 지우고(<code>&amp; 0x0f</code>) <code>0100</code>을 넣어(<code>| 0x40</code>) UUID의 버전 자리를 4로 만든다. 문자열로는 세 번째 묶음의 첫 글자가 <code>4</code>가 된다.</details>
+
 ## 9. 더 읽을거리
 
 - React 공식 문서: https://react.dev/learn (Describing the UI, Rules of Hooks)
 - React Router 문서: https://reactrouter.com (v7 "Declarative mode": `BrowserRouter`, `Routes`, `Route`, 경로 순위)
-- MDN Web Docs: Fetch API, `Response`, `Request.credentials`, `encodeURIComponent`, `Crypto.randomUUID()`, Secure contexts
+- MDN Web Docs: Fetch API, `Response`, `Request.credentials`, `encodeURIComponent`, `Crypto.randomUUID()`, `Crypto.getRandomValues()`, Secure contexts; RFC 9562(UUID, 버전·변형 비트)
 - TypeScript Handbook: https://www.typescriptlang.org/docs/handbook/ (Narrowing, Generics, `unknown`)
 - TypeScript tsconfig 레퍼런스: `erasableSyntaxOnly`, `verbatimModuleSyntax`
 - Vitest 문서: https://vitest.dev (Mocking, `vi.fn`, `vi.stubGlobal`)
