@@ -1,6 +1,6 @@
 # 구현 계획 (Implementation Plan): 티스토리형 블로그 플랫폼 (지원)
 
-> **이 문서는?** 지원의 구현 계획이다. 기능 명세를 어떤 기술과 구조로 만들지 정한다. 결정의 이유는 조사(research.md)에, 세부 설계는 데이터 모델과 REST API 초안에 있다. 전체 문서 안내는 [README](../../README.md)에 있다.
+> **이 문서는?** 지원의 구현 계획이다. 기능 명세를 어떤 기술과 구조로 만들지 정한다. 결정의 이유는 조사(research.md)에, 세부 설계는 데이터 모델, REST API 명세, 화면 목업에 있다. 전체 문서 안내는 [README](../../README.md)에 있다.
 
 **브랜치**: `001-tistory-blog` | **날짜**: 2026-10-07 | **명세**: [spec.md](./spec.md)
 
@@ -93,7 +93,8 @@ specs/001-tistory-blog/
 ├── data-model.md        # 엔티티·테이블
 ├── quickstart.md        # 로컬 실행과 수용 시나리오 검증
 ├── contracts/
-│   └── rest-api.md      # REST API 초안
+│   └── rest-api.md      # REST API 명세
+├── mockups/             # 화면 목업 (build.py로 생성)
 ├── checklists/requirements.md
 └── tasks.md             # 2주 일정 기준 작업
 ```

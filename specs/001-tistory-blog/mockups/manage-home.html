@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>관리 홈 목업</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans+KR:wght@400;600;700&display=swap">
+<link rel="stylesheet" href="assets/mock.css">
+</head>
+<body>
+<div class="wrap">
+  <div class="mockbar"><a class="back" href="index.html">← 화면 목록</a><h1>관리 홈</h1><span class="url">jiwon.blog.com/manage</span><div class="codes"><span class="code">MNG-03</span><span class="code">ADMIN-05</span></div></div>
+  <p class="lead">방문자 요약과 최근 댓글·글. 주인이 아니면 403 화면.</p>
+  <div class="frame"><div class="frame-top"><div class="dots"><i></i><i></i><i></i></div><div class="addr">https://jiwon.blog.com/manage</div></div>
+  <header class="site-head"><a class="logo" href="home.html">blog.com</a><a href="blog-main.html" style="text-decoration:none;font-weight:700">지원의 기록</a><span class="chip">관리</span><a class="pin" href="#api-B" title="API B">B</a><span class="grow"></span><a class="btn" href="blog-main.html">블로그 보기</a><a class="row" href="mypage.html"><span class="avatar"></span></a><a class="pin" href="#api-A" title="API A">A</a></header><div class="manage"><nav class="manage-nav" aria-label="관리 메뉴"><div class="sec">블로그 관리</div><a href="manage-home.html" class="on">관리 홈</a><a href="manage-write.html" class="">글쓰기</a><a href="manage-posts.html" class="">글 관리</a><a href="manage-comments.html" class="">댓글·방명록</a><a href="manage-categories.html" class="">카테고리·태그</a><div class="sec">통계</div><a href="manage-stats.html" class="">방문 통계</a><div class="sec">설정</div><a href="manage-settings.html" class="">블로그 설정</a><a href="manage-spam.html" class="">스팸·차단</a></nav><main class="page">
+<div class="stat-row">
+  <div class="stat"><span class="small muted">오늘 방문자</span><b>37</b></div>
+  <div class="stat"><span class="small muted">어제</span><b>52</b></div>
+  <div class="stat"><span class="small muted">누적</span><b>4,318</b></div>
+</div><span class="small muted"><a class="pin" href="#api-1" title="API 1">1</a> 주인 본인 방문은 세지 않음</span>
+<div class="cols" style="grid-template-columns:minmax(0,1fr) minmax(0,1fr)">
+  <section class="section"><h2>최근 댓글</h2><div class="stack small"><div>하늘 · 잘 읽었습니다! addFilterAt과… <span class="muted">Spring Security 필터 체인 정리</span></div><div>민수 · fetch join 페이징은요? <span class="muted">JPA N+1과 fetch join</span></div></div><a class="small" href="manage-comments.html">댓글 관리</a></section>
+  <section class="section"><h2>최근 글</h2><div class="stack small"><div>Spring Security 필터 체인 정리 <span class="muted">조회 120</span></div><div>JPA N+1과 fetch join <span class="muted">조회 88</span></div></div><a class="small" href="manage-posts.html">글 관리</a></section>
+</div></main></div>
+  </div>
+  <section class="section"><h2>다른 상태</h2><div class="states"><div class="state"><span class="state-label">이용 제한된 블로그 (공통 B의 restriction)</span><div class="box danger"><b>이 블로그는 이용이 제한되었습니다</b><span>사유: 스팸·광고 — 광고성 글이 반복되어 다른 사람에게 보이지 않습니다.</span></div></div></div></section>
+  <section class="api"><h2>이 화면이 부르는 API</h2><p class="small muted">화면의 파란 번호가 아래 줄이다. 글자 번호(A, B, C)는 같은 틀의 화면이 모두 부르는 공통 API다. 경로와 응답은 <a href="../contracts/rest-api.md">REST API 명세</a>를 따른다.</p><div class="table-wrap"><table><thead><tr><th>#</th><th>언제</th><th>요청</th><th>메모</th></tr></thead><tbody><tr id="api-A"><td><a class="pin" href="#api-A" title="API A">A</a></td><td>화면 열 때</td><td><span class="method">GET</span> /api/me</td><td>401이면 로그인 화면으로(돌아올 주소 포함)</td></tr><tr id="api-B"><td><a class="pin" href="#api-B" title="API B">B</a></td><td>화면 열 때</td><td><span class="method">GET</span> /api/blog</td><td>viewer.isOwner가 false면 403 화면. 이용 제한이면 restriction 사유 띠</td></tr><tr id="api-1"><td><a class="pin" href="#api-1" title="API 1">1</a></td><td>화면 열 때</td><td><span class="method">GET</span> /api/manage/stats</td><td>today, yesterday, total, 최근 댓글·글 5</td></tr></tbody></table></div></section>
+  
+</div>
+</body>
+</html>

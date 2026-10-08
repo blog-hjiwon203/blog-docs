@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>오류 화면 목업</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans+KR:wght@400;600;700&display=swap">
+<link rel="stylesheet" href="assets/mock.css">
+</head>
+<body>
+<div class="wrap">
+  <div class="mockbar"><a class="back" href="index.html">← 화면 목록</a><h1>오류 화면</h1><span class="url">(어느 주소든)</span><div class="codes"><span class="code">COM-01</span><span class="code">COM-02</span></div></div>
+  <p class="lead">404·403·로그인 안내·예상하지 못한 오류. 볼 수 없는 글·블로그는 로그인 여부와 상관없이 404.</p>
+  <div class="frame"><div class="frame-top"><div class="dots"><i></i><i></i><i></i></div><div class="addr">(어느 주소든)</div></div>
+  <main class="page">
+<div class="states">
+  <div class="state"><span class="state-label">404</span><h3>페이지를 찾을 수 없습니다</h3><p class="muted">주소가 바뀌었거나 볼 수 없는 페이지입니다.</p><a class="btn" href="home.html">홈으로</a></div>
+  <div class="state"><span class="state-label">403</span><h3>접근 권한이 없습니다</h3><p class="muted">이 화면은 블로그 주인만 볼 수 있습니다.</p><a class="btn" href="home.html">홈으로</a></div>
+  <div class="state"><span class="state-label">401</span><h3>로그인이 필요합니다</h3><p class="muted">로그인하면 보던 화면으로 돌아옵니다.</p><a class="btn primary" href="login.html">로그인</a></div>
+  <div class="state"><span class="state-label">500</span><h3>잠시 문제가 생겼습니다</h3><p class="muted">잠시 후 다시 시도해 주세요.</p><p class="small muted">스택·SQL 같은 내부 정보는 보이지 않는다.</p></div>
+  <div class="state"><span class="state-label">입력 오류 400</span><label class="field"><span>제목</span><input type="text" id="e1" value=""><span class="err">제목을 입력해 주세요.</span></label><p class="small muted">fieldErrors로 어느 칸인지 알리고 입력값은 그대로 둔다.</p></div>
+</div></main>
+  </div>
+  
+  
+  <ul class="notes"><li>모든 API의 오류 본문은 { code, message, fieldErrors, detail } 모양이다(contracts/rest-api.md 오류 본문).</li><li>API가 401을 주면 프론트는 지금 주소를 redirect에 담아 blog.com/login으로 보낸다.</li></ul>
+</div>
+</body>
+</html>
