@@ -17,7 +17,7 @@ description: "지원 서비스 구현 작업 (2주 일정 기준)"
 ## 형식: `[ID] [P?] [스토리] [주차] 설명 (기능 코드)`
 
 - **[P]**: 다른 파일을 건드리고 의존이 없어 병렬로 할 수 있음
-- **[스토리]**: spec 유저 스토리(US1~US15)
+- **[스토리]**: spec 유저 스토리(US1~US16)
 - 경로는 plan.md 구조 기준: `backend/src/main/java/com/blog/...`, `frontend/src/...`
 
 ---
@@ -104,7 +104,7 @@ description: "지원 서비스 구현 작업 (2주 일정 기준)"
 
 - [ ] T041 [US3] [W1] 글 상세 API: 글 가시성 판단(질문 4개), 다른 블로그 소속이면 301/404, 주인에게만 수정·삭제 플래그 in `post/` (POST-04)
 - [ ] T042 [US3] [W1] 홈 최신 글 API: 커서 `(published_at, id)`, 20개, 숨긴 글·블로그 제외 in `home/` (HOME-01)
-- [ ] T043 [P] [US3] [W1] `comment` 엔티티 (parent_id, deleted, is_secret, blinded) in `comment/`
+- [ ] T043 [P] [US3] [W1] `comment` 엔티티 (parent_id, deleted_at, is_secret, is_blinded) in `comment/`
 - [ ] T044 [US3] [W1] 댓글 작성(회원만, 1~1,000자(채움), Idempotency-Key)·조회(작성순 더보기 20)·본인 삭제·주인 삭제 API in `comment/` (CMT-01, CMT-02)
 - [ ] T045 [P] [US3] [W1] 화면: 홈, 글 상세(DOMPurify 후 렌더), 댓글 in `frontend/src/pages/`
 - [ ] T046 [US3] [W2a] 공감 API: PUT/DELETE 멱등, `post_like` UNIQUE, like_count 트랜잭션 갱신 in `reaction/` (SOC-01)
@@ -150,7 +150,7 @@ description: "지원 서비스 구현 작업 (2주 일정 기준)"
 
 ## 9단계: US8 내 블로그 관리 (P2) — 2주 범위 일부
 
-- [ ] T067 [US8] [W2b] 내 글 관리 API·화면: 상태·카테고리 필터, 검색, 페이지 20, 블라인드 사유 표시, 일괄 공개 범위 변경·삭제 in `manage/` (MNG-01)
+- [ ] T067 [US8] [W2b] 내 글 관리 API·화면: 상태·카테고리 필터, 검색, 페이지 20, 블라인드 사유 표시(최신 BLIND 관리 이력), 일괄 공개 범위 변경·삭제 in `manage/` (MNG-01)
 - [ ] T068 [US8] 댓글 관리 (MNG-02)
 
 ## 10단계: US11 일부 앞당김 (P3)
@@ -188,7 +188,7 @@ description: "지원 서비스 구현 작업 (2주 일정 기준)"
 | US9 | 회원 정지 화면·API, 게시물 블라인드 (ADMIN-02, 03) |
 | US10 | 블로그 이사·삭제·대표·꾸미기, 탈퇴(블로그·글·댓글 모두 소프트 삭제, Q1) (BLOG-05~08, AUTH-06, R-08) |
 | US11 | 구독자 공개(구독 필요. 목록에서 빼고 링크로 열면 구독 안내, Q4), 예약 발행, 카테고리 비공개, 태그 관리, 비밀댓글, 댓글 허용 |
-| US12~14 | 알림, 통계, 스팸, 신고, 블로그 제한, 공지·이력·대시보드 |
+| US12~14 | 알림, 통계, 스팸, 신고, 블로그 제한, 공지·이력·대시보드. 통계·스팸 작업은 아래 "백로그: US13" |
 | US15 | 같은 카테고리 다른 글(OWN-05). 비슷한 글 추천(OWN-06)은 10a단계(도전 과제) |
 | US16 | 저장, 추천 블로그, 인기 블로거, 랭킹 전체보기 (SOC-03, SUB-06, HOME-04, HOME-05). 작업은 아래 "백로그: US16" |
 
@@ -206,6 +206,13 @@ description: "지원 서비스 구현 작업 (2주 일정 기준)"
 - [ ] T081 [P] [US16] 화면: 홈 인기 블로거, 구독 피드의 추천 블로그(빈 피드 포함), `/ranking` 탭 2개와 기준 시각 표시 in `frontend/src/` (HOME-04, SUB-06, HOME-05)
 
 ---
+
+### 백로그: US13 방문 통계와 스팸 차단 (2026-10-08 ERD 반영)
+
+- [ ] T082 [US13] `blog_visit` 기록(블로그·날짜·방문자 하루 1회, 주인 제외, Referer로 유입 종류·사이트), 새벽 집계 작업(`blog_daily_stat`, `blog_referrer_daily`, `blog.total_visitor_count`), 7일 지난 방문 기록 삭제 in `manage/stats/` (MNG-03)
+- [ ] T083 [US13] 통계 API: 관리 홈(오늘·어제·누적, 최근 댓글·글 요약), 일·주·월 그래프, 인기 글(누적·7일), 유입 경로 in `manage/stats/` (MNG-03)
+- [ ] T084 [US13] `blog_blocked_member`, `blog_banned_word` 엔티티와 관리 API(차단 시 기존 구독 삭제, 금칙어 100개), 댓글·방명록 작성과 구독에 차단·금칙어 검사 연결 in `manage/` (MNG-04)
+- [ ] T085 [P] [US13] 화면: 관리 홈 통계, 통계 그래프·유입 경로, 차단 회원·금칙어 관리, 댓글 관리에서 바로 차단 in `frontend/src/pages/manage/` (MNG-03, MNG-04)
 
 ## 의존 관계와 실행 순서
 
