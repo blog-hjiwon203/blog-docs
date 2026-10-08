@@ -382,7 +382,7 @@ erDiagram
 | `referrer_host` | 유입 호스트 | VARCHAR(100) | N | '' | UK |  |
 | `visit_count` | 방문 수 | INT | N | 0 |  |  |
 
-- 유니크 `uk_blog_referrer_daily_blog_id_stat_date_referrer_type_referrer_host`: (blog_id, stat_date, referrer_type, referrer_host)
+- 유니크 `uk_blog_referrer_daily_key`: (blog_id, stat_date, referrer_type, referrer_host)
 - 근거 기능: MNG-03
 
 ### blog_blocked_member (차단 회원)
