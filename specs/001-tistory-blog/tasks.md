@@ -236,7 +236,8 @@ description: "지원 서비스 구현 작업 (2주 일정 기준)"
 - 마감은 2026-10-16이고, 스텝에 날짜는 정하지 않는다(2026-10-08 지원 결정). 마감 때 끝난 스텝까지가 결과물이다.
 - 테이블은 스텝 1에서 한 번에 다 만들고, 자바 클래스(엔티티)는 스텝마다 필요한 것만 쓴다. 핵심 엔티티는 스텝 3이 쓰기 때문에 스텝 2에서 만든다.
 - T050(블로그 주인 검사)은 아래 6단계 목록에 있지만 스텝 4의 블로그 수정이 먼저 쓰므로 스텝 3에서 만든다.
-- 스텝 안에서 명세와 다르게 해야 할 것이 생기면 Claude Code가 멈추고 묻는다. 명세를 바꾸면 이 저장소(blog-docs)의 문서를 먼저 고친다.
+- 스텝 3에서 `moderation_log`(T008 정지 사유)와 `subscription`(T011 구독자 공개 판단) 엔티티를 먼저 만들었다. 관리 이력·구독 기능 작업은 이것을 이어서 쓴다.
+- 스텝 안에서 명세와 다르게 해야 할 것이 생기면 Claude Code가 멈추고 묻는다. 지원이 정하면 그 스텝 안에서 바로 이 저장소(blog-docs)의 해당 문서를 고치고, 코드 PR보다 먼저 병합한다. PR 본문에만 적고 끝내지 않는다(2026-10-08 지원 결정).
 - 백로그(T057~T059, T060a~T062, T065, T066, T068, T074~T087)는 스텝 11 이후 지원이 고른 순서대로 스텝 12부터 붙인다.
 
 ---
@@ -265,7 +266,7 @@ description: "지원 서비스 구현 작업 (2주 일정 기준)"
 - [ ] T005 [W1] 공통 엔티티 기반(BaseTimeEntity), `member` 엔티티(role, status) in `member/` (data-model)
 - [ ] T006 [W1] 공통 오류 응답 형식과 `@RestControllerAdvice` (400 fieldErrors, 401, 403, 404, 409, 500은 내부 정보 없이) in `global/error/` (COM-02)
 - [ ] T007 [W1] JWT 발급·검증 필터(`.blog.com` HttpOnly 쿠키로 발급, SameSite=Lax + CSRF 대책, R-03), Spring Security 설정(`/api/admin/**` hasRole ADMIN, 나머지 permitAll + 메서드 단위 인증) in `global/config/SecurityConfig.java` (COM-01, ADMIN-01, AUTH-03)
-- [ ] T008 [W1] 요청마다 member.status 확인(SUSPENDED → 403 + 사유·기한, WITHDRAWN → 401) in JWT 필터 (ADMIN-02 대비, R-03)
+- [ ] T008 [W1] 요청마다 member.status 확인(SUSPENDED → API 요청은 403 + 사유·기한, WITHDRAWN → 쿠키 삭제 후 비회원 처리라 로그인이 필요하면 401) in JWT 필터 (ADMIN-02 대비, R-03)
 - [ ] T009 [W1] Host 헤더 → 블로그 해석 `BlogHostResolver` (플랫폼 도메인 / 서브도메인 / 없으면 404 / 이사 301) in `global/host/` (R-04)
 - [ ] T010 [W1] 화면 주소 처리: `/api/**` 외 요청은 블로그·글 확인 후 `index.html` 포워드, 301은 서버가 직접 in `global/config/SpaForwardController.java` (6장 ①)
 - [ ] T011 [W1] 가시성 판단 `PostVisibilityPolicy` (data-model 글 가시성 판단, 볼 수 없는 글은 401보다 먼저 404)와 목록용 공통 조건(Specification/QueryDSL) in `global/visibility/` (COM-01, POST-04)

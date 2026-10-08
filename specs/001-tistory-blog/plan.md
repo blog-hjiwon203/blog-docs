@@ -14,7 +14,7 @@
 
 **언어/버전**: Java 21 (Spring Boot 4.1, **Maven**, Maven Wrapper `mvnw` 포함), TypeScript/JavaScript (React 18) — 버전은 [research.md R-01](./research.md) 기본값
 
-**주요 의존성**: Spring Boot (Web, Security, Data JPA, Validation, Cache, Data Redis), Flyway, JWT 라이브러리, OWASP Java HTML Sanitizer, jsoup / React, React Router, Vite, Tiptap, DOMPurify
+**주요 의존성**: Spring Boot (Web, Security, Data JPA, Validation, Cache, Data Redis), Flyway, JWT(Nimbus, `spring-security-oauth2-jose`: Boot가 버전 관리, Jackson 3과 충돌 없음), OWASP Java HTML Sanitizer, jsoup / React 18, React Router 7(8은 React 19 필요), Vite, Vitest, Tiptap, DOMPurify
 
 **저장소**: 주 DB는 MySQL 8 (개발은 docker compose의 MySQL, 운영 MySQL). 테이블은 Flyway가 [erd/schema.sql](./erd/schema.sql)로 만들고 JPA는 `ddl-auto=validate`로 엔티티가 스키마와 맞는지만 확인한다 (R-02). Redis는 캐시(@Cacheable, TTL 5분)와 연타 방지 키 저장. PostgreSQL + pgvector는 비슷한 글 추천(OWN-06) 전용으로 2주 안에 도전(도전 과제, R-02). 이미지는 서버 로컬 디스크의 업로드 폴더(UUID 파일명)에 두고, DB에는 경로·원본 파일명·크기만. 업로드 폴더는 설정값 `app.upload.dir`이고 개발 기본값은 코드 저장소 루트 아래 `/Users/chosun-nhn54/IdeaProjects/blog/uploads`(git에서 뺌), 운영은 서버 경로로 따로 준다. 화면에서는 `/uploads/{파일명}`으로 연다. ERD·data-model의 `./uploads/`는 이 폴더를 뜻한다.
 
