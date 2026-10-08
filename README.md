@@ -105,7 +105,7 @@ cd blog && git add CLAUDE.md && git commit -m "docs: CLAUDE.md 추가" && git pu
 4. Claude Code가 멈추고 정리해 주면 표의 "확인할 것"으로 확인하고, push → PR → 병합
 5. 다음 스텝
 
-문서 쪽 점검(`/speckit-analyze` 등 Spec Kit 스킬)은 이 저장소에서 Claude Code를 열 때만 쓸 수 있다.
+`--add-dir`로 연 폴더의 `.claude/skills/`는 같이 읽히므로 코드 저장소에서도 `/speckit-analyze` 같은 Spec Kit 스킬을 쓸 수 있다. 반대로 이 저장소의 CLAUDE.md는 읽히지 않으니, 코드 작업 규칙은 코드 저장소의 CLAUDE.md에 둔다.
 
 ## 폴더 구성
 
