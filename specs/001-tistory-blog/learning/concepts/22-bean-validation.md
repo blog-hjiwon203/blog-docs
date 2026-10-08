@@ -1,6 +1,6 @@
 # 22. 입력 검증과 JSON 바인딩
 
-> 관련 스텝: [스텝 4](../step-04.md) (T017, T018, T019, T022, T023) · 관련 개념: [07-spring-mvc-exception-handling](./07-spring-mvc-exception-handling.md), [09-password-hashing](./09-password-hashing.md), [15-subdomain-host-routing](./15-subdomain-host-routing.md), [16-authorization-visibility](./16-authorization-visibility.md), [23-transactions-locking](./23-transactions-locking.md)
+> 관련 스텝: [스텝 4](../step-04.md) (T017, T018, T019, T022, T023), [스텝 5](../step-05.md) (T029, T031~T034: 아직 없는 기능의 값 거절) · 관련 개념: [07-spring-mvc-exception-handling](./07-spring-mvc-exception-handling.md), [09-password-hashing](./09-password-hashing.md), [15-subdomain-host-routing](./15-subdomain-host-routing.md), [16-authorization-visibility](./16-authorization-visibility.md), [23-transactions-locking](./23-transactions-locking.md)
 
 ## 1. 이 문서로 배우는 것
 
@@ -439,6 +439,76 @@ update(testMembers.loginCookies(owner), """
 
 처음 쓴 테스트는 `"  " + 이메일 + " "`처럼 공백을 붙여 보내고 "서버가 다듬어 준다"를 확인하려 했다. 결과는 202가 아니라 **400**이었다. `@Email`은 공백이 붙은 값을 이메일 형식으로 보지 않는다. 검증은 서비스의 `Emails.normalize`(소문자로 맞추기)보다 먼저 일어나므로, 서버가 다듬을 기회가 없다. 이 동작이 맞다고 보고 테스트를 "대소문자만 다른 이메일"(`emailIsComparedIgnoringCase`)로 바꿨다. 공백 다듬기는 화면이 보낼 때 `email.trim()`으로 한다.
 
+### 5.9 (스텝 5) 아직 없는 기능의 값: 버리지 말고 400
+
+글 저장 본문(contracts/rest-api.md "글 저장 본문")에는 칸이 많다. 그중 태그(스텝 7), 대표 이미지(POST-07), 예약 발행(POST-13), 임시저장(POST-08), 구독자 공개(SUB-01), 댓글 막기(CMT-07)는 스텝 5에서 아직 동작하지 않는다. 이런 값이 오면 두 가지 선택이 있다.
+
+| 선택 | 결과 |
+| --- | --- |
+| 조용히 버린다 | 요청은 성공(201)한다. 쓰는 사람은 태그를 달았다고 믿지만 저장되지 않았다. 나중에 "태그가 사라졌다"는 버그로 돌아온다 |
+| 400으로 알린다 | 발행이 실패하고 어느 칸이 왜 안 되는지 알 수 있다. 기능이 생기면 그 검사만 지운다 |
+
+이 프로젝트는 두 번째를 골랐다. 5.7의 "모르는 칸은 무시된다"와 다른 점은, 이 칸들은 **명세에 있는 칸**이라 보낸 사람이 효과를 기대한다는 것이다.
+
+`src/main/java/com/nhnacademy/blog/post/presentation/dto/PostSaveRequest.java`
+
+```java
+public void checkSupported() {
+    List<FieldErrorDetail> errors = new ArrayList<>();
+    if (status != PostStatus.PUBLISHED) {
+        // 임시저장(POST-08), 예약 발행(POST-13)은 백로그
+        errors.add(new FieldErrorDetail("status", "지금은 바로 발행만 할 수 있습니다."));
+    }
+    if (visibility == Visibility.SUBSCRIBERS) {
+        // 구독(SUB-01)이 생기기 전에는 구독자 공개를 막는다 (contracts 글 저장 본문, review C-7)
+        errors.add(new FieldErrorDetail("visibility", "구독자 공개는 아직 고를 수 없습니다."));
+    }
+    if (tagNames != null && !tagNames.isEmpty()) {
+        errors.add(new FieldErrorDetail("tagNames", "태그는 아직 달 수 없습니다.")); // 스텝 7 (TAG-01)
+    }
+    ...
+    if (Boolean.FALSE.equals(commentAllowed)) {
+        errors.add(new FieldErrorDetail("commentAllowed", "댓글 막기는 아직 할 수 없습니다.")); // CMT-07
+    }
+    if (!errors.isEmpty()) {
+        throw BusinessException.fieldErrors(ErrorCode.VALIDATION_FAILED, errors);
+    }
+}
+```
+
+- 안 되는 칸을 **모두** 모아서 한 번에 알려 준다. 하나씩 던지면 고칠 때마다 다음 오류가 나온다.
+- "기본값이면 괜찮다"로 판단한다. 빈 태그 목록(`[]`)이나 `null`, 댓글 허용 `true`(또는 생략)는 지금 동작과 같아서 통과다. 실제로 다른 효과를 요구할 때만 막는다.
+- `commentAllowed`는 `Boolean`이라 `null`(생략)일 수 있다. `Boolean.FALSE.equals(...)`로 비교해 NPE 없이 "명시적으로 false"만 고른다(5.6과 같은 이유).
+- 이것을 애노테이션(`@AssertTrue` 등)으로 쓰지 않은 이유: 오류의 `field`가 메서드 이름(예: `statusSupported`)이 되어 화면이 칸에 붙이기 어렵다. 직접 쓰면 `field`를 `status`, `tagNames`처럼 실제 칸 이름으로 줄 수 있다.
+
+**한 칸이면 애노테이션으로**: 카테고리의 하위 카테고리(CAT-03, 스텝 9)는 칸 하나라 `@Null`로 충분하다.
+
+`src/main/java/com/nhnacademy/blog/category/presentation/dto/CategoryRequest.java`
+
+```java
+public record CategoryRequest(
+        @NotBlank(message = "카테고리 이름을 입력해 주세요.")
+        @Size(max = 30, message = "카테고리 이름은 30자까지입니다.")
+        String name,
+
+        @Null(message = "하위 카테고리는 아직 만들 수 없습니다.")
+        Long parentId) {
+}
+```
+
+`@Null`은 "값이 없어야 통과"다. `parentId`를 보내면 400, `fieldErrors[0].field`는 `parentId`.
+
+**검증 이어 쓰기.** `RequestValidator.validate`는 받은 요청을 그대로 돌려준다(`public <T> T validate(T request)`). 그래서 컨트롤러에서 한 줄로 이어 쓴다.
+
+```java
+blogOwnerGuard.requireOwner(blog, member);
+requestValidator.validate(request).checkSupported();   // 모양 검사 → 지원 여부 검사
+```
+
+순서는 애노테이션 검사(제목 비었나 등)가 먼저, 지원 여부가 다음이다. 제목도 비고 태그도 보냈다면 제목 오류만 먼저 받는다.
+
+**테스트** `PostWriteIntegrationTest.unsupportedOptionsAreRejectedNotIgnored`: 구독자 공개면 `fieldErrors[0].field`가 `visibility`이고, `status: DRAFT`와 `tagNames: ["java"]`를 함께 보내면 `fieldErrors`에 `status`, `tagNames`가 순서대로 둘 다 나온다.
+
 ## 6. 자주 하는 실수와 함정
 
 1. **`@Size`, `@Email`, `@Pattern`만 붙이고 필수라고 믿기**: 셋 다 `null`을 통과시킨다. 필수 칸에는 `@NotBlank`(문자열)나 `@NotNull`을 함께.
@@ -451,6 +521,7 @@ update(testMembers.loginCookies(owner), """
 8. **같은 규칙을 여러 곳에 따로 쓰기**: 주소 규칙을 `@Pattern`, Host 해석, 주소 확인 API에 각각 쓰면 언젠가 어긋난다. 규칙 클래스 하나(`BlogAddressRule`)를 같이 쓴다.
 9. **파서 오류 메시지를 그대로 내보내기**: `HttpMessageNotReadableException`의 메시지에는 클래스 이름 같은 내부 정보가 들어 있다. 이 프로젝트는 fieldErrors 없는 400만 준다(COM-02).
 10. **엔티티를 `@RequestBody`로 바로 받기**: 바꾸면 안 되는 칸(주소, 주인, 역할)까지 클라이언트가 채울 수 있다. 요청 DTO에는 받을 칸만.
+11. **명세에 있지만 아직 안 만든 칸을 조용히 버리기**: 요청은 성공했는데 효과가 없어 "저장이 안 된다"는 버그가 된다. 400으로 알리고, 기능을 만들 때 검사를 지운다(5.9).
 
 ## 7. 직접 해 보기
 
@@ -491,6 +562,14 @@ curl -s -X POST localhost:8080/api/auth/login -H 'Host: blog.test' \
 
 `BlogUpdateRequest`의 정규식을 `".*\\S.*"`로 바꾸고, 테스트를 하나 만들어 `{"name":"첫 줄\n둘째 줄"}`을 보내 본다. 줄바꿈 때문에 `.`이 맞지 않아 400이 된다. 되돌린다.
 
+**실습 6 (스텝 5). 안 되는 칸을 한꺼번에 보내 보기**
+
+```bash
+./mvnw test -Dtest=PostWriteIntegrationTest#unsupportedOptionsAreRejectedNotIgnored
+```
+
+`PostSaveRequest.checkSupported()`에서 `tagNames` 검사를 지우고 다시 돌리면, 태그를 보내도 오류에 `tagNames`가 없어 테스트가 실패한다. "조용히 버리는" 상태가 어떤 것인지 확인하고 되돌린다.
+
 ## 8. 확인 문제
 
 1. `@Size(max = 20) String nickname`만 붙였을 때 닉네임 칸을 아예 안 보내면 어떻게 되나? 필수로 만들려면?
@@ -516,6 +595,12 @@ curl -s -X POST localhost:8080/api/auth/login -H 'Host: blog.test' \
 
 8. `@Pattern(regexp = ".*\\S.*")`에 `(?s)`를 붙인 이유는?
 <details><summary>답</summary>기본적으로 정규식의 <code>.</code>은 줄바꿈과 맞지 않아, 줄바꿈이 든 값은 전체 일치에 실패한다. <code>(?s)</code>를 붙이면 <code>.</code>이 줄바꿈도 받아 "어딘가에 공백 아닌 글자가 있나"만 본다.</details>
+
+9. (스텝 5) 아직 만들지 않은 태그를 글 발행 요청에 넣으면 무시하지 않고 400을 주는 이유는?
+<details><summary>답</summary>무시하면 요청이 성공해 쓰는 사람은 태그가 달렸다고 믿지만 실제로는 저장되지 않는다. 명세에 있는 칸이라 보낸 사람이 효과를 기대하므로, 400과 칸 이름으로 "아직 안 된다"를 알려 주는 편이 안전하다.</details>
+
+10. (스텝 5) `requestValidator.validate(request).checkSupported()`처럼 이어 쓸 수 있는 이유는?
+<details><summary>답</summary><code>validate</code>가 <code>public &lt;T&gt; T validate(T request)</code>로 받은 요청을 그대로 돌려주기 때문이다. 검증을 통과하면 같은 객체에 다음 메서드를 부를 수 있다.</details>
 
 ## 9. 더 읽을거리
 
