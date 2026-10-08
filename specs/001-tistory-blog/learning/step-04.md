@@ -97,8 +97,8 @@ GET /api/posts?page=1  PostQueryService.blogPosts → PostSpecifications.listedI
 | 사이드바 모듈 | PROFILE, CATEGORY, RECENT_POST, RECENT_COMMENT를 고정 순서로 | 태그(TAG)는 스텝 7, 모듈 순서·표시 설정과 `blog_sidebar_module` 행 만들기는 백로그 T086 |
 | 블로그 수정 `PATCH /api/blog` | 이름·소개만 | 프로필 이미지는 스텝 7, 스킨·목록 형태·포인트 색은 백로그(BLOG-05) |
 | `profileImageUrl`, `socialAccounts`, `unreadNotificationCount` | `null`, `[]`, `0` | 이미지(스텝 7), 소셜·알림(백로그) |
-| 블로그 화면에서 주인이 보는 글 | 발행 글 전부(비공개·숨김 포함), 임시저장·예약 제외 | data-model "주인은 ④를 건너뛴다"를 블로그 화면에 맞게 좁힘 — **지원 확인 필요** |
-| 비밀번호 최대 길이 | 72바이트(bcrypt 한도) | 스텝 3에서 "지원이 정함"으로 남긴 항목 — **지원 확인 필요** |
+| 블로그 화면에서 주인이 보는 글 | 발행 글 전부(비공개·숨김 포함), 임시저장·예약 제외 | data-model "주인은 ④를 건너뛴다"를 블로그 화면에 맞게 좁힘. 지원 확인 후 data-model·spec·contracts에 반영(2026-10-08) |
+| 비밀번호 최대 길이 | 72바이트(bcrypt 한도) | 스텝 3에서 "지원이 정함"으로 남긴 항목. 지원 확인 후 spec·plan·contracts에 반영(2026-10-08) |
 | 로그인 화면의 "로그인 상태 유지" | 체크박스 있음(기본 꺼짐) | API가 스텝 3부터 지원. 목업 login에 있음 |
 
 ## 남은 문제

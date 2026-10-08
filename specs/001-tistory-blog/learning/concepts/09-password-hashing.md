@@ -296,7 +296,7 @@ public final class PasswordRule {
 - 길이 검사가 두 번이다: 최소는 **글자 수**(`length()`), 최대는 **바이트 수**(`getBytes(UTF_8).length`). bcrypt가 세는 것은 바이트이기 때문이다(4.3). 영문이면 72자, 한글이 섞이면 더 짧아진다.
 - 결과는 400 `VALIDATION_FAILED`에 `fieldErrors: [{field: "password", ...}]`. 화면이 비밀번호 칸 아래에 문구를 띄운다.
 - 요청 DTO의 `@NotBlank` 대신 이 클래스에 규칙을 모은 이유: 나중에 비밀번호 변경(AUTH-05)과 재설정(OWN-02)도 같은 규칙을 써야 한다. 한 곳에 있으면 규칙이 바뀌어도 한 곳만 고친다. 가입 서비스는 `PasswordRule.check("password", password)`로 부른다([입력 검증](./22-bean-validation.md)).
-- **최대 72바이트는 기술적 한계에서 정한 값이고 명세(spec.md AUTH-01)에는 없다.** 지원 확인을 받아 명세에 적을지 정하는 항목이다(스텝 4 보고에서 질문).
+- **최대 72바이트는 기술적 한계에서 정한 값이다.** 지원이 확인해(2026-10-08) spec.md AUTH-01, plan.md, contracts의 가입 API에 적었다.
 
 **로그인의 더미 해시**: `auth/application/AuthService.java`
 
