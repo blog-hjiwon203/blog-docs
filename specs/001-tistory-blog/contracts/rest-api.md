@@ -185,7 +185,7 @@
 ```json
 {
   "id": 1532, "title": "Spring Security 정리", "summary": "필터 체인부터...",
-  "thumbnailUrl": "/uploads/t_a1.webp",
+  "thumbnailUrl": "/uploads/t_a1.jpg",
   "blog": { "id": 3, "address": "jiwon", "name": "지원의 기록" },
   "category": { "id": 11, "name": "Spring" }, "topic": "IT_DEV",
   "publishedAt": "2026-10-08T09:00:00+09:00", "likeCount": 5, "commentCount": 2

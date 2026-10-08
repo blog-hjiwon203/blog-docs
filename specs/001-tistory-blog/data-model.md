@@ -96,7 +96,7 @@
 
 **view_log 보관**: 블로그 점수가 7일치를 쓰므로 7일보다 오래된 행은 매일 지운다.
 
-**image**: path(`./uploads/{uuid}.{ext}`), thumbnail_path(`./uploads/t_{uuid}.jpg` 또는 `.png`, 400px), original_name, content_type(jpg/png/gif/webp), size(CHECK ≤ 10MB), uploader_id. `uploader_id`는 회원 ↔ 이미지 순환 참조를 피하려고 외래 키 없이 두고(인덱스만), 서버가 로그인 회원으로 채운다.
+**image**: path(`/uploads/{uuid}.{ext}`), thumbnail_path(`/uploads/t_{uuid}.jpg` 또는 `.png`, 400px), original_name, content_type(jpg/png/gif/webp), size(CHECK ≤ 10MB), uploader_id. path·thumbnail_path에는 화면이 그대로 쓰는 주소를 저장하고, 실제 파일은 설정값 `app.upload.dir` 폴더에 같은 파일 이름으로 둔다(R-15). `uploader_id`는 회원 ↔ 이미지 순환 참조를 피하려고 외래 키 없이 두고(인덱스만), 서버가 로그인 회원으로 채운다.
 
 **category**: blog_id, parent_id(NULL 또는 1단계 상위), name(30), sort_order, is_private(P2). 계산 컬럼 `parent_key = IFNULL(parent_id, 0)`과 UNIQUE(blog_id, parent_key, name). MySQL UNIQUE는 NULL끼리 중복을 허용해서 (blog_id, parent_id, name)만으로는 최상위 이름 중복을 못 막기 때문이다. '전체 글'·'미분류'는 행이 아니라 가상 항목.
 
