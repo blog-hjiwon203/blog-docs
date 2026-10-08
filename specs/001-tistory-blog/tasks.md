@@ -122,6 +122,7 @@ description: "지원 서비스 구현 작업 (2주 일정 기준)"
 | T033 | 글 삭제 (댓글·공감도 함께) |
 | T034 | 공개·비공개 바꾸기 |
 | T035 | 화면: 에디터, 글쓰기·수정, 카테고리 관리 |
+| T035a | 에디터에서 마크다운 문법 입력·마크다운 붙여넣기 (2026-10-08 지원 결정으로 추가) |
 | T040 | 테스트: 수정해도 주소·순서 그대로, 카테고리 삭제 시 미분류 |
 
 **확인할 것**: quickstart 3에서 이미지·태그를 뺀 부분. 글을 고쳐도 주소와 목록 순서가 그대로다. 목업 manage-write, manage-categories와 비교한다.
@@ -315,6 +316,7 @@ description: "지원 서비스 구현 작업 (2주 일정 기준)"
 - [ ] T033 [US2] [W1] 글 삭제 API: 주인만, 소프트 삭제(`deleted_at`), 댓글·공감·알림 함께 처리(한 트랜잭션), 글 수·공감 수에서 바로 빠짐 in `post/` (POST-03)
 - [ ] T034 [US2] [W1] 공개 범위 변경 API (PUBLIC, PRIVATE; SUBSCRIBERS는 구독 이후) in `post/` (POST-06)
 - [ ] T035 [P] [US2] [W1] 화면: Tiptap 에디터(허용 서식만), 글쓰기·수정, 카테고리 관리, 삭제 확인 in `frontend/src/components/editor/`, `pages/manage/`
+- [ ] T035a [US2] [W1] 에디터 마크다운 입력: 같은 에디터에서 마크다운 문법(제목·굵게·기울임·목록·인용·코드 블록·`[글자](http/https 주소)`)을 치거나 마크다운 글을 붙여넣으면 서식으로, 저장은 HTML 그대로 in `frontend/src/components/editor/` (POST-01, 2026-10-08 지원 결정)
 - [ ] T036 [US2] [W2a] 이미지 업로드 API: 10MB, 확장자+실제 내용 검사(위장 파일 거절), UUID 파일명으로 `app.upload.dir`(개발: `/Users/chosun-nhn54/IdeaProjects/blog/uploads`)에 저장, `/uploads/**`로 서빙, 리사이즈·썸네일, EXIF 방향 보정, GIF 유지 in `image/` (POST-05, plan 저장소)
 - [ ] T037 [US2] [W2a] 에디터 이미지 버튼 ↔ 업로드 API 연결, 여러 장은 고른 순서대로 in `frontend/src/components/editor/` (POST-05)
 - [ ] T038 [P] [US2] [W2a] `tag`, `post_tag` 엔티티, 글 작성·수정 시 태그 최대 10개·중복 제거·없는 이름 자동 생성 in `tag/` (TAG-01)
