@@ -31,7 +31,7 @@
 
 ### 인증과 보안
 
-- 인증은 `Domain=.blog.com; HttpOnly; Secure; SameSite=Lax` 쿠키다(Q6, [조사](../research.md) R-03). 로그인 유지(AUTH-03)를 고르면 만료가 긴 Refresh Token 쿠키를 함께 준다.
+- 인증은 `Domain=.blog.com; HttpOnly; Secure; SameSite=Lax` 쿠키다(Q6, [조사](../research.md) R-03). Refresh Token 쿠키를 함께 준다. 로그인 유지(AUTH-03)를 고르면 14일 남는 쿠키, 고르지 않으면 브라우저를 닫으면 사라지는 쿠키이고 30분 동안 요청이 없으면 서버에서 끝난다(R-03). Access 토큰이 끝나면 서버가 요청을 처리하면서 새 Access 쿠키를 준다.
 - 상태를 바꾸는 요청(POST·PUT·PATCH·DELETE)은 `X-Requested-With: XMLHttpRequest` 헤더가 없으면 403 `CSRF_REJECTED`다.
 - 정지된 회원이 이미 로그인한 상태로 요청하면 그 요청부터 403 `MEMBER_SUSPENDED`와 쿠키 삭제다(ADMIN-02).
 - 본문 HTML(`contentHtml`)은 서버가 허용 목록으로 정화해 저장하고, 그 밖의 문자열은 글자 그대로 돌려준다. 프론트는 `contentHtml`만 DOMPurify를 한 번 더 거쳐 넣고, 나머지는 텍스트로 넣는다.
