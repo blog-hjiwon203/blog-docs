@@ -156,7 +156,7 @@ POST /api/posts  { "title": ..., "tagNames": ["spring", " #Security ", "Spring",
   트랜잭션 커밋 직전 flush                        INSERT INTO post_tag (post_id, tag_id) ... 태그 수만큼
 ```
 
-순서가 중요하다. 태그 정리에서 400(`tagNames` 칸 오류, `TOO_MANY_TAGS`)이 나면 예외가 트랜잭션 밖으로 나가 **아무것도 저장되지 않는다**. 테스트 `elevenTagsAreRejected`가 11개를 보낸 뒤 `tag` 표가 비어 있음(`tagCount()).isZero()`)을 확인한다.
+순서가 중요하다. 태그 정리에서 400(`tagNames` 칸 오류, `TOO_MANY_TAGS`)이 나면 예외가 트랜잭션 밖으로 나가 **아무것도 저장되지 않는다**. 테스트 `tooManyTooLongOrSlashedTagsAreRejected`가 11개를 보낸 뒤 `tag` 표가 비어 있음(`tagCount()).isZero()`)을 확인한다.
 
 ### 4.2 글을 고쳐 태그를 바꿀 때
 
@@ -269,6 +269,10 @@ public class Tag {
             if (trimmed.length() > Tag.MAX_NAME_LENGTH) {
                 throw BusinessException.invalidField("tagNames", "태그는 " + Tag.MAX_NAME_LENGTH + "자까지입니다.");
             }
+            if (trimmed.contains("/")) {
+                // 태그 목록 주소 /tag/{이름}에서 %2F가 되어 보안 방화벽이 거절한다 (spec TAG-01)
+                throw BusinessException.invalidField("tagNames", "태그에는 /를 쓸 수 없습니다.");
+            }
             if (unique.putIfAbsent(trimmed, trimmed) == null) {
                 ordered.add(trimmed);
             }
@@ -295,6 +299,7 @@ public class Tag {
 4. `trim()` → `replaceFirst("^#+", "")` → 다시 `trim()`: ` #Security `는 앞뒤 공백을 떼고(`#Security`), 앞의 `#`들을 떼고(`Security`), `# spring`처럼 `#` 뒤에 공백이 있으면 한 번 더 뗀다. 정규식 `^#+`는 "맨 앞에서 시작하는 # 한 개 이상"이다. 가운데 `#`(`C#`)은 남는다.
 5. 비었으면 건너뛴다. `""`, `"  "`, `"#"`는 오류가 아니라 무시한다.
 6. 30자를 넘으면 400. `invalidField("tagNames", ...)`라 응답의 `fieldErrors[0].field`가 `tagNames`다. 화면은 이 칸 이름으로 태그 입력 아래에 문장을 띄운다(`errors.tagNames`).
+   `/`가 들어 있어도 같은 400이다. 태그 `a/b`의 목록 주소는 `/tag/a%2Fb`가 되는데, Spring Security의 기본 방화벽(`StrictHttpFirewall`)이 인코딩된 슬래시가 든 주소를 거절한다. 방화벽을 푸는 대신 이름에서 막기로 했다(2026-10-09 지원 결정, spec TAG-01).
 7. **정리한 뒤** 10개를 센다. `["a", "A", "#a", ... ]`처럼 겹치는 이름으로 11개를 보내도 정리해서 10개 이하면 통과다.
 
 **`Collator`와 PRIMARY.** `java.text.Collator`는 언어 규칙대로 문자열을 비교하는 도구다. 비교의 세밀함(strength)을 정할 수 있다.
@@ -611,7 +616,7 @@ export function sameName(a: string, b: string): boolean {
 - **`INSERT IGNORE` 뒤 `FOR UPDATE`로 읽는다.** 중복을 만난 트랜잭션들이 이미 공유 잠금을 쥐고 있어, 배타 잠금으로 올리다 데드락이 난다. 읽기만 하면 `FOR SHARE`.
 - **태그 목록 주소에 이름을 인코딩하지 않는다.** `#`, `?`, `/`가 든 태그에서 주소가 깨진다. `encodeURIComponent`를 쓴다.
 - **점이 든 이름을 확장자로 본다.** 서버의 화면 주소 처리(`SpaForwardController`)는 원래 경로 조각을 `[^.]+`(점이 없는 글자)로만 받아서, `/tag/node.js`를 **새로 열거나 새로고침**하면 404였다(화면 안에서 칩을 누를 때는 브라우저 안 라우터가 처리해 문제가 안 보였다). 태그 주소만 `/tag/{name:.+}`로 따로 받게 고쳤다(`SpaForwardIntegrationTest`).
-- **슬래시가 든 이름.** `a/b` 태그는 `/tag/a%2Fb`가 된다. Spring Security의 기본 방화벽(`StrictHttpFirewall`)은 인코딩된 슬래시(`%2F`)가 든 주소를 거절한다. 태그 이름에 `/`를 허용할지는 아직 정하지 않았다(스텝 7 보고에서 지원에게 물음).
+- **슬래시가 든 이름을 받는다.** `a/b` 태그는 `/tag/a%2Fb`가 된다. Spring Security의 기본 방화벽(`StrictHttpFirewall`)은 인코딩된 슬래시(`%2F`)가 든 주소를 거절해 태그 목록을 열 수 없다. 방화벽을 풀면 경로 조작 공격을 막는 장치를 함께 끄게 되므로, 이 프로젝트는 이름에서 `/`를 막았다(400, spec TAG-01).
 - **조합 중 Enter를 처리한다.** 한글 태그의 마지막 글자가 빠지거나 두 번 들어간다. `isComposing`을 먼저 본다.
 - **키 이벤트로만 입력을 처리한다.** 붙여 넣기, 자동완성, 음성 입력은 keydown이 없다. 값은 `onChange`에서 본다(5.8의 버그).
 - **화면 규칙만 믿는다.** API를 직접 부르면 11개도, 31자도 들어온다. 서버의 `TagNames`가 진짜 검사다.
