@@ -25,60 +25,18 @@ npm run dev            →  Vite(5173), /api 요청은 8080으로 넘김
 | `frontend/` | Vite + React 18 + TypeScript |
 | `scripts/build-frontend.sh` | 프론트 빌드 결과를 `src/main/resources/static`으로 복사 |
 
-## 개념
+## 이 스텝을 이해하려면 (읽는 순서)
 
-### 1. Maven과 스타터 의존성
+이 스텝은 "코드를 돌릴 판"을 깐 것이라, 아래 순서로 읽으면 판이 어떻게 짜였는지 보인다.
 
-Spring Boot는 기능마다 **스타터**(`spring-boot-starter-xxx`)를 두고, 스타터 하나가 그 기능에 필요한 라이브러리 묶음과 자동 설정을 가져온다. 버전은 부모 POM(`spring-boot-starter-parent` 4.1.1)이 관리하므로 `<version>`을 쓰지 않는다.
-
-**Spring Boot 4에서 바뀐 점**(3.x 예제를 그대로 쓰면 안 되는 이유):
-- 웹 스타터 이름이 `spring-boot-starter-web` → `spring-boot-starter-webmvc`.
-- Flyway는 `flyway-core`만 넣으면 자동 설정이 안 되고 `spring-boot-starter-flyway`가 필요하다. MySQL을 쓰면 `flyway-mysql`도 따로 넣는다.
-- 테스트 스타터가 기능별로 나뉜다(`spring-boot-starter-webmvc-test`, `-data-jpa-test` 등).
-- Jackson 3(패키지 `tools.jackson`)을 쓴다. 애노테이션(`@JsonInclude` 등)은 예전 패키지 `com.fasterxml.jackson.annotation` 그대로다.
-- Testcontainers 2.x는 모듈 이름이 `testcontainers-mysql`, 클래스가 `org.testcontainers.mysql.MySQLContainer`다(1.x는 `mysql`, `org.testcontainers.containers.MySQLContainer`).
-
-**코드에서**: `pom.xml`. 버전을 확인하려면 `~/.m2/repository/org/springframework/boot/spring-boot-dependencies/4.1.1/*.pom`에서 `testcontainers.version` 등을 찾는다.
-
-### 2. Spring 프로필
-
-같은 코드를 개발·운영에서 다른 설정으로 돌리려고 설정 파일을 나눈다.
-- `application.yml`: 공통. `spring.profiles.default: dev`라서 아무 프로필도 안 주면 dev로 뜬다.
-- `application-dev.yml`: docker compose의 MySQL(`localhost:3306`, 계정 blog/blog), 업로드 폴더 절대 경로.
-- `application-prod.yml`: `${DB_URL}`처럼 **환경 변수**로 받는다. 비밀번호를 저장소에 남기지 않기 위해서다.
-
-운영에서는 `java -jar app.jar --spring.profiles.active=prod`처럼 켠다.
-
-### 3. Flyway: 테이블은 SQL 파일로 만든다
-
-JPA의 `ddl-auto=create`는 엔티티를 보고 테이블을 만들어 주지만, 실제 서비스에서는 쓰지 않는다. 어떤 SQL이 언제 실행됐는지 기록이 남지 않기 때문이다. Flyway는 `db/migration/V{번호}__{설명}.sql` 파일을 번호 순서대로 **한 번씩만** 실행하고 `flyway_schema_history` 테이블에 기록한다.
-
-- 이미 실행된 파일을 고치면 체크섬이 달라져 앱이 뜨지 않는다. 그래서 바꿀 때는 새 번호 파일(`V3__...`)을 더한다.
-- JPA는 `ddl-auto=validate`로 **엔티티와 테이블이 맞는지 확인만** 한다. 안 맞으면 앱이 뜰 때 실패한다(스텝 2에서 이 덕을 봤다).
-
-**코드에서**: `application.yml`의 `spring.flyway`, `spring.jpa.hibernate.ddl-auto`.
-
-### 4. Docker Compose와 Testcontainers
-
-- **Docker Compose**: 개발 중 계속 켜 두는 MySQL·Redis. 데이터는 `mysql-data` 볼륨에 남는다. `healthcheck`는 컨테이너가 "떴다"가 아니라 "요청을 받을 수 있다"를 확인한다.
-- **Testcontainers**: 테스트가 시작될 때 **새 컨테이너**를 띄우고 끝나면 지운다. 개발 DB를 더럽히지 않고, 누가 돌려도 같은 결과가 나온다.
-- `@ServiceConnection`(Spring Boot 3.1+)을 컨테이너 빈에 붙이면, 컨테이너의 주소·포트·계정을 Spring이 알아서 `spring.datasource.*`, `spring.data.redis.*`에 넣는다. 예전에는 `@DynamicPropertySource`로 직접 넣었다.
-
-**코드에서**: `src/test/…/TestcontainersConfiguration.java`. MySQL은 `@ServiceConnection`, Redis는 전용 클래스가 없어 `GenericContainer`에 `@ServiceConnection(name = "redis")`로 종류를 알려 준다.
-
-**왜 H2를 안 쓰나**: ERD의 `schema.sql`에 MySQL 전용 문법(`GENERATED ALWAYS AS ... STORED` 계산 컬럼)이 있어 H2에서 실행되지 않는다(research.md R-02). 테스트 DB와 운영 DB가 같아야 "테스트는 통과했는데 운영에서 깨지는" 일이 줄어든다.
-
-### 5. 시간대
-
-`TZ=Asia/Seoul` 요구를 세 곳에서 맞췄다.
-- JVM 기본 시간대: `BlogApplication.main`의 `TimeZone.setDefault(...)` → `LocalDateTime.now()`가 서버 위치와 상관없이 한국 시간.
-- Hibernate가 DB에 시각을 쓸 때: `hibernate.jdbc.time_zone: Asia/Seoul`.
-- MySQL 컨테이너: `TZ: Asia/Seoul`, JDBC URL의 `connectionTimeZone=Asia/Seoul`.
-
-### 6. Vite 프록시와 jar 하나 배포
-
-- 개발 중: 프론트(5173)와 백엔드(8080)가 따로 뜬다. 브라우저가 `/api/...`를 5173에 보내면 Vite가 8080으로 넘긴다(`vite.config.ts`의 `server.proxy`). 브라우저 입장에서는 같은 출처라 CORS 설정이 필요 없다.
-- 배포: `scripts/build-frontend.sh`가 `npm run build` 결과(`frontend/dist`)를 `src/main/resources/static`에 복사하고, Spring Boot가 그 정적 파일을 함께 서빙한다. 그래서 jar 하나로 배포된다. `static/`은 빌드 결과라 git에서 뺐다.
+| 순서 | 개념 문서 | 이 스텝에서 그 개념이 쓰인 곳 |
+| --- | --- | --- |
+| 1 | [Spring Boot 기초: 컨테이너, 빈, 스타터, 자동 설정](./concepts/01-spring-boot-basics.md) | `pom.xml`에 스타터를 더하자 Redis·Flyway·캐시가 설정 없이 켜진 이유. Spring Boot 4에서 바뀐 이름들 |
+| 2 | [설정 파일과 프로필](./concepts/02-configuration-profiles.md) | `application.yml`과 `-dev`·`-prod`, 시간대를 다섯 곳에서 맞춘 이유 |
+| 3 | [Flyway와 스키마 마이그레이션](./concepts/03-flyway-migration.md) | `V1__init.sql`, `ddl-auto=validate`, 64자 제약 이름 사건 |
+| 4 | [Docker와 Docker Compose](./concepts/04-docker-compose.md) | `docker-compose.yml`의 항목 하나하나, 6379 포트 충돌 |
+| 5 | [Spring 테스트와 Testcontainers](./concepts/05-spring-testing.md) | `TestcontainersConfiguration`, `@ServiceConnection`, H2를 안 쓰는 이유 |
+| 6 | [SPA와 서버 라우팅](./concepts/18-spa-server-routing.md)의 Vite·빌드 부분 | `vite.config.ts` 프록시, `scripts/build-frontend.sh`로 jar 하나 배포 |
 
 ## 막혔던 점
 
