@@ -141,7 +141,7 @@ frontend/
     └── api/
 ```
 
-**구조 결정**: 웹 애플리케이션 구조. 빌드 시 `frontend/dist`를 `src/main/resources/static`으로 복사해 jar 하나로 배포한다. 백엔드는 기능(도메인) 단위 패키지.
+**구조 결정**: 웹 애플리케이션 구조. 빌드 시 `frontend/dist`를 `src/main/resources/static`으로 복사해 jar 하나로 배포한다. 백엔드는 기능(도메인) 단위 패키지. 기능 패키지 안은 `domain/`(엔티티·enum·Repository), `application/`(Service), `presentation/`(Controller, `dto/`)으로 나누고 의존은 presentation → application → domain 한 방향이다(2026-10-08 지원 결정).
 
 **Spring Boot 4 주의**: 프로젝트가 Spring Boot 4.1.1로 만들어져 있다(Initializr 기본). 4.x는 스타터 이름(`spring-boot-starter-webmvc` 등)과 Flyway 자동 설정(`spring-boot-starter-flyway` 필요), Jackson 3 같은 점이 3.x와 다르므로, Claude Code가 3.x 예제를 그대로 쓰지 않게 한다.
 

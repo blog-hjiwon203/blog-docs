@@ -38,7 +38,7 @@
 
 ## R-06 페이지네이션 (4.4)
 
-- **결정**: 기본 offset(`?page=0&size=10`, 응답 content/page/size/totalElements/totalPages). 홈 최신 글·구독 피드는 커서 `(published_at, id)` 이후. size 1~50 보정, 음수 page는 0, 마지막 초과는 빈 content. '최신순' = published_at 내림차순, 같으면 id 내림차순. 화면 번호는 10개씩 묶음.
+- **결정**: 기본 offset(`?page=1&size=10`, page는 1부터, 응답 content/page/size/totalElements/totalPages). 홈 최신 글·구독 피드는 커서 `(published_at, id)` 이후. page가 1보다 작거나 size가 1~50을 벗어나면 보정하지 않고 400 `VALIDATION_FAILED`(fieldErrors에 page·size), 마지막 초과는 빈 content (2026-10-08 지원 결정: [REST API](./contracts/rest-api.md) 목록 규칙에 맞춤). '최신순' = published_at 내림차순, 같으면 id 내림차순. 화면 번호는 10개씩 묶음.
 
 | 목록 | 방식 | 크기 | 정렬 |
 | --- | --- | --- | --- |

@@ -61,7 +61,7 @@ description: "지원 서비스 구현 작업 (2주 일정 기준)"
 | T028 | 글·카테고리 클래스 |
 | T043 | 댓글 클래스 |
 | T006 | 오류 응답 형식 (400·401·403·404·409·500) |
-| T012 | 페이지 번호·크기 보정, 목록 응답 형식 |
+| T012 | 페이지 번호·크기 검증, 목록 응답 형식 |
 | T013 | 관리자 초기 계정 |
 | T014 | 글 본문 HTML 정화(XSS 방지), 목록용 요약 만들기 |
 
@@ -269,7 +269,7 @@ description: "지원 서비스 구현 작업 (2주 일정 기준)"
 - [ ] T009 [W1] Host 헤더 → 블로그 해석 `BlogHostResolver` (플랫폼 도메인 / 서브도메인 / 없으면 404 / 이사 301) in `global/host/` (R-04)
 - [ ] T010 [W1] 화면 주소 처리: `/api/**` 외 요청은 블로그·글 확인 후 `index.html` 포워드, 301은 서버가 직접 in `global/config/SpaForwardController.java` (6장 ①)
 - [ ] T011 [W1] 가시성 판단 `PostVisibilityPolicy` (data-model 글 가시성 판단, 볼 수 없는 글은 401보다 먼저 404)와 목록용 공통 조건(Specification/QueryDSL) in `global/visibility/` (COM-01, POST-04)
-- [ ] T012 [W1] 페이지 요청 보정(size 1~50, page 음수→0)과 페이지·커서 응답 DTO in `global/web/` (R-06)
+- [ ] T012 [W1] 페이지 요청 검증(page 1부터, size 1~50, 벗어나면 400 VALIDATION_FAILED)과 페이지·커서 응답 DTO in `global/web/` (R-06)
 - [ ] T013 [P] [W1] ADMIN 초기 계정(ERD의 "data.sql")을 Flyway `V2__admin_account.sql`로 넣기 in `src/main/resources/db/migration/` (ADMIN-01)
 - [ ] T014 [P] [W1] XSS: OWASP HTML Sanitizer 허용 목록 `HtmlSanitizer`, jsoup 요약 `SummaryExtractor`, CSP 헤더 in `global/security/` (R-05, 기능 명세 공통 규칙 보안)
 - [ ] T015 [P] [W1] 프론트 라우터: 플랫폼 도메인 / 블로그 서브도메인 분기, API 클라이언트(쿠키 자동 전송 + CSRF 헤더, 401 → 플랫폼 로그인 후 원래 주소 복귀) in `frontend/src/app/`, `frontend/src/api/`
