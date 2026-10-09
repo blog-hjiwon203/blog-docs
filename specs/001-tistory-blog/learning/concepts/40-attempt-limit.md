@@ -5,8 +5,9 @@
 ## 1. 이 문서로 배우는 것
 
 - **온라인 무차별 대입**: 서버에 직접 비밀번호·코드를 계속 넣어 보는 공격과, bcrypt로는 막을 수 없는 이유
-- 막는 방법들: 계정(대상)별 실패 횟수 제한, IP별 요청 제한, CAPTCHA, 점점 늘어나는 대기
-- 이 프로젝트의 규칙: **15분 안에 5번 틀리면, 다섯 번째로 틀린 때부터 15분 동안 막는다**(지원 결정, research R-17)
+- 막는 방법들: 계정(대상)별 실패 횟수 제한, IP별 실패 횟수 제한, CAPTCHA, 점점 늘어나는 대기
+- 이 프로젝트의 규칙: **15분 안에 5번 틀리면, 다섯 번째로 틀린 때부터 15분 동안 막는다**. 같은 IP는 모든 대상을 합쳐 **20번**(지원 결정, research R-17)
+- IP별 제한이 필요한 이유(비밀번호 스프레이), 공용 IP, 맞혀도 IP 횟수를 지우지 않는 이유, 프록시 뒤의 접속 주소
 - Redis `INCR` + `EXPIRE`로 실패 횟수 세기
 - "몇 번 틀렸나 보고 → 확인"이 **동시 요청에 뚫리는 이유**와, 확인 **전에** 먼저 하나 올려 자리를 잡는 방법
 - 맞으면 지우고, 틀리면 남기고, "틀린 것이 아닌 실패"는 되돌리기
@@ -35,11 +36,11 @@ bcrypt([09](./09-password-hashing.md))는 **DB가 털린 뒤**(오프라인) 해
 | 방법 | 기준 | 장점 | 단점 |
 | --- | --- | --- | --- |
 | **대상별 실패 횟수 제한** (이 프로젝트) | 이메일·회원마다 | 한 계정을 노린 공격을 정확히 막음 | 남이 일부러 틀려 그 계정을 잠글 수 있음(3.5) |
-| IP별 요청 제한 | 보낸 곳마다 | 여러 계정을 훑는 공격도 막음 | 공용 IP(회사·학교)가 함께 막힘, IP를 바꾸면 피함 |
+| **IP별 실패 횟수 제한** (이 프로젝트) | 보낸 곳마다 | 여러 계정을 훑는 공격도 막음 | 공용 IP(회사·학교)가 함께 막힘, IP를 바꾸면 피함 |
 | CAPTCHA | 몇 번 틀리면 사람 확인 | 자동 공격에 강함 | 외부 서비스·화면 작업 필요 |
 | 점점 늘어나는 대기 | 틀릴수록 1초, 2초, 4초… | 사람에게는 거의 안 보임 | 구현이 복잡 |
 
-여러 개를 함께 쓰는 서비스가 많다. 이 프로젝트는 명세에 정한 것이 없어서 지원에게 물었고, 가장 단순하고 효과가 큰 **대상별 실패 횟수 제한**을 15분·5번으로 정했다.
+여러 개를 함께 쓰는 서비스가 많다. 이 프로젝트는 명세에 정한 것이 없어서 지원에게 물었고, 먼저 **대상별 실패 횟수 제한**(15분·5번)을 정했다. 이어서 지원이 **IP별 제한**도 더하자고 해서 같은 IP는 합쳐 20번으로 했다(3.6).
 
 ### 3.2 규칙을 정확히
 
@@ -104,6 +105,25 @@ if (n > 5) throw 429;        // 6번째부터는 확인하지 않는다
 
 인증 코드는 **새 코드를 받아도 틀린 횟수가 그대로**다. 새로 받을 때 지운다면, 공격자는 1분마다 새 코드를 받아(재발송 제한 1분) 5번씩 넣어 볼 수 있다. 틀린 횟수가 15분 동안 남아 있으면 그 길이 막힌다.
 
+### 3.6 IP별 제한을 함께 두는 이유
+
+대상(이메일)별 제한만 있으면 **비밀번호 스프레이**를 막지 못한다. 흔한 비밀번호 하나(`password1`)를 이메일 수천 개에 **한 번씩** 넣어 보는 공격이다. 이메일마다 1번이니 "5번" 제한에 걸리지 않는다.
+
+그래서 같은 IP에서 온 실패를 **모든 대상을 합쳐** 센다(지원 결정, R-17).
+
+| | 대상별 | IP별 |
+| --- | --- | --- |
+| 키 | `attempt:login:{이메일}` 등 | `attempt:ip:{주소}` (세 종류 합침) |
+| 한도 | 15분 안에 5번 | 15분 안에 20번 |
+| 맞히면 | 지움 | 지우지 않음(이번 시도만 뺌) |
+| 막는 공격 | 한 계정을 노린 대입 | 여러 계정을 훑는 대입 |
+
+- **한도를 20으로 넉넉히** 잡은 이유: 회사·학교·카페는 여러 사람이 IP 하나를 함께 쓴다(NAT). 5로 하면 한 사람이 틀린 것 때문에 같은 건물 사람이 모두 막힌다.
+- **맞혀도 지우지 않는** 이유: 지운다면 공격자는 자기 계정을 하나 만들어, 19번 틀릴 때마다 자기 계정으로 한 번 로그인해 IP 횟수를 0으로 되돌릴 수 있다.
+- 잠금 악용(3.5)도 일부 막는다. 남의 계정을 일부러 잠그려는 사람의 IP도 20번에서 막힌다. 다만 IP를 바꿔 가며 하는 공격(봇넷)은 IP별 제한으로도 막지 못한다. 그 단계는 CAPTCHA 같은 다른 장치가 필요하다.
+
+**IP는 어떻게 아나**: 서블릿의 `request.getRemoteAddr()`는 TCP로 직접 연결한 쪽의 주소다. 서버 앞에 프록시·로드밸런서를 두면 **모든 요청이 프록시 주소**가 되어, 서비스 전체가 IP 하나로 묶여 20번 만에 모두 막힌다. 그때는 프록시가 붙여 주는 `X-Forwarded-For` 헤더를 읽어야 하는데, 이 헤더는 사용자가 마음대로 넣을 수도 있으므로 **믿을 수 있는 프록시가 붙인 것만** 읽어야 한다. Spring Boot에서는 `server.forward-headers-strategy`(`native` 또는 `framework`)로 설정한다. 이 프로젝트는 아직 프록시 없이 jar 하나로 띄우므로 설정하지 않았다(research R-17). 개발 중에는 Vite 개발 서버가 `/api`를 대신 보내므로 모든 요청이 127.0.0.1이다.
+
 ## 4. 동작 원리
 
 ### 4.1 로그인
@@ -112,12 +132,12 @@ if (n > 5) throw 429;        // 6번째부터는 확인하지 않는다
 POST /api/auth/login { email: "a@b.com", password: "..." }
   AuthService.login
     attemptLimiter.attempt("login:a@b.com", 확인, LOGIN_FAILED이면 틀림)
-      INCR attempt:login:a@b.com → n
-      n == 1(또는 수명이 없음) → EXPIRE 15분
-      n > 5 → 429 { retryAfterSeconds: TTL }               ← 확인하지 않음
+      INCR attempt:login:a@b.com → n        INCR attempt:ip:203.0.113.5 → m
+      처음(또는 수명이 없음)이면 EXPIRE 15분
+      n > 5 또는 m > 20 → 둘 다 DECR, 429 { retryAfterSeconds: TTL }   ← 확인하지 않음
       확인: 회원 찾기 → bcrypt 비교 → 틀리면 LOGIN_FAILED
-        맞음  → DEL (초기화)
-        틀림  → 그대로, n == 5면 EXPIRE 15분(지금부터 막음) → 401
+        맞음  → 이메일 키 DEL(초기화), IP 키 DECR(이번 시도만 뺌)
+        틀림  → 그대로, n == 5나 m == 20이면 그 키를 EXPIRE 15분(지금부터 막음) → 401
     정지 회원인지(맞힌 뒤에만) → 403 MEMBER_SUSPENDED
 ```
 
@@ -139,36 +159,63 @@ POST /api/auth/login { email: "a@b.com", password: "..." }
 
 ### 5.1 `global/auth/AttemptLimiter.java`
 
+대상별 카운터와 IP 카운터 두 개를 함께 다룬다(3.6).
+
 ```java
 public <T> T attempt(String key, Supplier<T> check, Predicate<BusinessException> isFailure) {
-    String redisKey = PREFIX + key;
-    Long reserved = redis.opsForValue().increment(redisKey);
-    long count = reserved == null ? 1 : reserved;
-    // 처음이거나, INCR 뒤 수명을 못 붙이고 끊겼던 키(수명 없음)면 15분 수명을 붙인다
-    Long ttl = redis.getExpire(redisKey);
-    if (count == 1 || ttl == null || ttl < 0) {
-        redis.expire(redisKey, properties.window());
+    List<Counter> counters = new ArrayList<>();
+    counters.add(reserve(PREFIX + key, properties.maxFailures(), true));
+    String ip = clientIp();
+    if (ip != null) {
+        counters.add(reserve(PREFIX + "ip:" + ip, properties.ipMaxFailures(), false));
     }
-    if (count > properties.maxFailures()) {
-        throw locked(redisKey);
+
+    List<Counter> locked = counters.stream().filter(Counter::overLimit).toList();
+    if (!locked.isEmpty()) {
+        // 확인하지 않으므로 이번 시도는 어느 쪽에도 세지 않는다
+        counters.forEach(this::release);
+        throw locked(locked);
     }
     try {
         T result = check.get();
-        redis.delete(redisKey);
+        counters.forEach(counter -> {
+            if (counter.resetOnSuccess()) {
+                redis.delete(counter.key());
+            } else {
+                release(counter);
+            }
+        });
         return result;
     } catch (BusinessException e) {
         if (isFailure.test(e)) {
-            if (count == properties.maxFailures()) {
-                // 다섯 번째로 틀림: 지금부터 15분 동안 막는다
-                redis.expire(redisKey, properties.window());
-            }
+            // 이번이 제한 횟수째로 틀린 것이면 지금부터 15분 동안 막는다
+            counters.stream()
+                    .filter(counter -> counter.count() == counter.max())
+                    .forEach(counter -> redis.expire(counter.key(), properties.window()));
         } else {
-            redis.opsForValue().decrement(redisKey);
+            counters.forEach(this::release);
         }
         throw e;
     } catch (RuntimeException e) {
-        redis.opsForValue().decrement(redisKey);
+        counters.forEach(this::release);
         throw e;
+    }
+}
+
+/** 하나 올리고, 처음이거나 INCR 뒤 수명을 못 붙이고 끊겼던 키(수명 없음)면 15분 수명을 붙인다. */
+private Counter reserve(String key, int max, boolean resetOnSuccess) {
+    Long reserved = redis.opsForValue().increment(key);
+    long count = reserved == null ? 1 : reserved;
+    Long ttl = redis.getExpire(key);
+    if (count == 1 || ttl == null || ttl < 0) {
+        redis.expire(key, properties.window());
+    }
+    return new Counter(key, max, resetOnSuccess, count);
+}
+
+private record Counter(String key, int max, boolean resetOnSuccess, long count) {
+    boolean overLimit() {
+        return count > max;
     }
 }
 ```
@@ -176,12 +223,15 @@ public <T> T attempt(String key, Supplier<T> check, Predicate<BusinessException>
 줄별로:
 
 - `attempt(key, check, isFailure)`: 세 곳(로그인, 인증 코드, 비밀번호 변경)이 같은 규칙을 쓰게 하나로 만든 메서드다. 무엇을 확인할지(`check`)와 어떤 예외가 "틀림"인지(`isFailure`)만 넘긴다. 제네릭 `<T>`는 확인이 돌려주는 값(로그인이면 `Member`)을 그대로 돌려주려는 것이다.
-- `increment`: Redis `INCR`. 확인 **전에** 자리를 잡는다(3.4). Spring Data Redis는 이 결과를 `Long`(null일 수 있는 타입)으로 주므로 null을 한 번 걸렀다.
-- `getExpire` < 0이면 수명을 붙인다: `INCR` 뒤 `EXPIRE` 전에 서버가 죽으면 **수명 없는 키**가 남아 그 계정이 영원히 막힐 수 있다. 다음 시도 때 수명이 없으면(`-1`) 붙여서 그런 키가 남지 않게 했다. (두 명령을 Lua 스크립트 하나로 묶는 방법도 있다.)
-- `count > maxFailures`: 6번째부터는 확인하지 않고 429. `locked`가 남은 수명(`TTL`)을 `RetryAfterDetail`에 담는다. 1초 미만이면 1로.
-- 맞으면 `delete`, 틀리면 다섯 번째일 때만 수명 다시 잡기, 틀린 것이 아니면 `decrement`(3.4의 표).
-- `catch (RuntimeException e)`: DB 오류 같은 예상 못 한 예외도 시도를 되돌린다. 서버 탓인 실패로 사용자가 막히면 안 된다.
-- 설정은 `AttemptLimitProperties`(`app.attempt-limit.max-failures: 5`, `window: 15m`)다. 코드를 고치지 않고 바꿀 수 있다.
+- `Counter`: 카운터 하나(키, 한도, 맞히면 지우는가, 이번에 받은 번호). 대상별은 한도 5·맞히면 지움, IP별은 한도 20·맞혀도 지우지 않음.
+- `reserve`: Redis `INCR`로 확인 **전에** 자리를 잡는다(3.4). Spring Data Redis는 이 결과를 `Long`(null일 수 있는 타입)으로 주므로 null을 한 번 걸렀다.
+- `getExpire` < 0이면 수명을 붙인다: `INCR` 뒤 `EXPIRE` 전에 서버가 죽으면 **수명 없는 키**가 남아 영원히 막힐 수 있다. 다음 시도 때 수명이 없으면(`-1`) 붙여서 그런 키가 남지 않게 했다. (두 명령을 Lua 스크립트 하나로 묶는 방법도 있다.)
+- `clientIp()`: 지금 요청의 접속 주소(`getRemoteAddr`). `RequestContextHolder`로 꺼내서 서비스 메서드에 IP를 넘기지 않아도 된다. 요청 밖에서 불리면 null이라 IP 제한을 건너뛴다.
+- `locked`: 하나라도 한도를 넘었으면 **확인하지 않고** 429. 확인하지 않았으니 두 카운터 모두 `release`(DECR)로 되돌린다. 그래서 IP가 막혀 있는 동안 넣은 시도는 그 이메일의 횟수에 들어가지 않는다. 남은 시간은 막힌 카운터 중 가장 긴 것.
+- 맞으면: 대상별은 `delete`, IP별은 `release`(이번 시도만 빼기). IP 횟수를 지우지 않는 이유는 3.6.
+- 틀리면: 이번 번호가 한도와 같은 카운터(대상별 5번째, IP별 20번째)만 수명을 15분으로 다시 잡는다.
+- 틀린 것이 아닌 실패, 예상 못 한 예외(`RuntimeException`): 모두 되돌린다. 서버 탓인 실패로 사용자가 막히면 안 된다.
+- 설정은 `AttemptLimitProperties`(`app.attempt-limit.max-failures: 5`, `ip-max-failures: 20`, `window: 15m`)다.
 
 ### 5.2 로그인: `AuthService.login`
 
@@ -277,8 +327,11 @@ export function waitText(seconds: number): string {
 | `concurrentGuessesGetOnlyFiveTries` | 동시에 12번 → 정확히 5번만 401(확인함), 7번 429 |
 | `fiveWrongVerificationCodesLockTheEmailEvenForTheRightCode` | 인증 코드 5번 틀린 뒤 맞는 코드도 429 |
 | `fiveWrongCurrentPasswordsLockPasswordChange` | 지금 비밀번호 5번 틀린 뒤 맞아도 429, 다른 회원은 상관없음 |
+| `sameIpIsLockedAfterTwentyFailuresAcrossDifferentEmails` | 이메일을 바꿔 가며 같은 IP로 틀리면 20번째 뒤 429(남은 시간 약 900초), 중간에 맞혀도 IP 횟수 유지, 막힌 IP는 맞는 비밀번호도 429, 그 시도는 이메일 횟수에 안 들어감(값 `0`), 다른 IP는 로그인됨 |
 
 15분을 기다릴 수 없으니 Redis 키를 지워 "시간이 지난 것"을 흉내 냈다.
+
+**테스트끼리 IP가 쌓이는 문제**: MockMvc 요청의 접속 주소는 기본이 모두 `127.0.0.1`이다. 여러 테스트가 남긴 로그인 실패가 IP 한 개에 20번 넘게 쌓여, 뒤에 도는 테스트가 엉뚱하게 429를 받는다. `TestWebConfiguration`이 `MockMvcBuilderCustomizer`로 **요청마다 다른 주소(10.x.x.x)**를 주게 했다(`IntegrationTestSupport`가 가져온다). IP를 정해야 하는 테스트는 요청에 `.with(request -> { request.setRemoteAddr(ip); return request; })`를 붙이고, 이것이 기본 설정보다 나중에 적용되어 이긴다.
 
 ## 6. 자주 하는 실수와 함정
 
@@ -291,7 +344,10 @@ export function waitText(seconds: number): string {
 - **이메일을 정규화하지 않고 키로 쓴다.** 대소문자만 바꿔 제한을 피한다.
 - **새 인증 코드를 받을 때 횟수를 지운다.** 재발송으로 제한을 풀 수 있다.
 - **남은 시간을 내림해서 보여 준다.** "14분 뒤"에 해도 막혀 있다.
-- **IP별 제한 없이 대상별 제한만 믿는다.** 여러 계정을 하나씩 훑는 공격(비밀번호 하나를 수많은 이메일에)은 막지 못하고, 남이 일부러 내 계정을 잠글 수 있다. 필요해지면 함께 둔다.
+- **IP별 제한 없이 대상별 제한만 믿는다.** 비밀번호 하나를 수많은 이메일에 넣어 보는 공격(스프레이)을 막지 못한다.
+- **IP 한도를 대상별만큼 작게 잡는다.** 공용 IP를 쓰는 사람들이 함께 막힌다.
+- **맞히면 IP 횟수도 지운다.** 자기 계정 로그인으로 IP 횟수를 계속 되돌리는 우회가 생긴다.
+- **프록시 뒤에서 `getRemoteAddr`를 그대로 쓰거나, `X-Forwarded-For`를 아무나 믿는다.** 앞의 것은 모두가 한 IP가 되고, 뒤의 것은 헤더를 바꿔 제한을 피한다. 믿을 수 있는 프록시가 붙인 값만 읽도록 설정한다.
 
 ## 7. 직접 해 보기
 
@@ -313,11 +369,26 @@ docker exec blog-redis redis-cli del "attempt:login:$E"   # 풀기
 
 스텝 9를 만들며 실제로 돌린 결과가 위와 같았다.
 
-### 7.2 화면
+### 7.2 IP 제한 (스프레이 흉내)
+
+```bash
+for i in $(seq 1 21); do
+  curl -s -o /dev/null -w "%{http_code} " -X POST -H "Host: blog.test" -H "X-Requested-With: XMLHttpRequest" \
+       -H "Content-Type: application/json" -d "{\"email\":\"spray$i-$RANDOM@example.com\",\"password\":\"wrong1234\"}" \
+       http://127.0.0.1:8080/api/auth/login
+done; echo
+# 401이 20번, 21번째가 429
+docker exec blog-redis redis-cli get attempt:ip:127.0.0.1   # 20
+docker exec blog-redis redis-cli del attempt:ip:127.0.0.1   # 꼭 풀어 둔다(안 그러면 이 컴퓨터에서 15분 동안 로그인 안 됨)
+```
+
+스텝 9를 만들며 8081에서 실제로 돌린 결과가 "401 20번, 429"였다.
+
+### 7.3 화면
 
 로그인 화면에서 내 계정 비밀번호를 5번 틀리고, 6번째에 맞는 비밀번호를 넣는다. "여러 번 시도해 잠시 막혔습니다. 15분 뒤에 다시 시도해 주세요."가 보인다. `redis-cli del`로 풀고 다시 로그인한다.
 
-### 7.3 "보고 → 확인"이 뚫리는 것 보기 (공부용 브랜치에서)
+### 7.4 "보고 → 확인"이 뚫리는 것 보기 (공부용 브랜치에서)
 
 `AttemptLimiter.attempt`를 "GET으로 횟수를 보고, 5 이상이면 429, 확인 뒤 틀리면 INCR"로 바꾸고 테스트를 돌린다.
 
@@ -327,7 +398,7 @@ git switch -c study/attempt-race
 git restore . && git switch -
 ```
 
-### 7.4 테스트
+### 7.5 테스트
 
 ```bash
 ./mvnw test -Dtest=AttemptLimitIntegrationTest
@@ -362,6 +433,15 @@ cd frontend && npm test
 
 9. 화면에서 남은 시간을 올림해서 보여 주는 이유는?
 <details><summary>답</summary>899초를 내림하면 "14분 뒤"가 되는데, 그때 다시 시도해도 아직 막혀 있다. 올림해야 안내한 시간 뒤에 실제로 풀린다.</details>
+
+10. IP별 제한이 따로 필요한 공격과, IP 한도를 대상별보다 크게 잡은 이유는?
+<details><summary>답</summary>비밀번호 하나를 수많은 이메일에 한 번씩 넣어 보는 스프레이 공격은 이메일마다 1번이라 대상별 제한에 걸리지 않는다. 같은 IP의 실패를 합쳐 센다. 회사·학교처럼 여러 사람이 IP 하나를 쓰면 함께 막히므로 한도를 20으로 넉넉히 잡았다.</details>
+
+11. 맞혀도 IP 횟수를 지우지 않는 이유는?
+<details><summary>답</summary>지우면 공격자가 자기 계정으로 한 번씩 로그인해 IP 횟수를 계속 0으로 되돌릴 수 있다. 이번 시도만 빼고(DECR) 쌓인 실패는 남긴다.</details>
+
+12. 서버 앞에 프록시를 두면 IP 제한에 무슨 일이 생기고, 어떻게 해야 하나?
+<details><summary>답</summary>getRemoteAddr가 모두 프록시 주소가 되어 서비스 전체가 IP 하나로 묶여 금방 다 막힌다. 프록시가 붙인 X-Forwarded-For를 읽어야 하는데, 사용자도 이 헤더를 넣을 수 있으므로 믿을 수 있는 프록시가 붙인 것만 읽도록 server.forward-headers-strategy를 설정한다.</details>
 
 ## 9. 더 읽을거리
 

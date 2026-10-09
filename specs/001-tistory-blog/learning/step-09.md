@@ -14,7 +14,7 @@
 | 하위 카테고리 (CAT-03) | `POST /api/categories { name, parentId }` → 201 `{ id, name, parentId, sortOrder }`, 3단계 409 `CATEGORY_DEPTH` | `category/application/CategoryService`, `CategoriesPage`의 [하위 추가] |
 | 홈 주제별 글 (HOME-03) | `GET /api/home/topics/{topic}` → PostSummary 6개 | `HomeService.topicPosts`, `PopularRanking.topicSnapshot`, `PopularScoreRepository.topScoresInTopic`, `HomePage`의 주제 탭 |
 | 내 글 관리 (MNG-01) | `GET /api/manage/posts?status=&visibility=&categoryId=&q=&page=`, `PATCH`·`DELETE /api/manage/posts` | `manage/application/ManagePostService`, `manage/presentation/ManagePostController`, `pages/manage/ManagePostsPage.tsx` |
-| 시도 횟수 제한 (T055a, 지원이 스텝 중에 추가) | 로그인·인증 코드·비밀번호 변경을 15분 안에 5번 틀리면 15분 동안 429 `{ retryAfterSeconds }` | `global/auth/AttemptLimiter`, `AttemptLimitProperties`, `AuthService.login`, `EmailVerificationService.check`, `MeService.changePassword`, `frontend/src/api/errors.ts` |
+| 시도 횟수 제한 (T055a, 지원이 스텝 중에 추가) | 로그인·인증 코드·비밀번호 변경을 15분 안에 5번 틀리면(같은 IP는 셋을 합쳐 20번) 15분 동안 429 `{ retryAfterSeconds }` | `global/auth/AttemptLimiter`, `AttemptLimitProperties`, `AuthService.login`, `EmailVerificationService.check`, `MeService.changePassword`, `frontend/src/api/errors.ts`, 테스트용 `TestWebConfiguration` |
 | 공용 도구 | — | `global/web/LikePatterns`(검색에서 옮김) |
 | 테스트 | — | `AttemptLimitIntegrationTest`, `errors.test.ts`, `MeUpdateIntegrationTest`, `TopicIntegrationTest`, `CategoryIntegrationTest`, `HomeTopicIntegrationTest`, `ManagePostIntegrationTest` |
 
@@ -25,7 +25,7 @@
 - 비밀번호를 바꿔도 다른 기기의 로그인은 끊지 않는다.
 - 하위 카테고리의 상위 번호가 이 블로그의 것이 아니면 400(`parentId`). 이름 변경(`PATCH`)에서 `parentId`를 보내면 400(상위 바꾸기는 CAT-04).
 - 모르는 주제 주소(`/api/home/topics/SPORTS`, 소문자 `health`)는 404.
-- 비밀번호·인증 코드 시도 제한(research R-17): 로그인(이메일별)·인증 코드(이메일별)·비밀번호 변경(회원별)을 15분 안에 5번 틀리면 다섯 번째로 틀린 때부터 15분 동안 429. 막힌 동안은 맞는 값도 거절, 맞히면 횟수 초기화, 가입하지 않은 이메일도 똑같이 센다. 스텝 9를 확인하던 지원이 "틀리는 횟수 제한이 있나?"라고 물어 없던 것을 알고 더했다.
+- 비밀번호·인증 코드 시도 제한(research R-17): 로그인(이메일별)·인증 코드(이메일별)·비밀번호 변경(회원별)을 15분 안에 5번 틀리면 다섯 번째로 틀린 때부터 15분 동안 429. 막힌 동안은 맞는 값도 거절, 맞히면 횟수 초기화, 가입하지 않은 이메일도 똑같이 센다. 스텝 9를 확인하던 지원이 "틀리는 횟수 제한이 있나?"라고 물어 없던 것을 알고 더했다. 이어서 IP별 제한도 더했다: 같은 IP는 셋을 합쳐 15분 안에 20번(20은 공용 IP를 생각한 Claude 기본값, 설정값), 맞혀도 IP 횟수는 지우지 않는다. 운영에서 프록시 뒤에 두면 `server.forward-headers-strategy` 설정이 필요하다.
 - 스텝이 끝나면 Claude Code가 tasks.md 체크박스를 `[X]`로 바꾼다(CLAUDE.md).
 - 내 글 관리 검색 `q`는 **제목만** 찾는다. 일괄 처리는 이 블로그의 지우지 않은 글만 처리하고 남의 글·지운 글·없는 번호는 건너뛰어 그 수를 뺀 `updatedCount`·`deletedCount`를 준다. 한 번에 100개까지.
 
@@ -84,6 +84,8 @@ blog.test/me       MyPage
 
 ## 막혔던 점
 
+- **테스트끼리 IP가 쌓임**: IP별 제한을 넣자 MockMvc 요청이 모두 127.0.0.1이라, 여러 테스트의 로그인 실패가 한 IP에 20번 넘게 쌓여 뒤 테스트가 429를 받을 수 있었다. 테스트 요청마다 다른 주소를 주는 `TestWebConfiguration`을 더했다([40](./concepts/40-attempt-limit.md) 5.6).
+
 - **비밀번호를 틀리는 횟수에 제한이 없었다**: 스텝 9를 확인하던 지원의 질문으로 알았다. 로그인·인증 코드·비밀번호 변경 모두 몇 번이든 넣어 볼 수 있었다(스텝 4 학습 문서 20의 "남은 위험"에 적혀만 있던 것). 지원이 15분·5번으로 정해 명세(spec, contracts, research R-17, tasks T055a)에 먼저 적고 만들었다. "보고 → 확인"이 동시 요청에 뚫리지 않게 확인 전에 `INCR`로 자리를 잡는다([40](./concepts/40-attempt-limit.md) 3.4).
 - **확인용 서버를 띄우다 지원의 서버를 끔**: 8080이 이미 쓰이고 있어 새 서버가 뜨지 못했는데, 정리하려고 이름으로 프로세스를 모두 끄다 지원이 띄워 둔 8080 서버까지 꺼졌다. 그 뒤로는 8081에 띄우고 그 포트의 프로세스만 끈다.
 
@@ -120,7 +122,7 @@ cd frontend && npm test
 2. **하위 카테고리**: `/manage/categories`에서 "개발" 아래 "Spring"을 만들고, 글을 하나씩 "개발"·"└ Spring"으로 발행한다. 사이드바의 "개발"을 누르면 두 글이 모두 나오고 글 수가 2다.
 3. **주제**: 글쓰기에서 주제를 "여행"으로 발행하고, 홈의 주제별 글 "여행" 탭에서 본다. (목업 home과 비교)
 4. **내 글 관리**: `/manage/posts`에서 글 두 개를 골라 "비공개로" [적용]. 시크릿 창(비회원)으로 블로그 메인을 열면 두 글이 없다. 상태·카테고리를 바꾸면 주소가 바뀌고, 그 주소를 새로 열어도 같은 목록이다. (목업 manage-posts와 비교)
-5. **시도 제한**: 로그아웃하고 로그인 비밀번호를 5번 틀린 뒤 맞는 비밀번호를 넣으면 "여러 번 시도해 잠시 막혔습니다. 15분 뒤에 다시 시도해 주세요."가 나온다. 풀려면 `docker exec blog-redis redis-cli del "attempt:login:{이메일}"`.
+5. **시도 제한**: 로그아웃하고 로그인 비밀번호를 5번 틀린 뒤 맞는 비밀번호를 넣으면 "여러 번 시도해 잠시 막혔습니다. 15분 뒤에 다시 시도해 주세요."가 나온다. 풀려면 `docker exec blog-redis redis-cli del "attempt:login:{이메일}"`. 같은 컴퓨터에서 여러 이메일로 20번 틀리면 IP도 막힌다(`attempt:ip:127.0.0.1`을 지워 푼다).
 
 ```bash
 H="Host: {주소}.blog.test"; X="X-Requested-With: XMLHttpRequest"; J="Content-Type: application/json"

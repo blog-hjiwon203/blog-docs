@@ -65,7 +65,7 @@
 | [13 CSRF, SameSite, CORS](./concepts/13-csrf-samesite-cors.md) | 출처와 사이트, CSRF 공격과 대책, preflight, CORS가 아닌 것 |
 | [14 XSS, HTML 정화, CSP](./concepts/14-xss-sanitize-csp.md) | XSS 종류, 허용 목록 정화, CSP 지시어 |
 | [20 이메일 인증 코드와 요청 제한](./concepts/20-email-verification.md) | 인증 코드 설계, `SecureRandom`, Redis로 1분 재요청 제한, 메일 발송 인터페이스 |
-| [40 시도 횟수 제한](./concepts/40-attempt-limit.md) | 온라인 무차별 대입, 대상별 실패 횟수(15분·5번), Redis `INCR`로 동시 시도까지 막기, 가입 여부 숨기기, 잠금 악용 |
+| [40 시도 횟수 제한](./concepts/40-attempt-limit.md) | 온라인 무차별 대입, 대상별(15분·5번)·IP별(20번) 실패 횟수, Redis `INCR`로 동시 시도까지 막기, 가입 여부 숨기기, 잠금 악용, 프록시 뒤의 IP |
 | [38 회원정보 수정](./concepts/38-member-profile-update.md) | PATCH 부분 수정, 나를 뺀 닉네임 중복, 지금 비밀번호 확인, IDOR(남의 것을 가리키는 번호), 마이페이지 |
 | [21 가입·로그인·로그아웃 설계](./concepts/21-signup-login.md) | 가입 트랜잭션, 계정 열거·타이밍 공격 방어, 정지 안내, 로그아웃, 열린 리다이렉트 |
 
