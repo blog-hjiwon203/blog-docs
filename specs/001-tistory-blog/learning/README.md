@@ -17,6 +17,7 @@
 | 5 | [글쓰기](./step-05.md) | 카테고리 관리, 글 발행·수정·삭제·공개 범위, Tiptap 에디터 |
 | 6 | [읽기·댓글·권한 (P0 완성)](./step-06.md) | 글 상세·이전·다음 글, 홈 최신 글, 댓글, 오류 화면, 관리자 영역 보호, 권한 시험 |
 | 7 | [이미지·태그·공감·검색·답글](./step-07.md) | 사진 올리기와 썸네일, 태그와 태그별 목록, 공감, 블로그 안 검색, 답글, 동시성 버그 두 개 |
+| 8 | [조회수·인기 글](./step-08.md) | 조회 기록과 5분 중복 판정, 방문자 쿠키, 사이드바 태그 목록, 인기 점수 집계와 5분 Redis 캐시 |
 
 ## 개념 문서
 
@@ -47,6 +48,8 @@
 | [27 소프트 삭제와 일괄 수정](./concepts/27-soft-delete-bulk-update.md) | 소프트 삭제, 딸린 데이터 처리, 변경 감지, `@Modifying`, 수정 시각 지키기 |
 | [23 트랜잭션과 동시성](./concepts/23-transactions-locking.md) | `@Transactional`, 경쟁 조건, 비관적 잠금(`FOR UPDATE`), UNIQUE 제약, 동시성 테스트 |
 | [33 격리 수준, 스냅샷, 데드락](./concepts/33-isolation-deadlock.md) | 격리 수준과 MVCC, 일관된 읽기와 잠금 읽기, 외래 키 공유 잠금과 데드락, 공감 버튼에서 겪은 두 버그 |
+| [34 조회수: 누가 봤는지, 5분 중복, 동시 새로고침](./concepts/34-view-count.md) | 조회자 키와 방문자 쿠키, 시간 창 중복 판정, 기록 테이블과 누적 칸, 잠금을 첫 문장으로, StrictMode effect 두 번 |
+| [36 집계 쿼리로 순위 매기기](./concepts/36-ranking-aggregation.md) | `GROUP BY`·`SUM`, `UNION ALL`로 가중치 점수, 시각 인덱스, 동점 처리, `NamedParameterJdbcTemplate`, 태그별 글 수 |
 | [30 이미지 업로드와 처리](./concepts/30-image-upload.md) | multipart, 크기 제한, 매직 넘버, Thumbnailator·EXIF, WebP 플러그인, `/uploads` 내보내기와 캐시, 목록 썸네일 |
 
 ### 3부. 보안
@@ -68,6 +71,7 @@
 | [15 서브도메인과 Host 라우팅](./concepts/15-subdomain-host-routing.md) | DNS, `/etc/hosts`, Host 헤더, 멀티테넌시, 인자 해석기 |
 | [16 인가와 가시성 판단](./concepts/16-authorization-visibility.md) | 인증과 인가, 존재를 숨기는 404, 정책 객체, sealed 타입과 switch |
 | [17 멱등성과 Redis](./concepts/17-idempotency-redis.md) | 멱등성, 중복 요청, Idempotency-Key, Redis 기초와 `SET NX` |
+| [35 캐시: Spring Cache와 Redis](./concepts/35-spring-cache-redis.md) | 캐시와 오래된 값, TTL, `@Cacheable`과 프록시, Redis 키·Java 직렬화, `sync`, 캐시에 번호만 두기 |
 | [18 SPA와 서버 라우팅](./concepts/18-spa-server-routing.md) | History API, 서버 폴백, 301/302, Vite 개발 서버와 빌드 |
 | [28 Thymeleaf에서 React로](./concepts/28-thymeleaf-to-react.md) | 서버 렌더링과 클라이언트 렌더링, 같은 화면 두 가지 구현, 빌드가 하는 일, 개발 서버와 빌드 스크립트 (Thymeleaf를 알면 React 문서보다 먼저) |
 | [19 React Router와 API 클라이언트](./concepts/19-react-router-api-client.md) | React 기초, React Router 7, fetch, TypeScript, Vitest |

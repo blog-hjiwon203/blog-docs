@@ -1,6 +1,6 @@
 # 33. 격리 수준, 스냅샷, 데드락: 공감 버튼에서 겪은 두 버그
 
-> 관련 스텝: [스텝 7](../step-07.md) (T046, T049, T044) · 관련 개념: [23-transactions-locking](./23-transactions-locking.md), [27-soft-delete-bulk-update](./27-soft-delete-bulk-update.md), [29-comments-design](./29-comments-design.md), [17-idempotency-redis](./17-idempotency-redis.md), [06-jpa-entity-mapping](./06-jpa-entity-mapping.md)
+> 관련 스텝: [스텝 7](../step-07.md) (T046, T049, T044), [스텝 8](../step-08.md) (T053) · 관련 개념: [34-view-count](./34-view-count.md), [23-transactions-locking](./23-transactions-locking.md), [27-soft-delete-bulk-update](./27-soft-delete-bulk-update.md), [29-comments-design](./29-comments-design.md), [17-idempotency-redis](./17-idempotency-redis.md), [06-jpa-entity-mapping](./06-jpa-entity-mapping.md)
 
 ## 1. 이 문서로 배우는 것
 
@@ -364,6 +364,15 @@ void rapidConcurrentClicksCountOnce() throws Exception {
 | --- | --- |
 | `e15146c` | `PostRepository.lockById` 추가, `LikeService.like/unlike`와 `CommentService.write/delete`에서 먼저 호출(버그 1) |
 | `8580ac8` | `findLikeCount`에 `@Lock(PESSIMISTIC_WRITE)`, 테스트에 응답 본문 검사 추가(버그 2) |
+
+### 5.7 (스텝 8) 조회수에서 다시 만난 두 문제
+
+조회 기록(T053)도 "자식 행 INSERT(`view_log`) + 부모 행 숫자 UPDATE(`post.view_count`)"라 공감과 모양이 같다. 그래서 같은 두 문제가 그대로 나타난다.
+
+- **데드락(버그 1과 같음)**: 잠금 없이 같은 글에 동시 조회를 보내는 테스트를 돌리자 `Deadlock found when trying to get lock`으로 500이 났다(스텝 8에서 `lockById`를 일부러 빼고 확인). `view_log`의 외래 키 확인이 글 행에 S 잠금, `view_count` UPDATE가 X 잠금을 원하는 같은 고리다. `ViewService.record`도 맨 앞에서 `lockById`를 부른다.
+- **옛 스냅샷(버그 2와 같음)**: 조회는 "5분 안에 본 기록이 있나"를 평범한 SELECT로 묻는다. 잠금 **전에** 같은 트랜잭션에서 평범한 SELECT를 하면 스냅샷이 앞 요청의 커밋 전으로 정해져 같은 사람을 두 번 센다. 공감은 마지막 읽기를 잠금 읽기로 바꿔 고쳤지만, 조회는 다른 방법을 썼다. **잠금을 트랜잭션의 첫 문장으로** 두고, 가시성 확인(`readable`)은 컨트롤러에서 **다른 트랜잭션**으로 먼저 한다. 그러면 잠금을 얻은 뒤의 첫 평범한 SELECT가 스냅샷을 정하므로 앞 요청의 기록이 보인다.
+
+두 방법의 차이: 공감처럼 같은 트랜잭션 안에서 확인해야 하면 "잠금 뒤의 읽기를 잠금 읽기로", 확인을 앞으로 뺄 수 있으면 "잠금을 첫 문장으로". 자세한 것은 [34](./34-view-count.md) 4.2~4.4.
 
 ## 6. 자주 하는 실수와 함정
 

@@ -1,6 +1,6 @@
 # 31. 태그와 다대다 관계
 
-> 관련 스텝: [스텝 7](../step-07.md) (T038, T039) · 관련 개념: [06-jpa-entity-mapping](./06-jpa-entity-mapping.md), [08-pagination](./08-pagination.md), [16-authorization-visibility](./16-authorization-visibility.md), [22-bean-validation](./22-bean-validation.md), [25-react-forms-data](./25-react-forms-data.md), [28-thymeleaf-to-react](./28-thymeleaf-to-react.md), [32-search-like](./32-search-like.md)
+> 관련 스텝: [스텝 7](../step-07.md) (T038, T039), [스텝 8](../step-08.md) (T054) · 관련 개념: [36-ranking-aggregation](./36-ranking-aggregation.md), [06-jpa-entity-mapping](./06-jpa-entity-mapping.md), [08-pagination](./08-pagination.md), [16-authorization-visibility](./16-authorization-visibility.md), [22-bean-validation](./22-bean-validation.md), [25-react-forms-data](./25-react-forms-data.md), [28-thymeleaf-to-react](./28-thymeleaf-to-react.md), [32-search-like](./32-search-like.md)
 
 ## 1. 이 문서로 배우는 것
 
@@ -604,6 +604,15 @@ export function sameName(a: string, b: string): boolean {
 ```
 
 `BlogMainPage`는 `useParams()`로 `tagName`을 꺼내(이미 디코딩된 값) API 쿼리 문자열 `tag=`에 넣는다. `URLSearchParams`가 다시 인코딩한다. 서버가 404를 주면 `postsNotFound`로 "찾을 수 없음" 화면을 그린다. 목록 제목은 `#태그이름`, 페이지 링크는 `/tag/{이름}?page=2`다.
+
+### 5.10 (스텝 8) 사이드바 태그 목록과 글 수 (T054, TAG-03)
+
+블로그 태그와 각 태그의 글 수를 `GET /api/tags`와 사이드바 `TAG` 모듈(카테고리 다음)로 보여 준다. 응답 한 줄은 `{ id, name, postCount }`, 글 수 많은 순이고 같으면 이름순(이 문서의 `Collator` 비교)이다.
+
+- 글 수는 **보는 사람 기준**이다. 블로그 화면 목록과 같은 조건(`listedIn`)으로 `post JOIN post_tag`를 태그별로 센다(`PostCountRepository.countByTag`). 주인에게는 비공개·숨긴 글도 세고, 다른 사람에게는 볼 수 있는 글만 센다.
+- 볼 수 있는 글이 0개인 태그는 **목록에서 빠진다**. 비공개 글에만 단 태그 이름이 새지 않게 하려는 것이고, 4.2에서 미뤄 둔 "아무 글도 쓰지 않는 태그"도 이렇게 화면에서 사라진다(행은 남는다).
+- 쿼리와 코드 설명은 집계를 다루는 [36](./36-ranking-aggregation.md) 5.2에 있다. 테스트는 `TagIntegrationTest.tagListCountsOnlyPostsTheViewerCanSeeMostUsedFirst`.
+- 사이드바에 모듈이 하나 늘어 최근 글·최근 댓글의 위치가 한 칸씩 밀렸다. 사이드바를 위치(`modules[2]`)로 확인하던 다른 테스트 세 개도 함께 고쳤다.
 
 ## 6. 자주 하는 실수와 함정
 
