@@ -256,7 +256,7 @@ WHERE p.blog_id = ? AND (가시성 조건)
 GROUP BY pt.tag_id
 ```
 
-- `post.join("tags")`: `Post.tags`(`@ManyToMany`)를 따라 `post_tag`로 조인한다([31](./31-tags-many-to-many.md)). 글 하나에 태그가 셋이면 세 줄이 되고, 태그별로 묶으면 각 태그에 1씩 더해진다.
+- `post.join("tags")`: `Post.tags`(`@ManyToMany`)를 따라 `post_tag`로 조인한다([31](./31-tags-many-to-many.md)). 글 하나에 태그가 셋이면 세 줄이 되고, 태그별로 묶으면 각 태그에 1씩 더해진다. (스텝 9a에서 연결 엔티티로 바꿔 지금은 `post.join("postTags")` 뒤 `get("tag").get("id")`로 묶는다. [31](./31-tags-many-to-many.md) 5.11)
 - `createTupleQuery()` + `multiselect(...)`: 엔티티가 아니라 칸 두 개(태그 id, 개수)를 꺼낸다. `Tuple`은 "여러 값 한 줄".
 - `condition.toPredicate(post, query, cb)`: 넘겨받은 Specification을 이 쿼리의 WHERE로 바꾼다. 가시성 판단을 다시 짜지 않고 **재사용**한다.
 - 결과는 `태그 id → 글 수` 지도. 글이 하나도 없는 태그는 조인에서 아예 안 나와 지도에 없다.

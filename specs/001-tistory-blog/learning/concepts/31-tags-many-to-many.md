@@ -1,6 +1,6 @@
 # 31. 태그와 다대다 관계
 
-> 관련 스텝: [스텝 7](../step-07.md) (T038, T039), [스텝 8](../step-08.md) (T054) · 관련 개념: [36-ranking-aggregation](./36-ranking-aggregation.md), [06-jpa-entity-mapping](./06-jpa-entity-mapping.md), [08-pagination](./08-pagination.md), [16-authorization-visibility](./16-authorization-visibility.md), [22-bean-validation](./22-bean-validation.md), [25-react-forms-data](./25-react-forms-data.md), [28-thymeleaf-to-react](./28-thymeleaf-to-react.md), [32-search-like](./32-search-like.md)
+> 관련 스텝: [스텝 7](../step-07.md) (T038, T039), [스텝 8](../step-08.md) (T054), [스텝 9a](../step-09a.md) (T038a) · 관련 개념: [36-ranking-aggregation](./36-ranking-aggregation.md), [06-jpa-entity-mapping](./06-jpa-entity-mapping.md), [08-pagination](./08-pagination.md), [16-authorization-visibility](./16-authorization-visibility.md), [22-bean-validation](./22-bean-validation.md), [25-react-forms-data](./25-react-forms-data.md), [28-thymeleaf-to-react](./28-thymeleaf-to-react.md), [32-search-like](./32-search-like.md)
 
 ## 1. 이 문서로 배우는 것
 
@@ -92,7 +92,13 @@ ALTER TABLE post_tag ADD CONSTRAINT fk_post_tag_tag FOREIGN KEY (tag_id) REFEREN
 | 연결 행 다루기 | 컬렉션에 넣고 빼면 Hibernate가 INSERT/DELETE | `PostTag`를 직접 저장·삭제 |
 | 연결 테이블만 조회 | 어렵다 | Repository로 바로 |
 
-이 프로젝트의 `post_tag`는 외래 키 두 칸뿐이고, 늘 "글의 태그"로만 다룬다. 그래서 `@ManyToMany`로 충분하다. 나중에 "태그를 단 시각"이나 "태그 순서"를 저장해야 하면 연결 테이블에 칸이 생기고, 그때는 `PostTag` 엔티티로 올린다. `@ManyToMany`는 연결 테이블에 칸이 더 있으면 다룰 수 없다.
+스텝 7에서는 `post_tag`가 외래 키 두 칸뿐이라 `@ManyToMany`로 충분하다고 보고 그렇게 만들었다. 스텝 9a에서 지원이 이것을 다시 보고 **연결 테이블 엔티티(`PostTag`)로 바꿨다**(T038a). 칸이 없어도 `@ManyToMany`의 단점이 그대로 남기 때문이다.
+
+- 연결 테이블에 칸(단 시각, 순서)이 생기면 매핑을 통째로 바꿔야 한다. 처음부터 엔티티면 칸 하나만 더하면 된다.
+- 연결 행에 어떤 INSERT·DELETE가 나가는지 코드에서 보이지 않는다. 컬렉션 종류와 Hibernate 버전에 따라 "모두 지우고 다시 넣기"가 나가기도 한다(3.4).
+- ERD의 표(`post_tag`)와 코드의 클래스가 1:1로 맞지 않아 읽는 사람이 헷갈린다.
+
+그래서 실무에서는 `@ManyToMany`를 거의 쓰지 않고 연결 엔티티로 푸는 것을 권한다. 바꾼 코드는 5.11에 있다. 아래 5.2·5.6의 코드 발췌는 스텝 7 당시(`@ManyToMany`) 모습이다.
 
 ### 3.3 주인 쪽(owning side)
 
@@ -614,12 +620,88 @@ export function sameName(a: string, b: string): boolean {
 - 쿼리와 코드 설명은 집계를 다루는 [36](./36-ranking-aggregation.md) 5.2에 있다. 테스트는 `TagIntegrationTest.tagListCountsOnlyPostsTheViewerCanSeeMostUsedFirst`.
 - 사이드바에 모듈이 하나 늘어 최근 글·최근 댓글의 위치가 한 칸씩 밀렸다. 사이드바를 위치(`modules[2]`)로 확인하던 다른 테스트 세 개도 함께 고쳤다.
 
+### 5.11 (스텝 9a) `@ManyToMany`에서 `PostTag` 중간 엔티티로
+
+DB는 그대로다(`post_tag(post_id, tag_id)`, 마이그레이션 없음). 바뀐 것은 자바 쪽 매핑과 그것을 쓰는 쿼리 네 곳이다.
+
+`tag/domain/PostTag.java`:
+
+```java
+@Entity
+@Table(name = "post_tag")
+public class PostTag {
+
+    @EmbeddedId
+    private PostTagId id = new PostTagId();
+
+    @MapsId("postId")
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "post_id")
+    private Post post;
+
+    @MapsId("tagId")
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "tag_id")
+    private Tag tag;
+    ...
+}
+```
+
+- 키가 두 칸(`post_id`, `tag_id`)이라 **복합 키 클래스** `PostTagId`(`@Embeddable`)를 둔다. JPA는 복합 키 클래스에 `Serializable`과 `equals`·`hashCode`를 요구한다. 키 값이 같으면 같은 행이라는 판단을 이 둘로 하기 때문이다.
+- `@EmbeddedId`: 키를 그 클래스 하나로 담는다.
+- `@MapsId("postId")`: "키의 `postId` 칸은 이 `post` 연관의 id로 채운다." 이것이 없으면 `post_id` 칸을 키와 연관에서 **두 번** 매핑하게 되어 Hibernate가 오류를 낸다. 글을 처음 저장할 때(아직 id가 없을 때)도, 글이 INSERT되어 id가 생긴 뒤 키를 채워 준다.
+- 두 연관 모두 LAZY.
+
+`Post`의 태그 부분:
+
+```java
+@OneToMany(mappedBy = "post", cascade = CascadeType.ALL, orphanRemoval = true)
+private Set<PostTag> postTags = new LinkedHashSet<>();
+
+public void replaceTags(Collection<Tag> newTags) {
+    Set<Long> wanted = newTags.stream().map(Tag::getId).collect(Collectors.toSet());
+    postTags.removeIf(postTag -> !wanted.contains(postTag.getTag().getId()));
+    Set<Long> current = postTags.stream().map(postTag -> postTag.getTag().getId()).collect(Collectors.toSet());
+    newTags.stream()
+            .filter(tag -> !current.contains(tag.getId()))
+            .forEach(tag -> postTags.add(PostTag.of(this, tag)));
+}
+```
+
+- `mappedBy = "post"`: 연결 행을 고칠 책임(주인, 3.3)은 `PostTag.post` 쪽에 있다. `Post`는 목록을 들고만 있다.
+- `cascade = ALL`: 글에 `PostTag`를 넣고 글을 저장하면 연결 행도 INSERT된다. 그래서 `PostTagRepository`를 따로 두지 않고 예전처럼 `post.replaceTags(...)` 한 줄로 쓴다.
+- `orphanRemoval = true`: 목록에서 뺀 `PostTag`(고아)는 DELETE된다.
+- `replaceTags`는 이제 **차이만** 반영한다. 빠진 태그의 연결만 빼고, 새 태그의 연결만 더한다. 그대로인 태그는 건드리지 않는다. 비교는 태그 id로 한다(`PostTag`는 `equals`를 따로 두지 않았다).
+
+실제로 나가는 SQL(태그 `spring, jpa`인 글을 `jpa, mysql`로 고칠 때, `show-sql`로 확인):
+
+```
+insert into post_tag (post_id,tag_id) values (?,?)        ← mysql 하나
+delete from post_tag where post_id=? and tag_id=?          ← spring 하나
+```
+
+`jpa`의 행은 그대로다. 이것이 "어떤 SQL이 나가는지 코드에 보인다"는 뜻이다.
+
+**N+1과 `@BatchSize`**: 처음 바꾸고 SQL을 보니 태그 이름을 읽을 때 `select ... from tag where id=?`가 **태그마다** 하나씩 나갔다. `PostTag.tag`가 LAZY라 하나씩 프록시를 초기화하기 때문이다(`@ManyToMany`일 때는 연결 테이블과 태그를 한 번에 읽었다). `Tag` 클래스에 `@BatchSize(size = 10)`를 붙였다. 아직 안 읽은 태그 프록시를 10개까지 모아 `where id in (?, ?, ...)` 한 번으로 읽는다. 글당 태그는 10개까지라 한 번으로 끝난다. ([06](./06-jpa-entity-mapping.md)의 N+1)
+
+쿼리 경로도 연결 엔티티를 거치게 바꿨다.
+
+| 쓰는 곳 | 전 | 후 |
+| --- | --- | --- |
+| 태그별 글 목록 `PostQueryService.taggedWith` | `root.join("tags").get("id")` | `root.join("postTags").get("tag").get("id")` |
+| 검색 `SearchService` | `sameRow.join("tags")` | `sameRow.join("postTags").join("tag")` |
+| 태그 글 수 `PostCountRepositoryImpl.countByTag` | `post.join("tags")` | `post.join("postTags")` 후 `get("tag").get("id")` |
+
+동작이 같은지는 원래 있던 테스트(`TagIntegrationTest`의 정리·수정·동시 생성·태그 목록, `SearchIntegrationTest`, `SidebarIntegrationTest`, 글 쓰기·상세 테스트)가 그대로 통과하는 것으로 확인했다. 전체 278개 통과.
+
 ## 6. 자주 하는 실수와 함정
 
 - **태그를 글 표의 문자열 칸에 쉼표로 이어 저장한다.** 태그별 목록이 `LIKE '%spring%'`이 되어 `springboot`까지 걸리고, 이름 바꾸기와 개수 세기가 어려워진다. 다대다는 연결 테이블로.
 - **`@ManyToMany`에 `List`를 쓴다.** bag이 되어 수정 때 연결 행을 모두 지우고 다시 넣기 쉽고, 다른 bag과 함께 `join fetch`하면 `MultipleBagFetchException`이 난다. 중복 없는 관계면 `Set`.
 - **컬렉션 필드를 새 객체로 바꿔 끼운다.** `this.tags = new HashSet<>(newTags)`는 Hibernate의 추적용 컬렉션을 버린다. 비우고 채운다(`clear` + `addAll`).
-- **연결 테이블에 칸을 더하고 싶은데 `@ManyToMany`를 고집한다.** 단 시각·순서가 필요해지면 연결 엔티티(`PostTag`)로 바꾼다.
+- **`@ManyToMany`를 쓴다.** 칸이 없어도 나가는 SQL이 숨고, 칸이 생기면 매핑을 통째로 바꿔야 한다. 처음부터 연결 엔티티(`PostTag`)로 푼다(5.11).
+- **연결 엔티티의 다른 쪽을 LAZY로 두고 목록에서 하나씩 꺼낸다.** 태그마다 SELECT가 나간다(N+1). `@BatchSize`나 fetch join으로 묶는다.
+- **복합 키 연결 엔티티에서 `@MapsId`를 빠뜨린다.** 같은 칸을 키와 연관에서 두 번 매핑하게 된다.
 - **같은 이름 판단이 Java와 DB에서 다르다.** DB 정렬 규칙이 `_cs`나 `_bin`이면 `Spring`과 `spring`이 다른 행이 된다. 반대로 이 프로젝트처럼 `_ai_ci`면 DB가 **악센트까지** 무시한다. Java가 `toLowerCase`로만 비교하면 `cafe`를 새 이름으로 보고 저장하려다 UNIQUE 위반 500이 난다(이 프로젝트에서 실제로 났다, 5.3). Java 비교를 DB 규칙에 맞추고, 최종 판단은 `INSERT IGNORE`로 DB에 맡긴다.
 - **"없으면 만들기"를 확인 → INSERT로 한다.** 동시에 두 요청이 "없다"를 확인하면 둘 다 INSERT한다. UNIQUE 제약이 막아 주지만 늦은 쪽은 500이다. `INSERT IGNORE` 뒤에 잠금 읽기로 DB의 행을 가져온다(5.4).
 - **`INSERT IGNORE` 뒤 `FOR UPDATE`로 읽는다.** 중복을 만난 트랜잭션들이 이미 공유 잠금을 쥐고 있어, 배타 잠금으로 올리다 데드락이 난다. 읽기만 하면 `FOR SHARE`.
@@ -750,6 +832,9 @@ cd frontend && npx vitest run src/components/editor/tagNames.test.ts
 
 13. 같은 새 태그를 단 글을 동시에 저장할 때 `INSERT IGNORE` 뒤의 읽기가 평범한 SELECT면 안 되는 이유와, `FOR UPDATE`가 아니라 `FOR SHARE`인 이유는?
 <details><summary>답</summary>평범한 SELECT는 이 트랜잭션의 옛 스냅샷을 읽어, 다른 트랜잭션이 막 커밋한 태그를 못 볼 수 있다. 잠금 읽기는 최신 커밋을 본다. <code>INSERT IGNORE</code>가 중복을 만나면 그 행에 공유 잠금을 걸어 두므로, 여럿이 배타 잠금으로 올리려 하면 서로 기다려 데드락이 난다. 읽기만 하면 되니 공유 잠금으로 충분하다.</details>
+
+14. (스텝 9a) `@ManyToMany` 대신 `PostTag` 엔티티로 바꾼 이유 세 가지와, `@MapsId`가 하는 일은?
+<details><summary>답</summary>연결 테이블에 칸이 생기면 매핑을 통째로 바꿔야 하고, 나가는 INSERT·DELETE가 코드에서 보이지 않으며, ERD의 표와 클래스가 1:1로 맞지 않는다. @MapsId는 복합 키의 칸(postId, tagId)을 연관(post, tag)의 id로 채워서, 같은 칸을 두 번 매핑하지 않게 한다.</details>
 
 ## 9. 더 읽을거리
 
