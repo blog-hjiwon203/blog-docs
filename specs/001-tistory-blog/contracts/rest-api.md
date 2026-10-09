@@ -93,7 +93,7 @@
 | 400 | `VERIFICATION_EXPIRED` | 인증 코드 만료 | |
 | 400 | `RESET_TOKEN_INVALID` | 재설정 링크가 틀렸거나 만료·사용됨 | |
 | 400 | `BLOG_ADDRESS_INVALID` | 주소 규칙 위반·예약어 | `fieldErrors` |
-| 400 | `UNSUPPORTED_IMAGE` | jpg/png/gif/webp가 아님 | |
+| 400 | `UNSUPPORTED_IMAGE` | jpg/png/gif/webp가 아님(파일 앞부분으로 판단), 파일 이름의 확장자가 jpg·jpeg·png·gif·webp가 아니거나 실제 형식과 다름 | |
 | 400 | `IMAGE_TOO_LARGE` | 10MB 초과 | |
 | 400 | `TOO_MANY_TAGS` | 태그 10개 초과 | |
 | 400 | `BANNED_WORD` | 댓글·방명록에 그 블로그 금칙어 | |

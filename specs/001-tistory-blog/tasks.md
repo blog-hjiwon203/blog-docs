@@ -29,6 +29,7 @@ description: "지원 서비스 구현 작업 (2주 일정 기준)"
 | 7 | 이미지·태그·공감·검색·답글 | 사진 넣은 글, 공감, 검색 |
 | 8 | 조회수·인기 글 | 홈에 인기 글 |
 | 9 | 회원정보·주제·하위 카테고리·내 글 관리 | 블로그 관리가 편해짐 |
+| 9a | 보완: 이미지 확장자 검사, 태그 중간 엔티티 | 스텝 1~7 작업 대조에서 나온 빈 곳 메움 |
 | 10 | 비슷한 글 추천 (도전, 빼도 됨) | 글 아래 비슷한 글 |
 | 11 | 마무리 | 테스트 보강, 모바일 화면 |
 
@@ -196,6 +197,19 @@ description: "지원 서비스 구현 작업 (2주 일정 기준)"
 
 **확인할 것**: 상위 카테고리를 누르면 하위 카테고리 글까지 보인다. 내 글 관리에서 여러 글을 골라 한 번에 비공개로 바꾼다. 로그인 비밀번호를 5번 틀리면 맞는 비밀번호도 15분 동안 막힌다. 목업 mypage, manage-posts, home과 비교한다.
 
+### 스텝 9a. 보완 (2026-10-09 지원 결정)
+
+**무엇을 만드나**: 스텝 1~7 작업을 코드와 하나씩 대조하다 나온 빈 곳을 메운다. T036은 설명의 "확장자 검사"가 빠져 있었고, T038은 `post_tag`를 엔티티 없이 `@ManyToMany`로 매핑해 중간 테이블에 칸을 더하기 어렵고 나가는 SQL이 보이지 않는 단점이 그대로였다.
+
+**끝나면**: 이미지는 이름의 확장자와 실제 형식이 모두 맞아야 올라가고, 태그 연결은 `PostTag` 엔티티로 다룬다(동작은 그대로).
+
+| 작업 | 내용 |
+| --- | --- |
+| T036a | 이미지 확장자 허용 목록과 실제 형식 일치 검사, EXIF 방향 보정 테스트 |
+| T038a | `post_tag`를 `PostTag` 중간 엔티티로 |
+
+**확인할 것**: `a.txt`·`a.html`이나 내용과 다른 확장자(PNG를 `a.jpg`로)를 올리면 400 `UNSUPPORTED_IMAGE`. 태그 달기·바꾸기·태그별 목록·검색·사이드바 태그 글 수가 전과 같다.
+
 ### 스텝 10. 비슷한 글 추천 (도전, 빼도 됨)
 
 **무엇을 만드나**: 글 내용을 숫자 벡터로 바꿔 PostgreSQL(pgvector)에 저장하고, 글 상세 아래에 내용이 비슷한 글을 보여 준다. 다른 스텝과 떨어져 있어 통째로 빼도 된다.
@@ -321,9 +335,11 @@ description: "지원 서비스 구현 작업 (2주 일정 기준)"
 - [X] T034 [US2] [W1] 공개 범위 변경 API (PUBLIC, PRIVATE; SUBSCRIBERS는 구독 이후) in `post/` (POST-06)
 - [X] T035 [P] [US2] [W1] 화면: Tiptap 에디터(허용 서식만), 글쓰기·수정, 카테고리 관리, 삭제 확인 in `frontend/src/components/editor/`, `pages/manage/`
 - [X] T035a [US2] [W1] 에디터 마크다운 입력: 같은 에디터에서 마크다운 문법(제목·굵게·기울임·목록·인용·코드 블록·`[글자](http/https 주소)`)을 치거나 마크다운 글을 붙여넣으면 서식으로, 저장은 HTML 그대로 in `frontend/src/components/editor/` (POST-01, 2026-10-08 지원 결정)
-- [X] T036 [US2] [W2a] 이미지 업로드 API: 10MB, 확장자+실제 내용 검사(위장 파일 거절), UUID 파일명으로 `app.upload.dir`(개발: `/Users/chosun-nhn54/IdeaProjects/blog/uploads`)에 저장, `/uploads/**`로 서빙, 리사이즈·썸네일, EXIF 방향 보정, GIF 유지 in `image/` (POST-05, plan 저장소)
+- [ ] T036 [US2] [W2a] 이미지 업로드 API: 10MB, 확장자+실제 내용 검사(위장 파일 거절), UUID 파일명으로 `app.upload.dir`(개발: `/Users/chosun-nhn54/IdeaProjects/blog/uploads`)에 저장, `/uploads/**`로 서빙, 리사이즈·썸네일, EXIF 방향 보정, GIF 유지 in `image/` (POST-05, plan 저장소)
 - [X] T037 [US2] [W2a] 에디터 이미지 버튼 ↔ 업로드 API 연결, 여러 장은 고른 순서대로 in `frontend/src/components/editor/` (POST-05)
-- [X] T038 [P] [US2] [W2a] `tag`, `post_tag` 엔티티, 글 작성·수정 시 태그 최대 10개·중복 제거·없는 이름 자동 생성 in `tag/` (TAG-01)
+- [ ] T038 [P] [US2] [W2a] `tag`, `post_tag` 엔티티, 글 작성·수정 시 태그 최대 10개·중복 제거·없는 이름 자동 생성 in `tag/` (TAG-01)
+- [ ] T036a [US2] 이미지 확장자 검사: 이름의 확장자가 jpg·jpeg·png·gif·webp가 아니거나 매직 넘버로 본 실제 형식과 다르면 400 `UNSUPPORTED_IMAGE`(jpg·jpeg 같게, 대소문자 무시), EXIF 방향 정보가 든 JPEG가 바로 선 모양으로 저장되는지 테스트 in `image/` (POST-05, R-15, 스텝 9a)
+- [ ] T038a [US2] `post_tag`를 `PostTag` 중간 엔티티(@ManyToOne post·tag, 복합 키)로 바꾸고 `Post.tags`의 @ManyToMany를 없앰. 태그 달기·바꾸기·태그별 목록·검색·태그 글 수는 그대로 in `tag/`, `post/` (TAG-01, TAG-02, TAG-03, 스텝 9a)
 - [X] T039 [US2] [W2a] 태그별 글 목록 `/tag/{name}` in `post/` (TAG-02)
 - [X] T040 [US2] [W1] 통합 테스트: 수정 후 주소·순서 불변, 카테고리 삭제 시 미분류, 비공개 전환 시 목록·개수에서 빠짐 in `src/test/.../post/`
 
