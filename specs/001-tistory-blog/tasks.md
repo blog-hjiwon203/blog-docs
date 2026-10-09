@@ -414,10 +414,10 @@ description: "지원 서비스 구현 작업 (2주 일정 기준)"
 
 **목표**: 글 상세 아래 비슷한 글 몇 개. 일정이 밀리면 이 단계 전체를 백로그로 돌린다(다른 단계와 의존 없음).
 
-- [ ] T069a [W2b] docker compose에 PostgreSQL + pgvector 추가, 두 번째 DataSource 설정(추천 전용) in `recommend/config/` (R-02)
-- [ ] T069b [W2b] `post_embedding(post_id, embedding vector)` 테이블, 발행·수정 시 비동기로 임베딩 생성·저장 in `recommend/` (로컬 Ollama + bge-m3, R-02 2026-10-10 결정)
-- [ ] T069c [W2b] 비슷한 글 API: 코사인 유사도 상위 N에서 보는 사람이 볼 수 없는 글 제외(가시성 판단 재사용) in `recommend/`
-- [ ] T069d [P] [W2b] 글 상세 하단 '비슷한 글' 영역 in `frontend/src/pages/post/`
+- [X] T069a [W2b] docker compose에 PostgreSQL + pgvector 추가, 두 번째 DataSource 설정(추천 전용) in `recommend/config/` (R-02)
+- [X] T069b [W2b] `post_embedding(post_id, embedding vector)` 테이블, 발행·수정 시 비동기로 임베딩 생성·저장 in `recommend/` (로컬 Ollama + bge-m3, R-02 2026-10-10 결정)
+- [X] T069c [W2b] 비슷한 글 API: 코사인 유사도 상위 N에서 보는 사람이 볼 수 없는 글 제외(가시성 판단 재사용) in `recommend/`
+- [X] T069d [P] [W2b] 글 상세 하단 '비슷한 글' 영역 in `frontend/src/pages/post/`
 
 ---
 
