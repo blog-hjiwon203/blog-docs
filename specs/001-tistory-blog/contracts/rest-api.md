@@ -124,7 +124,7 @@
 | 409 | `ALREADY_BLOCKED` | 이미 차단한 회원 | |
 | 409 | `BANNED_WORD_LIMIT` | 금칙어 100개 초과 | |
 | 409 | `RANKING_UPDATED` | 랭킹 더보기 중 스냅숏이 바뀜 | `{ snapshotAt }` (새 기준 시각) |
-| 429 | `TOO_MANY_REQUESTS` | 인증 메일·재설정 메일을 1분 안에 다시 요청, 같은 연타 방지 키의 처음 요청이 3초 넘게 처리 중 | `{ retryAfterSeconds }` |
+| 429 | `TOO_MANY_REQUESTS` | 인증 메일·재설정 메일을 1분 안에 다시 요청, 같은 연타 방지 키의 처음 요청이 3초 넘게 처리 중, 로그인 비밀번호(이메일별)·인증 코드(이메일별)·비밀번호 변경의 지금 비밀번호(회원별)를 15분 안에 5번 틀림(다섯 번째부터 15분 동안), 같은 IP에서 이 셋을 합쳐 15분 안에 20번 틀림(research R-17) | `{ retryAfterSeconds }` |
 | 500 | `INTERNAL_ERROR` | 예상하지 못한 오류 | |
 
 ### 제재 사유
@@ -270,8 +270,8 @@
 | 메서드 | 경로 | Host | 권한 | 설명 | ID |
 | --- | --- | --- | --- | --- | --- |
 | GET | /api/me | \* | 회원 | `Me`. 비회원이면 401 (프론트는 로그인 상태 확인에 씀) | AUTH-04, AUTH-05 |
-| PATCH | /api/me | P | 회원 | `{ nickname?, profileImageId? }` → `Me`. 닉네임 중복 409 | AUTH-05 |
-| PUT | /api/me/password | P | 회원 | `{ currentPassword, newPassword }` → 204. 이메일 가입 회원만(아니면 403) | AUTH-05 |
+| PATCH | /api/me | P | 회원 | `{ nickname?, profileImageId? }` → `Me`. 보내지 않은 칸은 그대로. 닉네임 중복 409(대소문자만 바꾸기는 됨). `profileImageId`는 본인이 올린 이미지만(아니면 400 `fieldErrors[].field = profileImageId`). `Me.profileImageUrl`은 썸네일 주소 | AUTH-05 |
+| PUT | /api/me/password | P | 회원 | `{ currentPassword, newPassword }` → 204. 이메일 가입 회원만(아니면 403). 지금 비밀번호가 틀리면 400(`fieldErrors[].field = currentPassword`), 새 비밀번호는 가입 규칙(`newPassword`). 지금 로그인과 다른 기기 로그인은 그대로 | AUTH-05 |
 | DELETE | /api/me/social/{provider} | P | 회원 | 204. 남는 로그인 수단이 없으면 409 `LAST_LOGIN_METHOD`. 연동은 `authorize?mode=link` | OWN-03 |
 | DELETE | /api/me | P | 회원 | `{ password }`(이메일 가입) 또는 `{}`(소셜 재인증 10분 안) → 204 + 쿠키 삭제. 본인 확인 실패 401 | AUTH-06 |
 | GET | /api/me/blogs | P | 회원 | 내 활성 블로그 `[{ id, address, name, isPrimary, movedTo, postCount }]` | BLOG-08 |
@@ -374,8 +374,8 @@
 | 메서드 | 경로 | Host | 권한 | 설명 | ID |
 | --- | --- | --- | --- | --- | --- |
 | GET | /api/categories | B | 누구나 | 트리. 주인이 아니면 비공개 카테고리와 그 글 수는 빠짐 | CAT-01, CAT-05, BLOG-04 |
-| POST | /api/categories | B | 주인 | `{ name, parentId? }` → 201. 이름 중복 409 `NAME_TAKEN`, 하위의 하위 409 `CATEGORY_DEPTH` | CAT-01, CAT-03 |
-| PATCH | /api/categories/{id} | B | 주인 | `{ name?, isPrivate? }` → 204 | CAT-01, CAT-05 |
+| POST | /api/categories | B | 주인 | `{ name, parentId? }` → 201 `{ id, name, parentId, sortOrder }`. 같은 자리(최상위끼리, 같은 상위의 하위끼리) 이름 중복 409 `NAME_TAKEN`, 하위의 하위 409 `CATEGORY_DEPTH`, 이 블로그 카테고리가 아닌 `parentId`는 400 | CAT-01, CAT-03 |
+| PATCH | /api/categories/{id} | B | 주인 | `{ name?, isPrivate? }` → 204. `parentId`를 보내면 400(상위 바꾸기는 `PUT /api/categories/order`) | CAT-01, CAT-05 |
 | DELETE | /api/categories/{id} | B | 주인 | 204. 글은 미분류로. 하위가 있으면 409 `CATEGORY_HAS_CHILDREN` | CAT-01 |
 | PUT | /api/categories/order | B | 주인 | `[{ id, parentId, sortOrder }]` 전체 → 204. 드래그 앤 드롭 결과 한 번에 | CAT-04 |
 | GET | /api/tags | B | 누구나 | `[{ id, name, postCount }]` 글 수순 | TAG-03 |
@@ -439,7 +439,7 @@
 | GET | /api/search?q=&type=blog&page= | P | 누구나 | 블로그 이름·소개 검색 `[{ blog, owner, subscriberCount }]` 10 | SRCH-02 |
 | GET | /api/home/latest?cursor= | P | 누구나 | 모든 블로그 공개 글 `PostSummary` 20 최신순 | HOME-01 |
 | GET | /api/home/popular | P | 누구나 | 인기 점수 상위 10 `{ snapshotAt, items: [{ rank, post }] }`. 5분 스냅숏 | HOME-02 |
-| GET | /api/home/topics/{topic} | P | 누구나 | 주제별 6. 인기 점수 순, 모자라면 최신 글 | HOME-03 |
+| GET | /api/home/topics/{topic} | P | 누구나 | 주제별 `PostSummary[]` 6. 인기 점수 순(주제마다 5분 캐시), 모자라면 그 주제의 최신 글. `topic`은 주제 code(`IT_DEV` 등), 모르는 값은 404 | HOME-03 |
 | GET | /api/home/bloggers | P | 누구나 | 인기 블로거 상위 5 `{ snapshotAt, items: [{ rank, blog, owner }] }`. 1시간 스냅숏 | HOME-04 |
 | GET | /api/ranking/posts?snapshotAt=&offset= | P | 누구나 | 인기 글 100위까지 20개씩. 처음엔 `snapshotAt` 없이. 스냅숏이 바뀌었으면 409 `RANKING_UPDATED` | HOME-05 |
 | GET | /api/ranking/bloggers?snapshotAt=&offset= | P | 누구나 | 인기 블로거 100위까지 20개씩. 같은 규칙 | HOME-05 |
@@ -453,9 +453,9 @@
 
 | 메서드 | 경로 | 설명 | ID |
 | --- | --- | --- | --- |
-| GET | /api/manage/posts?status=&visibility=&categoryId=&q=&page= | 내 글 20 최신순(임시저장은 수정 시각순). 숨긴 글은 `blinded: true`와 `blind` 사유 | MNG-01, POST-08, ADMIN-03 |
-| PATCH | /api/manage/posts | `{ postIds, visibility }` → `{ updatedCount }` 일괄 공개 범위 | MNG-01 |
-| DELETE | /api/manage/posts | `{ postIds }` → `{ deletedCount }` 일괄 삭제 | MNG-01 |
+| GET | /api/manage/posts?status=&visibility=&categoryId=&q=&page= | 내 글 20 최신순(임시저장은 수정 시각순). `categoryId`는 하위 포함, `0`은 미분류. `q`는 제목만 찾는다. 숨긴 글은 `blinded: true`와 `blind` 사유 | MNG-01, POST-08, ADMIN-03 |
+| PATCH | /api/manage/posts | `{ postIds, visibility }` → `{ updatedCount }` 일괄 공개 범위. `postIds` 1~100개. 이 블로그의 지우지 않은 글만 바꾸고 남의 글·지운 글·없는 번호는 건너뛴다(수에서 빠짐). 한 트랜잭션 | MNG-01 |
+| DELETE | /api/manage/posts | `{ postIds }` → `{ deletedCount }` 일괄 삭제(글 하나 삭제와 같은 처리). `postIds` 1~100개, 건너뛰는 규칙은 위와 같음 | MNG-01 |
 | GET | /api/manage/comments?type=comment\|guestbook&page= | 받은 댓글·방명록 20 최신순 `[{ ...Comment, post: { id, title } \| null }]` | MNG-02 |
 | GET | /api/manage/stats | 관리 홈 `{ today, yesterday, total, recentComments[5], recentPosts[5] }` | MNG-03 |
 | GET | /api/manage/stats/visitors?unit=day\|week\|month&from=&to= | `[{ date, visitorCount, viewCount }]`. 주·월은 일별 합 | MNG-03 |
@@ -542,3 +542,9 @@
 | 내 정보 경로 | `/api/me/**`로 통일 | `/api/members/me/**` |
 | 비회원 조회자 식별 | 서버가 주는 `visitor_id` 쿠키(UUID, 1년, 모든 블로그 주소 공통). 키는 회원 `m:{id}`, 비회원 `a:{uuid}` (지원 확인 2026-10-09) | IP 주소, 브라우저 지문 |
 | 주인 본인 조회 | 조회수에 셈 (지원 확인 2026-10-09) | 빼기 |
+| 비밀번호 변경의 지금 비밀번호 틀림 | 400 `VALIDATION_FAILED`, 칸 `currentPassword` (지원 확인 2026-10-09) | 새 오류 코드, 401 |
+| 프로필 사진 이미지 | 본인이 올린 이미지만, 응답은 썸네일 주소 (지원 확인 2026-10-09) | 아무 이미지 |
+| 비밀번호 변경 뒤 다른 기기 | 로그인 유지 (지원 확인 2026-10-09) | 모두 로그아웃 |
+| 남의 블로그 상위 카테고리·이름 변경의 `parentId` | 400 (지원 확인 2026-10-09) | 404, 무시 |
+| 모르는 주제 주소 | 404 (지원 확인 2026-10-09) | 400 |
+| 내 글 관리 검색·일괄 처리 | 검색은 제목만. 일괄 처리는 내 글만 처리하고 나머지는 건너뛰어 수로 알림, 100개까지 (지원 확인 2026-10-09) | 본문까지 검색, 하나라도 틀리면 전체 거절 |
