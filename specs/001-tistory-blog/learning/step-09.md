@@ -1,6 +1,6 @@
 # 스텝 9. 회원정보·주제·하위 카테고리·내 글 관리
 
-> 작업: T055, T056, T060, T064, T067 · 코드 브랜치: `step-9-manage-topics` · 날짜: 2026-10-09
+> 작업: T055, T055a, T056, T060, T064, T067 · 코드 브랜치: `step-9-manage-topics` · 날짜: 2026-10-09
 
 ## 한눈에 보기
 
@@ -14,8 +14,9 @@
 | 하위 카테고리 (CAT-03) | `POST /api/categories { name, parentId }` → 201 `{ id, name, parentId, sortOrder }`, 3단계 409 `CATEGORY_DEPTH` | `category/application/CategoryService`, `CategoriesPage`의 [하위 추가] |
 | 홈 주제별 글 (HOME-03) | `GET /api/home/topics/{topic}` → PostSummary 6개 | `HomeService.topicPosts`, `PopularRanking.topicSnapshot`, `PopularScoreRepository.topScoresInTopic`, `HomePage`의 주제 탭 |
 | 내 글 관리 (MNG-01) | `GET /api/manage/posts?status=&visibility=&categoryId=&q=&page=`, `PATCH`·`DELETE /api/manage/posts` | `manage/application/ManagePostService`, `manage/presentation/ManagePostController`, `pages/manage/ManagePostsPage.tsx` |
+| 시도 횟수 제한 (T055a, 지원이 스텝 중에 추가) | 로그인·인증 코드·비밀번호 변경을 15분 안에 5번 틀리면 15분 동안 429 `{ retryAfterSeconds }` | `global/auth/AttemptLimiter`, `AttemptLimitProperties`, `AuthService.login`, `EmailVerificationService.check`, `MeService.changePassword`, `frontend/src/api/errors.ts` |
 | 공용 도구 | — | `global/web/LikePatterns`(검색에서 옮김) |
-| 테스트 | — | `MeUpdateIntegrationTest`, `TopicIntegrationTest`, `CategoryIntegrationTest`, `HomeTopicIntegrationTest`, `ManagePostIntegrationTest` |
+| 테스트 | — | `AttemptLimitIntegrationTest`, `errors.test.ts`, `MeUpdateIntegrationTest`, `TopicIntegrationTest`, `CategoryIntegrationTest`, `HomeTopicIntegrationTest`, `ManagePostIntegrationTest` |
 
 **지원이 정한 것 (2026-10-09, 명세에 정해지지 않았던 것, contracts에 반영)**
 
@@ -24,6 +25,8 @@
 - 비밀번호를 바꿔도 다른 기기의 로그인은 끊지 않는다.
 - 하위 카테고리의 상위 번호가 이 블로그의 것이 아니면 400(`parentId`). 이름 변경(`PATCH`)에서 `parentId`를 보내면 400(상위 바꾸기는 CAT-04).
 - 모르는 주제 주소(`/api/home/topics/SPORTS`, 소문자 `health`)는 404.
+- 비밀번호·인증 코드 시도 제한(research R-17): 로그인(이메일별)·인증 코드(이메일별)·비밀번호 변경(회원별)을 15분 안에 5번 틀리면 다섯 번째로 틀린 때부터 15분 동안 429. 막힌 동안은 맞는 값도 거절, 맞히면 횟수 초기화, 가입하지 않은 이메일도 똑같이 센다. 스텝 9를 확인하던 지원이 "틀리는 횟수 제한이 있나?"라고 물어 없던 것을 알고 더했다.
+- 스텝이 끝나면 Claude Code가 tasks.md 체크박스를 `[X]`로 바꾼다(CLAUDE.md).
 - 내 글 관리 검색 `q`는 **제목만** 찾는다. 일괄 처리는 이 블로그의 지우지 않은 글만 처리하고 남의 글·지운 글·없는 번호는 건너뛰어 그 수를 뺀 `updatedCount`·`deletedCount`를 준다. 한 번에 100개까지.
 
 ## 요청 흐름
@@ -70,6 +73,7 @@ blog.test/me       MyPage
 | 순서 | 개념 문서 | 이 스텝에서 그 개념이 쓰인 곳 |
 | --- | --- | --- |
 | 1 | [38 회원정보 수정](./concepts/38-member-profile-update.md) | `MeService.update`·`changePassword`, IDOR 막기, 마이페이지 |
+| 1-1 | [40 시도 횟수 제한](./concepts/40-attempt-limit.md) | `AttemptLimiter`, 로그인·인증 코드·비밀번호 변경의 15분·5번, 동시 시도, 429 안내 문장 |
 | 2 | [39 계층 데이터: 카테고리 2단계와 주제](./concepts/39-category-hierarchy.md) | 하위 카테고리, `parent_key` 계산 칸, `Topic` enum, 주제별 글 |
 | 3 | [37 거르기 조건이 있는 목록과 일괄 처리](./concepts/37-filtered-list-bulk-actions.md) | 내 글 관리 목록·일괄 처리, `LikePatterns`, 주소에 둔 거르기 조건 |
 | 4 | [35 캐시](./concepts/35-spring-cache-redis.md)의 5.9, [36 집계 순위](./concepts/36-ranking-aggregation.md)의 5.5 | 주제별 캐시 키 `#topic.name()`, 같은 SQL에 주제 조건 |
@@ -79,6 +83,9 @@ blog.test/me       MyPage
 먼저 알고 있으면 좋은 문서: [09 비밀번호 해시](./concepts/09-password-hashing.md), [22 입력 검증](./concepts/22-bean-validation.md)(401이 400보다 먼저), [16 인가와 가시성](./concepts/16-authorization-visibility.md)(`ownerView`, `visibleTo`), [06 JPA](./concepts/06-jpa-entity-mapping.md)(Specification), [25 React 폼](./concepts/25-react-forms-data.md)(`useSearchParams`).
 
 ## 막혔던 점
+
+- **비밀번호를 틀리는 횟수에 제한이 없었다**: 스텝 9를 확인하던 지원의 질문으로 알았다. 로그인·인증 코드·비밀번호 변경 모두 몇 번이든 넣어 볼 수 있었다(스텝 4 학습 문서 20의 "남은 위험"에 적혀만 있던 것). 지원이 15분·5번으로 정해 명세(spec, contracts, research R-17, tasks T055a)에 먼저 적고 만들었다. "보고 → 확인"이 동시 요청에 뚫리지 않게 확인 전에 `INCR`로 자리를 잡는다([40](./concepts/40-attempt-limit.md) 3.4).
+- **확인용 서버를 띄우다 지원의 서버를 끔**: 8080이 이미 쓰이고 있어 새 서버가 뜨지 못했는데, 정리하려고 이름으로 프로세스를 모두 끄다 지원이 띄워 둔 8080 서버까지 꺼졌다. 그 뒤로는 8081에 띄우고 그 포트의 프로세스만 끈다.
 
 - **혼자 돌리면 통과, 전체를 돌리면 실패 (두 번)**: 주제별 글 테스트가 만든 "활동 많은 다른 주제 글"이 홈 인기 글 테스트의 1·2위를 밀어냈고, 고친 뒤에는 채우는 글을 2099년 날짜에 둔 것이 홈 최신 글 테스트의 미래 글과 섞였다. 인기 글 테스트를 "몇 위"가 아니라 "앞뒤 관계"로 바꾸고, 미래 날짜를 쓰지 않게 했다([05](./concepts/05-spring-testing.md) 5.7).
 - **이름 바꾸기도 같은 자리에서만 비교해야 했다**: 스텝 5의 이름 중복 검사는 최상위끼리만 봤다. 하위가 생기면 다른 상위 아래의 같은 이름으로 잘못 409가 난다. 추가·이름 바꾸기 모두 같은 `nameTaken(blog, 상위, 이름)`을 쓰게 했다([39](./concepts/39-category-hierarchy.md) 5.1).
@@ -103,7 +110,7 @@ blog.test/me       MyPage
 ## 직접 해 보기
 
 ```bash
-./mvnw test -Dtest='MeUpdateIntegrationTest,TopicIntegrationTest,CategoryIntegrationTest,HomeTopicIntegrationTest,ManagePostIntegrationTest'
+./mvnw test -Dtest='AttemptLimitIntegrationTest,MeUpdateIntegrationTest,TopicIntegrationTest,CategoryIntegrationTest,HomeTopicIntegrationTest,ManagePostIntegrationTest'
 cd frontend && npm test
 ```
 
@@ -113,6 +120,7 @@ cd frontend && npm test
 2. **하위 카테고리**: `/manage/categories`에서 "개발" 아래 "Spring"을 만들고, 글을 하나씩 "개발"·"└ Spring"으로 발행한다. 사이드바의 "개발"을 누르면 두 글이 모두 나오고 글 수가 2다.
 3. **주제**: 글쓰기에서 주제를 "여행"으로 발행하고, 홈의 주제별 글 "여행" 탭에서 본다. (목업 home과 비교)
 4. **내 글 관리**: `/manage/posts`에서 글 두 개를 골라 "비공개로" [적용]. 시크릿 창(비회원)으로 블로그 메인을 열면 두 글이 없다. 상태·카테고리를 바꾸면 주소가 바뀌고, 그 주소를 새로 열어도 같은 목록이다. (목업 manage-posts와 비교)
+5. **시도 제한**: 로그아웃하고 로그인 비밀번호를 5번 틀린 뒤 맞는 비밀번호를 넣으면 "여러 번 시도해 잠시 막혔습니다. 15분 뒤에 다시 시도해 주세요."가 나온다. 풀려면 `docker exec blog-redis redis-cli del "attempt:login:{이메일}"`.
 
 ```bash
 H="Host: {주소}.blog.test"; X="X-Requested-With: XMLHttpRequest"; J="Content-Type: application/json"

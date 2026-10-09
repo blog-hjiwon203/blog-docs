@@ -1,6 +1,6 @@
 # 20. 이메일 인증 코드와 요청 제한
 
-> 관련 스텝: [스텝 4](../step-04.md) (T017) · 관련 개념: [17-idempotency-redis](./17-idempotency-redis.md), [21-signup-login](./21-signup-login.md), [06-jpa-entity-mapping](./06-jpa-entity-mapping.md), [07-spring-mvc-exception-handling](./07-spring-mvc-exception-handling.md), [05-spring-testing](./05-spring-testing.md)
+> 관련 스텝: [스텝 4](../step-04.md) (T017), [스텝 9](../step-09.md) (T055a) · 관련 개념: [40-attempt-limit](./40-attempt-limit.md), [17-idempotency-redis](./17-idempotency-redis.md), [21-signup-login](./21-signup-login.md), [06-jpa-entity-mapping](./06-jpa-entity-mapping.md), [07-spring-mvc-exception-handling](./07-spring-mvc-exception-handling.md), [05-spring-testing](./05-spring-testing.md)
 
 ## 1. 이 문서로 배우는 것
 
@@ -70,7 +70,7 @@
 - 코드 하나당 틀릴 수 있는 횟수 제한(예: 5번 틀리면 그 코드는 폐기)
 - IP·이메일당 확인 요청 속도 제한
 
-이 프로젝트는 **아직 두지 않았다**(5.8 남은 위험).
+스텝 4에서는 두지 않았다가(5.8 남은 위험), 스텝 9에서 **같은 이메일로 15분 안에 5번 틀리면 15분 동안 막는** 제한을 더했다(T055a, [40](./40-attempt-limit.md)).
 
 ### 3.5 요청 제한(rate limiting)과 429
 
@@ -406,10 +406,10 @@ public void expireLatest(String email) {
 
 | 위험 | 내용 | 대책 후보 |
 | --- | --- | --- |
-| 코드 무차별 대입 | `verify`와 `signup`의 코드 확인에 **시도 횟수 제한이 없다**. 10분 동안 요청을 많이 보내면 6자리를 맞힐 수 있다 | 코드별 실패 횟수를 세어 5번이면 폐기, 이메일·IP별 확인 요청 제한(Redis 카운터 `INCR` + TTL) |
+| 코드 무차별 대입 | ~~`verify`와 `signup`의 코드 확인에 시도 횟수 제한이 없다~~ → **스텝 9에서 고침**: 같은 이메일로 15분 안에 5번 틀리면 15분 동안 429 | 이메일별 실패 횟수(Redis `INCR` + TTL), [40](./40-attempt-limit.md) |
 | 가입 여부 노출 | `send`가 409 `EMAIL_TAKEN`을 주므로, 아무 이메일이나 넣어 보면 우리 회원인지 알 수 있다(계정 열거) | 가입된 이메일에도 202를 주고 "이미 가입된 계정입니다" 안내 메일을 보내기. 대신 가입 화면에서 바로 알려 주는 편의는 사라진다 |
 
-두 번째는 의도한 트레이드오프다. API 명세가 409를 정했고(가입 화면에서 "이미 가입한 이메일입니다. 로그인해 주세요"를 바로 보여 주는 편의), 로그인과 비밀번호 재설정에서는 반대로 가입 여부를 숨긴다([21](./21-signup-login.md) 3.2). 첫 번째는 지원이 정할 것으로 남겨 두었다.
+두 번째는 의도한 트레이드오프다. API 명세가 409를 정했고(가입 화면에서 "이미 가입한 이메일입니다. 로그인해 주세요"를 바로 보여 주는 편의), 로그인과 비밀번호 재설정에서는 반대로 가입 여부를 숨긴다([21](./21-signup-login.md) 3.2). 첫 번째는 지원이 정할 것으로 남겨 두었고, 스텝 9에서 지원이 15분·5번으로 정했다(research R-17).
 
 ## 6. 자주 하는 실수와 함정
 

@@ -1,6 +1,6 @@
 # 38. 회원정보 수정: 부분 수정, 비밀번호 바꾸기, 남의 것을 가리키는 번호
 
-> 관련 스텝: [스텝 9](../step-09.md) (T055) · 관련 개념: [09-password-hashing](./09-password-hashing.md), [21-signup-login](./21-signup-login.md), [22-bean-validation](./22-bean-validation.md), [30-image-upload](./30-image-upload.md), [23-transactions-locking](./23-transactions-locking.md), [25-react-forms-data](./25-react-forms-data.md)
+> 관련 스텝: [스텝 9](../step-09.md) (T055, T055a) · 관련 개념: [40-attempt-limit](./40-attempt-limit.md), [09-password-hashing](./09-password-hashing.md), [21-signup-login](./21-signup-login.md), [22-bean-validation](./22-bean-validation.md), [30-image-upload](./30-image-upload.md), [23-transactions-locking](./23-transactions-locking.md), [25-react-forms-data](./25-react-forms-data.md)
 
 ## 1. 이 문서로 배우는 것
 
@@ -181,6 +181,7 @@ public void changePassword(Long memberId, String currentPassword, String newPass
 - 소셜 가입 회원은 `password_hash`가 NULL이다. 바꿀 비밀번호가 없으니 403(contracts "이메일 가입 회원만(아니면 403)").
 - 지금 비밀번호가 틀리면 400이고, 칸 이름 `currentPassword`를 준다. 오류 코드를 새로 만들지 않고 `VALIDATION_FAILED`의 칸 오류로 했다. 화면은 그 칸 아래에 문장을 보여 준다. 로그인 실패(401 `LOGIN_FAILED`)와 달리 이미 로그인한 사람이라 401은 맞지 않다.
 - 확인 순서: 지금 비밀번호 → 새 비밀번호 규칙. 지금 비밀번호를 모르는 사람에게는 새 비밀번호 규칙을 알려 줄 필요가 없다.
+- (T055a) 지금 비밀번호 비교는 `attemptLimiter.attempt("password-change:" + memberId, ...)` 안에서 한다. 15분 안에 5번 틀리면 15분 동안 429다. 이것이 없으면 잠깐 얻은 로그인 상태로 지금 비밀번호를 계속 맞혀 볼 수 있어서 3.2의 보호가 무너진다([40](./40-attempt-limit.md)). 위 발췌는 제한을 더하기 전 모습이다.
 - `PasswordRule.check`: 가입과 **같은 규칙**(8자 이상, 영문+숫자, 72바이트, [09](./09-password-hashing.md)).
 - 마지막 줄은 `save`가 없다. 트랜잭션 안에서 읽은 엔티티의 값을 바꾸면 커밋 때 UPDATE가 나간다(변경 감지).
 
