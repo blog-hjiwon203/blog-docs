@@ -7,10 +7,11 @@
 ```bash
 # 모두 코드 저장소 루트(~/IdeaProjects/blog)에서
 
-# MySQL 8, Redis
+# MySQL 8, Redis, PostgreSQL(pgvector, 비슷한 글 추천), Ollama(임베딩 bge-m3, 기존 docker 볼륨 ollama)
 docker compose up -d
 
-# 백엔드 (http://localhost:8080, 처음 뜰 때 Flyway가 테이블 생성)
+# 프론트 빌드를 static으로 복사한 뒤 백엔드 (http://blog.test:8080, 처음 뜰 때 Flyway가 테이블 생성)
+./scripts/build-frontend.sh
 ./mvnw spring-boot:run
 
 # 백엔드 테스트 (Testcontainers라 Docker가 켜져 있어야 함)
@@ -20,8 +21,7 @@ docker compose up -d
 cd frontend && npm install && npm run dev
 
 # 배포용 jar (프론트 빌드 포함)
-cd frontend && npm run build && cp -r dist/* ../src/main/resources/static/
-cd .. && ./mvnw clean package   # target/*.jar
+./scripts/build-frontend.sh && ./mvnw clean package   # target/*.jar
 ```
 
 - 블로그 주소(`{주소}.blog.test:8080`)를 브라우저로 열려면 `*.blog.test`가 내 컴퓨터(127.0.0.1)를 가리켜야 한다. **dnsmasq를 권한다**(한 번 설정하면 새 블로그도 바로 열린다, 명령은 [학습 자료 15의 실습 6](./learning/concepts/15-subdomain-host-routing.md)):
@@ -34,7 +34,9 @@ cd .. && ./mvnw clean package   # target/*.jar
   ```
   dnsmasq는 Spring 서버와 별개로 계속 돈다. 서버를 끈 채 블로그 주소를 열면 `ERR_CONNECTION_REFUSED`, dnsmasq가 꺼져 있으면 `DNS_PROBE_FINISHED_NXDOMAIN`이다.
   dnsmasq 없이 하려면 `/etc/hosts`에 `127.0.0.1 blog.test alpha.blog.test beta.blog.test gamma.blog.test`처럼 쓸 주소를 하나씩 넣는다(새 블로그마다 한 줄 더). `*.localhost`는 하위 도메인 쿠키 공유가 브라우저마다 달라 쓰지 않는다.
-- 서비스 관리자 초기 계정은 Flyway 데이터 마이그레이션으로 들어간다.
+- 서비스 관리자 초기 계정은 Flyway 데이터 마이그레이션으로 들어간다(`admin@blog.test`, 개발용 비밀번호는 `V2__admin_account.sql` 주석).
+- 개발용 DB 접속 정보와 운영 환경 변수는 코드 저장소 `README.md`에 있다.
+- 아래 "P0 한 바퀴"와 "권한·가시성" 표는 코드 저장소의 `QuickstartScenarioIntegrationTest`가 같은 순서로 자동 확인한다(T070, `./mvnw test`).
 
 ## P0 한 바퀴 (spec SC-001, US1~US3)
 
@@ -49,7 +51,7 @@ cd .. && ./mvnw clean package   # target/*.jar
 
 | 시도 | 기대 |
 | --- | --- |
-| 비회원 `alpha.blog.test:8080/manage/post/new` | 로그인 안내 → 로그인 후 원래 화면 |
+| 비회원 `alpha.blog.test:8080/manage/write` | 로그인 안내 → 로그인 후 원래 화면 |
 | B로 로그인한 상태로 `PUT alpha.blog.test:8080/api/posts/{A글}` | 403 |
 | A 글을 비공개로 바꾼 뒤 B·비회원이 주소로 열기 | 404, 홈·목록·글 수에서 빠짐 |
 | `beta.blog.test:8080/{A글 id}` (B 블로그 주소에 A 글 번호) | A 글이 볼 수 있으면 `alpha...`로 301, 아니면 404 |
@@ -58,7 +60,16 @@ cd .. && ./mvnw clean package   # target/*.jar
 | 발행 버튼 빠르게 두 번 / 같은 Idempotency-Key 두 번 | 글 1개 (SC-004) |
 | `?page=999` | 빈 content, 200 |
 
+## 휴대폰 화면과 공유 미리보기 (스텝 11)
+
+| 확인 | 기대 |
+| --- | --- |
+| 브라우저 개발자 도구에서 기기 폭 360px로 홈·블로그 메인·글 상세·로그인·가입·마이페이지·관리 화면 열기 | 가로 스크롤 없음. 내 글 관리는 글마다 카드로 보이고, "모두" 체크박스가 위에 있음 (T071) |
+| `curl -s alpha.blog.test:8080/{공개 글 id} \| grep og:` | `og:title`·`og:description`·`og:image`(대표 이미지, 절대 주소)·`og:url`이 나옴. 비공개·구독자 공개 글은 나오지 않음 (T072) |
+
 ## 주소 영속성 (SC-005, P2 이후)
+
+글 옮기기·블로그 이사·삭제(BLOG-06·07)는 백로그라 아직 화면·API가 없다. 서버의 301·404 처리는 이사 상태를 DB로 만들어 `SpaForwardIntegrationTest`가, 삭제된 주소 재사용 거절은 `BlogCreateIntegrationTest`가 확인한다.
 
 1. `alpha` 글 15를 `gamma`로 이동 → `alpha.blog.test:8080/15` 요청이 `gamma.blog.test:8080/15`로 301
 2. `alpha` 이사 대상을 `gamma`로 → `alpha.blog.test:8080/` 301
