@@ -21,6 +21,7 @@
 | 9 | [회원정보·주제·하위 카테고리·내 글 관리](./step-09.md) | 닉네임·사진·비밀번호 바꾸기, 비밀번호·인증 코드 시도 제한, 글 주제와 홈 주제별 글, 하위 카테고리, 내 글 거르기·일괄 처리, 테스트 간섭 |
 | 9a | [보완: 이미지 확장자 검사, 태그 중간 엔티티](./step-09a.md) | 스텝 1~7 대조에서 나온 빈 곳: 확장자 허용 목록, EXIF 테스트, `@ManyToMany`를 `PostTag` 엔티티로 |
 | 10 | [비슷한 글 추천](./step-10.md) | Ollama bge-m3 임베딩, PostgreSQL pgvector, 두 번째 DB, 커밋 뒤 비동기, 비슷한 글 API와 카드 |
+| 11 | [마무리](./step-11.md) | quickstart 시나리오 테스트, 휴대폰 360px 점검과 표→카드, 글 공유 미리보기(Open Graph), README·quickstart 정리 |
 
 ## 개념 문서
 
@@ -53,6 +54,8 @@
 | [33 격리 수준, 스냅샷, 데드락](./concepts/33-isolation-deadlock.md) | 격리 수준과 MVCC, 일관된 읽기와 잠금 읽기, 외래 키 공유 잠금과 데드락, 공감 버튼에서 겪은 두 버그 |
 | [34 조회수: 누가 봤는지, 5분 중복, 동시 새로고침](./concepts/34-view-count.md) | 조회자 키와 방문자 쿠키, 시간 창 중복 판정, 기록 테이블과 누적 칸, 잠금을 첫 문장으로, StrictMode effect 두 번 |
 | [36 집계 쿼리로 순위 매기기](./concepts/36-ranking-aggregation.md) | `GROUP BY`·`SUM`, `UNION ALL`로 가중치 점수, 시각 인덱스, 동점 처리, `NamedParameterJdbcTemplate`, 태그별 글 수 |
+| [43 글 공유 미리보기: Open Graph](./concepts/43-open-graph-preview.md) | 봇은 자바스크립트를 안 돌린다, 서버가 넣는 og 태그, 이스케이프, 절대 주소, charset, 비회원 기준 |
+| [44 휴대폰 화면: 반응형과 헤드리스 Chrome 점검](./concepts/44-mobile-responsive-check.md) | viewport, 미디어 쿼리, `minmax(0, 1fr)`, 표를 카드로, CDP로 360px 화면 재기·스크린숏 |
 | [41 임베딩과 벡터 검색](./concepts/41-embedding-vector-search.md) | 임베딩, 코사인 유사도·거리, pgvector `<=>`와 HNSW, Ollama bge-m3, 추천에서 볼 수 없는 글 거르기, 가짜 임베딩 테스트 |
 | [42 두 번째 DB와 커밋 뒤 비동기 처리](./concepts/42-second-db-async-events.md) | `@Bean(defaultCandidate = false)` DataSource, DB별 Flyway, 최종 일관성, 이벤트·`@TransactionalEventListener`·`@Async`, 비동기 테스트 |
 | [37 거르기 조건이 있는 목록과 일괄 처리](./concepts/37-filtered-list-bulk-actions.md) | 동적 Specification, `COALESCE` 정렬과 개수 쿼리, 주인 확인 뒤 값 검사, 일괄 변경·삭제, `LikePatterns`, 주소에 둔 거르기 조건 |
