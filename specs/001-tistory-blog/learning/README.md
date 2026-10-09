@@ -20,6 +20,7 @@
 | 8 | [조회수·인기 글](./step-08.md) | 조회 기록과 5분 중복 판정, 방문자 쿠키, 사이드바 태그 목록, 인기 점수 집계와 5분 Redis 캐시 |
 | 9 | [회원정보·주제·하위 카테고리·내 글 관리](./step-09.md) | 닉네임·사진·비밀번호 바꾸기, 비밀번호·인증 코드 시도 제한, 글 주제와 홈 주제별 글, 하위 카테고리, 내 글 거르기·일괄 처리, 테스트 간섭 |
 | 9a | [보완: 이미지 확장자 검사, 태그 중간 엔티티](./step-09a.md) | 스텝 1~7 대조에서 나온 빈 곳: 확장자 허용 목록, EXIF 테스트, `@ManyToMany`를 `PostTag` 엔티티로 |
+| 10 | [비슷한 글 추천](./step-10.md) | Ollama bge-m3 임베딩, PostgreSQL pgvector, 두 번째 DB, 커밋 뒤 비동기, 비슷한 글 API와 카드 |
 
 ## 개념 문서
 
@@ -52,6 +53,8 @@
 | [33 격리 수준, 스냅샷, 데드락](./concepts/33-isolation-deadlock.md) | 격리 수준과 MVCC, 일관된 읽기와 잠금 읽기, 외래 키 공유 잠금과 데드락, 공감 버튼에서 겪은 두 버그 |
 | [34 조회수: 누가 봤는지, 5분 중복, 동시 새로고침](./concepts/34-view-count.md) | 조회자 키와 방문자 쿠키, 시간 창 중복 판정, 기록 테이블과 누적 칸, 잠금을 첫 문장으로, StrictMode effect 두 번 |
 | [36 집계 쿼리로 순위 매기기](./concepts/36-ranking-aggregation.md) | `GROUP BY`·`SUM`, `UNION ALL`로 가중치 점수, 시각 인덱스, 동점 처리, `NamedParameterJdbcTemplate`, 태그별 글 수 |
+| [41 임베딩과 벡터 검색](./concepts/41-embedding-vector-search.md) | 임베딩, 코사인 유사도·거리, pgvector `<=>`와 HNSW, Ollama bge-m3, 추천에서 볼 수 없는 글 거르기, 가짜 임베딩 테스트 |
+| [42 두 번째 DB와 커밋 뒤 비동기 처리](./concepts/42-second-db-async-events.md) | `@Bean(defaultCandidate = false)` DataSource, DB별 Flyway, 최종 일관성, 이벤트·`@TransactionalEventListener`·`@Async`, 비동기 테스트 |
 | [37 거르기 조건이 있는 목록과 일괄 처리](./concepts/37-filtered-list-bulk-actions.md) | 동적 Specification, `COALESCE` 정렬과 개수 쿼리, 주인 확인 뒤 값 검사, 일괄 변경·삭제, `LikePatterns`, 주소에 둔 거르기 조건 |
 | [39 계층 데이터: 카테고리 2단계와 주제](./concepts/39-category-hierarchy.md) | 자기 참조 트리, 2단계 제한, 계산 칸 `parent_key`와 UNIQUE, 주제 enum, 주제별 글 채우기 |
 | [30 이미지 업로드와 처리](./concepts/30-image-upload.md) | multipart, 크기 제한, 매직 넘버, Thumbnailator·EXIF, WebP 플러그인, `/uploads` 내보내기와 캐시, 목록 썸네일 |
