@@ -17,7 +17,7 @@
 | 공용 도구 | — | `global/web/LikePatterns`(검색에서 옮김) |
 | 테스트 | — | `MeUpdateIntegrationTest`, `TopicIntegrationTest`, `CategoryIntegrationTest`, `HomeTopicIntegrationTest`, `ManagePostIntegrationTest` |
 
-**이 스텝에서 정한 것 (명세에 정해지지 않았던 것, 지원 확인 필요)**
+**지원이 정한 것 (2026-10-09, 명세에 정해지지 않았던 것, contracts에 반영)**
 
 - 지금 비밀번호가 틀리면 새 오류 코드 없이 400 `VALIDATION_FAILED`의 칸 오류(`currentPassword`)로 준다.
 - 프로필 사진은 **본인이 올린 이미지**만 쓸 수 있다(남의 이미지 번호면 400 `profileImageId`). Me의 `profileImageUrl`은 썸네일 주소다.
