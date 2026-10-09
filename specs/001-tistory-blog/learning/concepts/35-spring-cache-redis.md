@@ -1,6 +1,6 @@
 # 35. 캐시: Spring Cache와 Redis로 인기 글 5분 동안 기억하기
 
-> 관련 스텝: [스텝 8](../step-08.md) (T063) · 관련 개념: [17-idempotency-redis](./17-idempotency-redis.md), [01-spring-boot-basics](./01-spring-boot-basics.md), [02-configuration-profiles](./02-configuration-profiles.md), [36-ranking-aggregation](./36-ranking-aggregation.md), [16-authorization-visibility](./16-authorization-visibility.md), [05-spring-testing](./05-spring-testing.md)
+> 관련 스텝: [스텝 8](../step-08.md) (T063), [스텝 9](../step-09.md) (T064) · 관련 개념: [39-category-hierarchy](./39-category-hierarchy.md), [17-idempotency-redis](./17-idempotency-redis.md), [01-spring-boot-basics](./01-spring-boot-basics.md), [02-configuration-profiles](./02-configuration-profiles.md), [36-ranking-aggregation](./36-ranking-aggregation.md), [16-authorization-visibility](./16-authorization-visibility.md), [05-spring-testing](./05-spring-testing.md)
 
 ## 1. 이 문서로 배우는 것
 
@@ -348,6 +348,22 @@ void setUp() {
 | `rankingIsCachedButPostsThatBecameHiddenDropOutAtOnce` | ① 점수가 바뀌어도 캐시 동안 같은 순위·같은 `snapshotAt` ② 캐시 안의 1위 글을 비공개로 바꾸면 **바로** 빠지고 2위가 1위로 ③ 캐시를 비우면 새로 계산 |
 
 ②가 3.2의 "오래된 값" 문제를 막았는지 보는 테스트다. ①이 통과한다는 것은 캐시가 실제로 Redis에 저장되고 꺼내진다는 뜻이기도 하다(직렬화가 안 되면 여기서 실패한다).
+
+### 5.9 (스텝 9) 인자마다 다른 캐시: 주제별 글
+
+홈 주제별 글(HOME-03)은 주제가 10개라 순위도 10개다. 같은 메서드를 주제마다 따로 캐시하려면 **인자를 키에 넣는다**.
+
+```java
+@Cacheable(cacheNames = TOPIC_CACHE, key = "#topic.name()", sync = true)
+public PopularSnapshot topicSnapshot(Topic topic) {
+    ...
+}
+```
+
+- `#topic`: SpEL에서 메서드 인자 `topic`을 가리킨다. `.name()`으로 enum 이름 글자(`IT_DEV`)를 키로 쓴다. Redis 키는 `blog:topicPosts::IT_DEV`, `blog:topicPosts::TRAVEL`…처럼 주제마다 따로 생기고, 각각 5분 TTL이다.
+- 인자 이름으로 `#topic`을 쓰려면 컴파일된 클래스에 매개변수 이름이 남아 있어야 한다. Spring Boot의 Maven 설정은 `-parameters`로 컴파일해 이름을 남긴다.
+- 캐시 이름을 홈 인기 글(`popularPosts`)과 나눠서 따로 비울 수 있다. 테스트(`HomeTopicIntegrationTest`)도 `TOPIC_CACHE`만 비운다.
+- 6개를 채우는 최신 글은 캐시하지 않는다. 자세한 것은 [39](./39-category-hierarchy.md) 3.6, 5.6.
 
 ## 6. 자주 하는 실수와 함정
 

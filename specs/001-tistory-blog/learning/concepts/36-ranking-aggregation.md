@@ -1,6 +1,6 @@
 # 36. 집계 쿼리로 순위 매기기: 인기 점수와 태그별 글 수
 
-> 관련 스텝: [스텝 8](../step-08.md) (T063, T054) · 관련 개념: [35-spring-cache-redis](./35-spring-cache-redis.md), [34-view-count](./34-view-count.md), [06-jpa-entity-mapping](./06-jpa-entity-mapping.md), [08-pagination](./08-pagination.md), [16-authorization-visibility](./16-authorization-visibility.md), [31-tags-many-to-many](./31-tags-many-to-many.md)
+> 관련 스텝: [스텝 8](../step-08.md) (T063, T054), [스텝 9](../step-09.md) (T064) · 관련 개념: [39-category-hierarchy](./39-category-hierarchy.md), [35-spring-cache-redis](./35-spring-cache-redis.md), [34-view-count](./34-view-count.md), [06-jpa-entity-mapping](./06-jpa-entity-mapping.md), [08-pagination](./08-pagination.md), [16-authorization-visibility](./16-authorization-visibility.md), [31-tags-many-to-many](./31-tags-many-to-many.md)
 
 ## 1. 이 문서로 배우는 것
 
@@ -322,6 +322,28 @@ private void views(Post post, int count, LocalDateTime at) {
 | --- | --- |
 | 비회원 | `spring 2, alpha 1, jpa 1` (secret·blind-only 없음, 같은 수는 이름순) |
 | 주인 | `spring 3, alpha 1, blind-only 1, jpa 1, secret 1` |
+
+### 5.5 (스텝 9) 같은 SQL에 조건 하나 더하기: 주제별 순위
+
+주제별 글(HOME-03)도 "같은 인기 점수"라, 5.1의 SQL에 **주제 조건만** 더해 다시 쓴다. SQL을 둘로 복사하지 않고, 글 조건 끝에 자리(`%s`)를 하나 두고 두 가지로 채웠다.
+
+```java
+private static final String SQL = """
+        ...
+        WHERE p.status = 'PUBLISHED' AND p.visibility = 'PUBLIC' AND p.deleted_at IS NULL AND p.is_blinded = 0%s
+        ...
+        """;
+
+private static final String ALL = SQL.formatted("");
+private static final String BY_TOPIC = SQL.formatted(" AND p.topic = :topic");
+```
+
+- `formatted`로 **우리가 정한 글자**(SQL 조각)만 넣는다. 사용자 값(주제)은 여전히 `:topic` 바인딩 변수로 간다. 사용자 값을 `formatted`로 SQL에 넣으면 SQL 주입이다.
+- 두 SQL은 클래스가 처음 쓰일 때 한 번 만들어진다(`static final`).
+- `topScoresInTopic(topic, ...)`이 `BY_TOPIC`을 쓴다. 후보는 30개(6개만 보이므로), 캐시 키는 주제마다 다르다([35](./35-spring-cache-redis.md) 5.9).
+- 활동이 없어 6개가 안 되면 최신 글로 채운다([39](./39-category-hierarchy.md) 5.6).
+
+**테스트끼리의 간섭**: 주제별 글 테스트가 "다른 주제·주제 없는 글은 빠진다"를 보려고 활동이 많은 글을 만들자, 홈 인기 글 테스트가 기대하던 "내 글이 1·2위"가 깨졌다(테스트끼리 DB를 같이 쓰므로). 인기 글 테스트를 "몇 위"가 아니라 **"A가 B보다 앞", "빠질 글이 없다"**로 바꿨다. 또 채우는 글을 먼 미래 시각에 두었더니 홈 최신 글 테스트의 미래 글과 섞여 그 테스트가 깨져서, 현재 시각 근처로 옮겼다([05](./05-spring-testing.md) 5.7).
 
 ## 6. 자주 하는 실수와 함정
 

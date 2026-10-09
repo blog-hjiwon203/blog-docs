@@ -1,6 +1,6 @@
 # 05. Spring 테스트: 단위·통합 테스트, MockMvc, Testcontainers
 
-> 관련 스텝: [스텝 1](../step-01.md), [스텝 2](../step-02.md), [스텝 3](../step-03.md) · 먼저 읽을 것: [01. Spring Boot 기초](./01-spring-boot-basics.md), [04. Docker](./04-docker-compose.md)
+> 관련 스텝: [스텝 1](../step-01.md), [스텝 2](../step-02.md), [스텝 3](../step-03.md), [스텝 9](../step-09.md) · 먼저 읽을 것: [01. Spring Boot 기초](./01-spring-boot-basics.md), [04. Docker](./04-docker-compose.md)
 
 ## 1. 이 문서로 배우는 것
 
@@ -311,6 +311,24 @@ public Cookie[] loginCookies(Member member, boolean rememberMe) {
 ### 5.6 동시성 테스트
 
 `IdempotencyIntegrationTest.concurrentDoubleClickRunsOnce`는 스레드 두 개로 같은 키의 요청을 **동시에** 보내 컨트롤러가 한 번만 실행되는지 본다. 컨트롤러가 300ms 잠들게 해서 두 요청이 확실히 겹치게 만든다. "두 번 누르기"를 순서대로 보내는 테스트(`sameKeyTwiceGivesOneResult`)만으로는 동시에 들어온 경우를 확인할 수 없다.
+
+### 5.7 (스텝 8·9) 서비스 전체를 보는 목록 테스트와 간섭
+
+4.4의 "랜덤 데이터"는 회원·블로그처럼 **내가 만든 것만 보는** 테스트에는 충분하다. 그런데 홈 최신 글, 홈 인기 글, 주제별 글처럼 **서비스 전체의 글을 모아 보는** 기능은 다른 테스트가 남긴 글도 함께 보인다. 스텝 9에서 실제로 두 번 깨졌다.
+
+1. 주제별 글 테스트가 "빠져야 할 글"로 조회 1000번짜리 글을 만들자, 홈 인기 글 테스트의 "내 글이 1위"가 깨졌다.
+2. 주제별 글 테스트가 채우는 글을 2099년 날짜로 두자, 같은 방법(먼 미래 날짜로 늘 맨 위에 오게)을 쓰던 홈 최신 글 테스트에 그 글이 섞였다.
+
+**혼자 돌리면 통과하고 전체를 돌리면 실패**해서 알아차렸다. 실행 순서에 따라 결과가 달라지는 테스트는 믿을 수 없다. 이 프로젝트가 고른 방법:
+
+| 방법 | 쓴 곳 |
+| --- | --- |
+| 정확한 위치 대신 **앞뒤 관계**와 **빠진 것**을 확인 | `HomePopularIntegrationTest`(A가 B보다 앞, 비공개 글이 없다) |
+| 다른 테스트가 쓰지 않는 **값 공간**을 쓴다 | `HomeTopicIntegrationTest`는 다른 테스트가 쓰지 않는 주제(HEALTH) |
+| 남이 쓰는 값 공간(먼 미래 날짜)을 **빌리지 않는다** | 채우는 글을 현재 시각 근처로 |
+| 테스트마다 공유 상태를 비운다 | 캐시 테스트의 `@BeforeEach`에서 `cacheManager.getCache(...).clear()` |
+
+다른 선택지로는 테스트마다 표를 비우기(`TRUNCATE`)나 `@Transactional` 롤백이 있다. 하지만 MockMvc로 실제 커밋·Redis까지 보는 테스트가 많고 표를 비우면 느려져서 쓰지 않았다(4.3, 4.4).
 
 ---
 

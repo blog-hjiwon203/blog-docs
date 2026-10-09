@@ -1,6 +1,6 @@
 # 32. 블로그 안 검색: LIKE와 비정규화 칸
 
-> 관련 스텝: [스텝 7](../step-07.md) (T047, T048) · 관련 개념: [03-flyway-migration](./03-flyway-migration.md), [06-jpa-entity-mapping](./06-jpa-entity-mapping.md), [08-pagination](./08-pagination.md), [14-xss-sanitize-csp](./14-xss-sanitize-csp.md), [16-authorization-visibility](./16-authorization-visibility.md), [19-react-router-api-client](./19-react-router-api-client.md), [25-react-forms-data](./25-react-forms-data.md), [28-thymeleaf-to-react](./28-thymeleaf-to-react.md), [31-tags-many-to-many](./31-tags-many-to-many.md)
+> 관련 스텝: [스텝 7](../step-07.md) (T047, T048), [스텝 9](../step-09.md) (T067) · 관련 개념: [37-filtered-list-bulk-actions](./37-filtered-list-bulk-actions.md), [03-flyway-migration](./03-flyway-migration.md), [06-jpa-entity-mapping](./06-jpa-entity-mapping.md), [08-pagination](./08-pagination.md), [14-xss-sanitize-csp](./14-xss-sanitize-csp.md), [16-authorization-visibility](./16-authorization-visibility.md), [19-react-router-api-client](./19-react-router-api-client.md), [25-react-forms-data](./25-react-forms-data.md), [28-thymeleaf-to-react](./28-thymeleaf-to-react.md), [31-tags-many-to-many](./31-tags-many-to-many.md)
 
 ## 1. 이 문서로 배우는 것
 
@@ -496,6 +496,18 @@ R-16 결정이 지키려던 것을 그대로 시험한다. `content_html`에서 
 ```
 
 라우터(`app/routes.tsx`)에 `<Route path="/search" element={<BlogSearchPage />} />`를 더했다. 블로그 주소의 화면이라 서버의 화면 주소 처리(`SpaForwardController`)가 `/search`를 `index.html`로 돌려준다([18](./18-spa-server-routing.md)).
+
+### (스텝 9) 이스케이프를 `global/web/LikePatterns`로 옮겼다
+
+스텝 9의 내 글 관리(MNG-01)도 제목 검색에 같은 LIKE 이스케이프가 필요해, 위에서 본 `SearchService.escapeLike`와 `ESCAPE` 상수를 공용 클래스 `global/web/LikePatterns`로 옮겼다. 규칙은 그대로다. 지금 `SearchService`는 이렇게 쓴다.
+
+```java
+String pattern = LikePatterns.contains(query);          // "%" + 이스케이프한 글자 + "%"
+...
+cb.like(root.get("title"), pattern, LikePatterns.ESCAPE)
+```
+
+같은 규칙을 두 곳에 복사해 두면 한쪽만 고치는 실수가 생기고, 기능 패키지(`manage`)가 다른 기능 패키지(`search`)를 가져다 쓰는 것도 피하고 싶었다. 이 문서 5장의 코드 발췌는 스텝 7 당시 모습이다. 자세한 것은 [37](./37-filtered-list-bulk-actions.md) 5.4.
 
 ## 6. 자주 하는 실수와 함정
 
