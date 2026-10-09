@@ -334,7 +334,7 @@
 | PUT | /api/posts/{id} | B | 주인 | [글 저장 본문](#글-저장-본문) → 200 `{ id, status, url }`. 숨긴 글이면 403 `POST_BLINDED`. 자동 임시저장도 이 경로 | POST-02, POST-08 |
 | DELETE | /api/posts/{id} | B | 주인 | 204. 소프트 삭제, 숨긴 글도 삭제는 됨 | POST-03 |
 | PATCH | /api/posts/{id}/visibility | B | 주인 | `{ visibility }` → 204 | POST-06, POST-12 |
-| POST | /api/posts/{id}/views | B | 누구나 | 204. 같은 조회자 5분 안 중복은 세지 않음 | POST-09 |
+| POST | /api/posts/{id}/views | B | 누구나 | 204(셌든 안 셌든 같음). 같은 조회자 5분 안 중복은 세지 않음. 비회원에게 `visitor_id` 쿠키가 없으면 응답에 `Set-Cookie`로 준다. 볼 수 없는 글은 상세와 같이 404·403. 주인 본인 조회도 셈 | POST-09 |
 | POST | /api/images | \* | 회원 | multipart `file` → 201 `{ id, url, thumbnailUrl }`. 400 `UNSUPPORTED_IMAGE`·`IMAGE_TOO_LARGE`. 본문·프로필·블로그 이미지 공통 | POST-05, AUTH-05, BLOG-02 |
 | GET | /api/topics | \* | 누구나 | 고정 주제 10개 `[{ code, name }]` | POST-11, HOME-03 |
 | GET | /api/posts/{id}/same-category?size=5 | B | 누구나 | 같은 카테고리의 다른 글(볼 수 있는 글만) `PostSummary[]` | OWN-05 |
@@ -540,3 +540,5 @@
 | 공지 수정·삭제 | 관리자가 자기 공지를 고치고 지울 수 있음 | 작성만 |
 | 같은 카테고리·비슷한 글 개수 | 각 5개 | 다른 개수 |
 | 내 정보 경로 | `/api/me/**`로 통일 | `/api/members/me/**` |
+| 비회원 조회자 식별 | 서버가 주는 `visitor_id` 쿠키(UUID, 1년, 모든 블로그 주소 공통). 키는 회원 `m:{id}`, 비회원 `a:{uuid}` (지원 확인 2026-10-09) | IP 주소, 브라우저 지문 |
+| 주인 본인 조회 | 조회수에 셈 (지원 확인 2026-10-09) | 빼기 |

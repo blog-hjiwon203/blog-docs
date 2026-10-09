@@ -88,7 +88,7 @@
 
 인덱스: (blog_id, status, visibility, published_at DESC, id DESC), (status, visibility, published_at DESC, id DESC) — 홈 커서. (topic, status, visibility, published_at DESC) — 주제별 글. (status, scheduled_at) — 예약 발행.
 
-**view_log**: post_id, viewer_key(회원 id 또는 익명 식별자), viewed_at. 같은 viewer_key가 5분 안에 다시 열면 기록하지 않는다(Q2). 최근 1시간 인기 점수와 최근 7일 블로그 점수 집계에 사용.
+**view_log**: post_id, viewer_key, viewed_at. viewer_key는 회원이면 `m:{회원 id}`, 비회원이면 `a:{visitor_id 쿠키 값}`이다. `visitor_id`는 서버가 처음 보는 비회원에게 주는 임의 UUID 쿠키(Domain=.{플랫폼 주소}, HttpOnly, SameSite=Lax, 1년)이고, UUID 모양이 아니면 새로 준다(2026-10-09 지원 결정). 같은 viewer_key가 5분 안에 다시 열면 기록하지 않는다(Q2). 블로그 주인이 자기 글을 봐도 센다(2026-10-09 지원 결정, 방문 통계 blog_visit과 다름). 최근 1시간 인기 점수와 최근 7일 블로그 점수 집계에 사용.
 
 **인기 점수** (HOME-02, HOME-03): 최근 1시간 안의 `view_log` 수×1 + `post_like` 수(created_at 기준)×3 + 삭제·숨김 안 된 `comment` 수×5. 5분마다 계산해 Redis에 상위 100개 스냅숏(순위, 점수, 계산 시각)으로 둔다. 홈은 상위 10개, 랭킹 전체보기(HOME-05)는 같은 스냅숏을 이어서 본다. 가중치는 설정값으로 둔다.
 
