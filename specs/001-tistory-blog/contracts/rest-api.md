@@ -330,7 +330,7 @@
 | GET | /api/posts?page=&size=&categoryId=&tag= | B | 누구나 | 블로그 글 목록 10, 최신순. `categoryId`면 하위 카테고리 글 포함, `categoryId=0`은 미분류. 주인에게는 비공개·숨긴 글을 포함한 발행 글 전부(임시저장·예약 제외) | BLOG-03, CAT-02, TAG-02 |
 | GET | /api/posts/{id} | B | 누구나 | `PostDetail`. 볼 수 없으면 404, 구독자 공개를 구독 안 한 사람이 열면 403 `SUBSCRIBERS_ONLY` | POST-04, POST-10, POST-12 |
 | POST | /api/posts | B | 주인 | [글 저장 본문](#글-저장-본문) → 201 `{ id, status, url }`. `Idempotency-Key` 필수 | POST-01, POST-08, POST-13 |
-| GET | /api/manage/posts/{id} | B | 주인 | 편집용. 본문 + 임시저장·예약·숨김 상태와 `blind` 사유 | POST-02, POST-08 |
+| GET | /api/manage/posts/{id} | B | 주인 | 편집용. 본문 + 임시저장·예약·숨김 상태와 `blind` 사유, 고른 대표 이미지 `thumbnailImageId`(없으면 `null`)와 대표 이미지 후보인 본문 이미지 `images: [{ id, url, thumbnailUrl }]`(본문 순서, 2026-10-10 스텝 13에서 더함) | POST-02, POST-07, POST-08 |
 | PUT | /api/posts/{id} | B | 주인 | [글 저장 본문](#글-저장-본문) → 200 `{ id, status, url }`. 숨긴 글이면 403 `POST_BLINDED`. 자동 임시저장도 이 경로 | POST-02, POST-08 |
 | DELETE | /api/posts/{id} | B | 주인 | 204. 소프트 삭제, 숨긴 글도 삭제는 됨 | POST-03 |
 | PATCH | /api/posts/{id}/visibility | B | 주인 | `{ visibility }` → 204 | POST-06, POST-12 |
@@ -365,9 +365,10 @@
 
 - `categoryId`가 `null`이면 미분류. `topic`이 `null`이면 주제 없음.
 - `tagNames` 최대 10개(넘으면 400 `TOO_MANY_TAGS`). 블로그에 없는 이름은 새 태그가 된다(TAG-01). 이름은 앞뒤 공백과 앞의 `#`을 떼고 30자까지, `/`가 들어 있으면 400(`fieldErrors[].field = tagNames`). 대소문자·악센트만 다른 이름은 같은 태그다.
-- `thumbnailImageId`는 본문에 들어간 이미지 중 하나. `null`이면 본문 첫 이미지(POST-07).
+- `thumbnailImageId`는 본문에 들어간 이미지 중 하나. `null`이면 본문 첫 이미지(POST-07). 없는 이미지거나 본문에 없으면 400(`fieldErrors[].field = thumbnailImageId`). 고른 이미지를 본문에서 지우면 화면이 `null`로 돌려 보낸다.
 - `visibility`: `PUBLIC`·`PRIVATE`·`SUBSCRIBERS`. SUB-01이 생기기 전에는 `SUBSCRIBERS`를 400으로 막는다(review C-7).
-- 발행한 글을 `DRAFT`로 되돌릴 수는 없다(400). 예약 글은 `DRAFT`로 되돌려 예약을 취소한다.
+- 발행한 글을 `DRAFT`로 되돌릴 수는 없다(400, `fieldErrors[].field = status`). 예약 글은 `DRAFT`로 되돌려 예약을 취소한다.
+- 임시저장은 처음 한 번 `POST /api/posts`(`DRAFT`)로 글 번호를 받고, 그 뒤 다시 저장(자동 저장 포함)과 발행은 `PUT /api/posts/{id}`다. 임시저장 글을 `PUBLISHED`로 저장하면 그때가 처음 발행 시각이다(POST-08).
 
 ### CAT 카테고리 · TAG 태그
 
