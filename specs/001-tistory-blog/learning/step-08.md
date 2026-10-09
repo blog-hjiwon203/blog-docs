@@ -14,7 +14,7 @@
 | 화면 | 글 상세 "조회 N", 사이드바 태그 칩, 홈 인기 글 | `pages/post/PostPage`, `components/Sidebar`, `pages/home/HomePage` |
 | 테스트 | — | `ViewCountIntegrationTest`, `HomePopularIntegrationTest`, `TagIntegrationTest`, `SidebarIntegrationTest` |
 
-**이 스텝에서 정한 것 (명세에 빈칸이던 것, 지원 확인 필요)**
+**지원이 정한 것 (2026-10-09, 명세에 빈칸이던 것)**
 
 - 비회원 "익명 식별자"(data-model `view_log.viewer_key`): 서버가 처음 보는 비회원에게 임의 값(UUID) 쿠키 `visitor_id`를 1년짜리로 준다(`Domain=.{platform}`, HttpOnly). 키는 회원 `m:{id}`, 비회원 `a:{uuid}`.
 - 블로그 주인이 자기 글을 봐도 조회수를 센다(명세에 빼라는 말이 없음. 방문 통계 MNG-03만 주인을 뺀다).
@@ -78,7 +78,8 @@ blog.test/                         HomePage
 
 | 항목 | 지금 | 언제 |
 | --- | --- | --- |
-| 비회원 식별 방식 | `visitor_id` 쿠키(UUID, 1년). 명세는 "익명 식별자"만 적음 | 지원 확인 뒤 data-model·contracts에 적기 |
+| 비회원 식별 방식 | `visitor_id` 쿠키(UUID, 1년). 명세는 "익명 식별자"만 적었음 | 지원 결정, data-model·contracts·spec POST-09에 반영 |
+| 주인 본인 조회 | 셈 | 지원 결정, 같은 문서에 반영 |
 | 인기 글 계산 방식 | `@Cacheable` 5분 TTL, 후보 100개. research R-13의 "스케줄러가 상위 100개 스냅숏"은 아님 | T078(백로그, 랭킹 전체보기와 함께) |
 | `view_log` 7일 지난 행 지우기 | 없음. 계속 쌓인다 | 블로그 점수·통계(T080·T083) 때 |
 | 사이드바 인기 글 모듈(누적 조회수 순) | 없음 | T086(사이드바 설정) |
@@ -105,7 +106,7 @@ docker exec blog-redis redis-cli ttl 'blog:popularPosts::home'                # 
 
 브라우저로:
 
-1. `./scripts/build-frontend.sh && ./mvnw spring-boot:run`
+1. **코드 저장소 루트**(`~/IdeaProjects/blog`, `frontend` 폴더가 아님)에서 `./scripts/build-frontend.sh && ./mvnw spring-boot:run`
 2. 글 하나를 열어 "조회 N"을 본다. 새로고침하면 N+1, 5분 안에 다시 새로고침해도 N+1 그대로다.
 3. 다른 회원 B로 다른 글에 공감·댓글을 여러 개 단다. 홈(`http://blog.test:8080`)의 인기 글은 5분 안에는 그대로이고, 5분 뒤(또는 `redis-cli del 'blog:popularPosts::home'` 뒤) 공감·댓글 많은 글이 위로 온다.
 4. 인기 글에 있는 글을 주인이 비공개로 바꾸고 홈을 새로고침하면 바로 빠진다.
