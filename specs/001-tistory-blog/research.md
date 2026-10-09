@@ -113,7 +113,7 @@
 - **결정**: Thumbnailator(리사이즈·썸네일, JPEG EXIF 방향 보정) + TwelveMonkeys `imageio-webp`(WebP 읽기). 외부 프로그램(ImageMagick 등) 없이 JVM 안에서 처리한다.
 - **원본**: 긴 변이 1920px보다 크면 1920px로 줄여 같은 형식으로 저장한다. EXIF 방향은 이때 픽셀에 반영한다. **GIF는 애니메이션을 지키려고 원본 그대로**, WebP도 Java로 쓸 수 없어 원본 그대로 둔다.
 - **썸네일**: 긴 변 400px. 투명도가 있을 수 있는 PNG·GIF·WebP는 PNG, JPEG는 JPG로 저장한다(`t_{uuid}.png|jpg`). contracts 예시의 `t_a1.webp`는 예시일 뿐이다.
-- **검사**: 확장자와 Content-Type만 믿지 않고 파일 앞부분(매직 넘버)으로 실제 형식을 확인한다. 이미지로 읽히지 않으면 400 `UNSUPPORTED_IMAGE`, 10MB 초과는 400 `IMAGE_TOO_LARGE`.
+- **검사**: 확장자와 Content-Type만 믿지 않고 파일 앞부분(매직 넘버)으로 실제 형식을 확인한다. 이미지로 읽히지 않으면 400 `UNSUPPORTED_IMAGE`, 10MB 초과는 400 `IMAGE_TOO_LARGE`. 여기에 더해 파일 이름의 확장자도 허용 목록(jpg·jpeg·png·gif·webp, 대소문자 무시)이어야 하고 실제 형식과 같아야 한다(jpg·jpeg는 같게 본다). OWASP 파일 업로드 지침의 확장자 허용 목록 + 내용 검사 이중 방어다. GIF·WebP는 원본 그대로 저장하므로 입구 검사가 한 겹 더 의미가 있다(2026-10-09 지원 결정, T036a). 저장 이름과 확장자는 여전히 서버가 판단한 형식으로 정한다.
 - **대안**: 리사이즈 없이 썸네일만(원본이 무겁고 방향 보정이 원본에 안 됨), ImageMagick 호출(서버에 설치 필요).
 
 ## R-16 블로그 안 검색 (2026-10-09 지원 결정, T047)

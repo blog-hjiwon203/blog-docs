@@ -100,7 +100,7 @@
 
 **category**: blog_id, parent_id(NULL 또는 1단계 상위), name(30), sort_order, is_private(P2). 계산 컬럼 `parent_key = IFNULL(parent_id, 0)`과 UNIQUE(blog_id, parent_key, name). MySQL UNIQUE는 NULL끼리 중복을 허용해서 (blog_id, parent_id, name)만으로는 최상위 이름 중복을 못 막기 때문이다. '전체 글'·'미분류'는 행이 아니라 가상 항목.
 
-**tag**: blog_id, name. UNIQUE(blog_id, name). **post_tag**: post_id, tag_id. PK(post_id, tag_id). 글당 최대 10개는 서비스에서 검사.
+**tag**: blog_id, name. UNIQUE(blog_id, name). **post_tag**: post_id, tag_id. PK(post_id, tag_id). 글당 최대 10개는 서비스에서 검사. JPA에서는 `@ManyToMany`가 아니라 중간 엔티티 `PostTag`(@ManyToOne 두 개, 복합 키)로 매핑한다(2026-10-09 지원 결정, T038a).
 
 ## 소통
 
