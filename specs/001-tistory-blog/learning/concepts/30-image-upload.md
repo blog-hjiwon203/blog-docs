@@ -1,6 +1,6 @@
 # 30. 이미지 업로드와 처리
 
-> 관련 스텝: [스텝 7](../step-07.md) (T036, T037) · 관련 개념: [01-spring-boot-basics](./01-spring-boot-basics.md)(`@ConfigurationProperties`), [07-spring-mvc-exception-handling](./07-spring-mvc-exception-handling.md), [14-xss-sanitize-csp](./14-xss-sanitize-csp.md), [06-jpa-entity-mapping](./06-jpa-entity-mapping.md)(N+1), [26-wysiwyg-editor-tiptap](./26-wysiwyg-editor-tiptap.md), [28-thymeleaf-to-react](./28-thymeleaf-to-react.md)
+> 관련 스텝: [스텝 7](../step-07.md) (T036, T037), [스텝 9a](../step-09a.md) (T036a) · 관련 개념: [01-spring-boot-basics](./01-spring-boot-basics.md)(`@ConfigurationProperties`), [07-spring-mvc-exception-handling](./07-spring-mvc-exception-handling.md), [14-xss-sanitize-csp](./14-xss-sanitize-csp.md), [06-jpa-entity-mapping](./06-jpa-entity-mapping.md)(N+1), [26-wysiwyg-editor-tiptap](./26-wysiwyg-editor-tiptap.md), [28-thymeleaf-to-react](./28-thymeleaf-to-react.md)
 
 ## 1. 이 문서로 배우는 것
 
@@ -650,6 +650,43 @@ editor.chain().focus().setImage({ src: image.url, alt: file.name }).run()
 
 `PostThumbnailsTest`는 DB 없이 `firstImage` 정규식만 확인하는 단위 테스트다.
 
+### 5.10 (스텝 9a) 확장자 검사와 EXIF 테스트
+
+스텝 1~7 작업을 코드와 대조하다, 작업 설명(T036)의 "확장자+실제 내용 검사" 중 **확장자 검사가 빠져 있던 것**을 찾았다. 매직 넘버 검사만 있어서, 내용이 진짜 JPEG면 이름이 `a.html`이어도 받았다. 지원 결정으로 더했다(T036a, research R-15).
+
+```java
+// ImageType
+JPEG("image/jpeg", "jpg", "jpg", Set.of("jpg", "jpeg")),
+PNG("image/png", "png", "png", Set.of("png")),
+...
+public boolean matchesFileName(String fileName) {
+    if (fileName == null) {
+        return false;
+    }
+    int dot = fileName.lastIndexOf('.');
+    if (dot < 0 || dot == fileName.length() - 1) {
+        return false;
+    }
+    return fileExtensions.contains(fileName.substring(dot + 1).toLowerCase(Locale.ROOT));
+}
+
+// ImageService.upload — 매직 넘버로 형식을 알아낸 바로 뒤
+if (!type.matchesFileName(file.getOriginalFilename())) {
+    throw new BusinessException(ErrorCode.UNSUPPORTED_IMAGE);
+}
+```
+
+- **허용 목록 + 일치**: 확장자가 `jpg·jpeg·png·gif·webp` 중 하나이면서 **실제 형식의 확장자**여야 한다. PNG 내용을 `a.jpg`로 올리면 거절한다. `jpg`와 `jpeg`는 같은 형식이라 JPEG에 둘 다 넣었다.
+- `lastIndexOf('.')`: 마지막 점 뒤가 확장자다. `photo.html.jpg`는 `jpg`로 보지만, 내용 검사가 함께 있어 진짜 이미지여야 통과한다. 점이 없거나(`photo`) 점으로 끝나면(`photo.`) 거절한다.
+- `toLowerCase(Locale.ROOT)`: `PHOTO.JPG`도 받는다. `Locale.ROOT`를 주는 이유는 터키어 등 일부 언어 설정에서 `I`의 소문자가 `i`가 아니기 때문이다.
+- 저장 이름과 확장자는 여전히 서버가 정한다(`uuid.jpg`). 사용자 확장자는 **검사에만** 쓴다.
+
+**왜 두 겹인가**: OWASP 파일 업로드 지침은 "확장자 허용 목록"과 "내용 검사"를 함께 하라고 한다. 한 겹이 뚫려도 다른 겹이 막는다. 이 프로젝트에서 특히 의미가 있는 곳은 GIF·WebP다. JPEG·PNG는 서버가 다시 그려 저장하므로 파일 뒤에 숨긴 내용이 떨어져 나가지만, GIF·WebP는 원본 그대로 저장한다(5.4). 앞부분만 이미지처럼 꾸민 위장 파일을 입구에서 한 번 더 거른다.
+
+**EXIF 방향 테스트**: 방향 보정은 Thumbnailator가 기본으로 해 주는 동작에 맡기고 있었고 테스트가 없었다. 가로 40×세로 20 JPEG의 SOI(`FF D8`) 바로 뒤에 EXIF 조각(APP1, Orientation=6 "시계 방향 90도로 보여라")을 직접 끼워 올리고, 저장된 원본이 20×40(세로)인지 본다(`exifOrientationIsAppliedToTheStoredPixels`). 방향 값을 1(그대로)로 바꿔 돌리면 "expected: 20 but was: 40"으로 실패하는 것까지 확인해서, 테스트가 정말 보정을 잡아낸다는 것을 봤다.
+
+거절 문장(`UNSUPPORTED_IMAGE`)에 "파일 이름의 확장자도 실제 형식과 같아야 합니다."를 더했다.
+
 ## 6. 자주 하는 실수와 함정
 
 1. **확장자나 `getContentType()`으로 형식 판단**: 보낸 쪽이 마음대로 적는 값이다. 매직 넘버 + 실제로 읽어 보기.
@@ -768,6 +805,9 @@ docker exec blog-mysql mysql -ublog -pblog blog -e "SELECT id, path, thumbnail_p
 
 12. 여러 장을 `Promise.all`이 아니라 `for ... of` + `await`로 올리는 이유는?
 <details><summary>답</summary>한꺼번에 올리면 먼저 끝난 것부터 본문에 들어가 고른 순서가 섞일 수 있다. 하나씩 차례로 올려야 고른 순서대로 들어간다(POST-05). 반복 안의 try/catch로 한 장이 거절돼도 나머지는 계속한다.</details>
+
+13. (스텝 9a) 매직 넘버 검사가 있는데 확장자 검사를 또 하는 이유는?
+<details><summary>답</summary>OWASP가 권하는 이중 방어다. 특히 GIF·WebP는 원본 그대로 저장하므로, 앞부분만 이미지처럼 꾸민 위장 파일(a.html 등)을 이름에서 한 번 더 거른다. 확장자는 허용 목록이면서 실제 형식과 같아야 하고, 저장 이름은 서버가 정한다.</details>
 
 ## 9. 더 읽을거리
 
