@@ -247,7 +247,7 @@
 | POST | /api/auth/signup | P | 누구나 | `{ email, code, password, nickname }` → 201 `Me` + 로그인 쿠키. 서버가 코드를 다시 확인하고 `verified_at`을 남긴다. 비밀번호는 8자 이상 영문+숫자, 72바이트 이하(아니면 400 `VALIDATION_FAILED`, `field: password`) | AUTH-01, OWN-01 |
 | POST | /api/auth/login | P | 누구나 | `{ email, password, rememberMe }` → 200 `Me` + 쿠키. 실패 401 `LOGIN_FAILED`, 정지 403 `MEMBER_SUSPENDED` | AUTH-01, AUTH-03, ADMIN-02 |
 | POST | /api/auth/logout | \* | 회원 | 204. 쿠키 삭제 + 토큰 무효화. 모든 블로그 주소에서 로그아웃 | AUTH-02 |
-| POST | /api/auth/token/refresh | \* | 누구나 | Refresh 쿠키로 Access 쿠키 재발급. 정지·탈퇴면 401 | AUTH-03 |
+| POST | /api/auth/token/refresh | \* | 누구나 | Refresh 쿠키로 Access 쿠키 재발급(Access가 끝났으면 새 쿠키, 살아 있으면 그대로) → 204. Refresh가 없거나 끝났거나 탈퇴면 401. 정지면 다른 API와 같이 403 `MEMBER_SUSPENDED`(정지 사유, 2026-10-10 지원 결정) | AUTH-03 |
 | GET | /api/auth/oauth/{provider}/authorize?mode=&redirect= | P | 누구나 | `provider`: `kakao`·`google`. `mode`: `login`(기본)·`link`·`reauth`. state를 만들고 제공사로 302 | AUTH-01, OWN-03, AUTH-06 |
 | GET | /api/auth/oauth/{provider}/callback | P | 누구나 | state 확인 후 302. 아래 [소셜 로그인 흐름](#소셜-로그인-흐름) | AUTH-01, OWN-03 |
 | POST | /api/auth/oauth/signup | P | 누구나 | `{ signupToken, nickname }` → 201 `Me` + 쿠키. 처음 보는 소셜 계정의 닉네임 확인 단계 | AUTH-01 |
