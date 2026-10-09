@@ -22,6 +22,7 @@
 | 9a | [보완: 이미지 확장자 검사, 태그 중간 엔티티](./step-09a.md) | 스텝 1~7 대조에서 나온 빈 곳: 확장자 허용 목록, EXIF 테스트, `@ManyToMany`를 `PostTag` 엔티티로 |
 | 10 | [비슷한 글 추천](./step-10.md) | Ollama bge-m3 임베딩, PostgreSQL pgvector, 두 번째 DB, 커밋 뒤 비동기, 비슷한 글 API와 카드 |
 | 11 | [마무리](./step-11.md) | quickstart 시나리오 테스트, 휴대폰 360px 점검과 표→카드, 글 공유 미리보기(Open Graph), README·quickstart 정리 |
+| 12 | [글쓰기 버튼 안내·로그인 유지](./step-12.md) | 대표 블로그 글쓰기 또는 개설 안내 → 만든 뒤 글쓰기, Access 재발급 API, 브라우저 재시작 시나리오 테스트, 로그인 유지 안내 |
 
 ## 개념 문서
 
@@ -75,6 +76,7 @@
 | [40 시도 횟수 제한](./concepts/40-attempt-limit.md) | 온라인 무차별 대입, 대상별(15분·5번)·IP별(20번) 실패 횟수, Redis `INCR`로 동시 시도까지 막기, 가입 여부 숨기기, 잠금 악용, 프록시 뒤의 IP |
 | [38 회원정보 수정](./concepts/38-member-profile-update.md) | PATCH 부분 수정, 나를 뺀 닉네임 중복, 지금 비밀번호 확인, IDOR(남의 것을 가리키는 번호), 마이페이지 |
 | [21 가입·로그인·로그아웃 설계](./concepts/21-signup-login.md) | 가입 트랜잭션, 계정 열거·타이밍 공격 방어, 정지 안내, 로그아웃, 열린 리다이렉트 |
+| [45 로그인 유지](./concepts/45-remember-me.md) | 세션 쿠키와 영속 쿠키, 브라우저 재시작, 미끄러지는 만료와 고정 만료, 필터 재발급과 재발급 API, 재시작 흉내 테스트 |
 
 ### 4부. 이 블로그의 구조와 프론트
 
@@ -87,6 +89,7 @@
 | [18 SPA와 서버 라우팅](./concepts/18-spa-server-routing.md) | History API, 서버 폴백, 301/302, Vite 개발 서버와 빌드 |
 | [28 Thymeleaf에서 React로](./concepts/28-thymeleaf-to-react.md) | 서버 렌더링과 클라이언트 렌더링, 같은 화면 두 가지 구현, 빌드가 하는 일, 개발 서버와 빌드 스크립트 (Thymeleaf를 알면 React 문서보다 먼저) |
 | [19 React Router와 API 클라이언트](./concepts/19-react-router-api-client.md) | React 기초, React Router 7, fetch, TypeScript, Vitest |
+| [46 상태에 따라 갈 곳 정하기: 글쓰기 버튼](./concepts/46-entry-routing-write-button.md) | 판단을 순수 함수 하나에, `Pick`과 단위 테스트, 호스트를 넘는 이동, `?from=`으로 하려던 일 넘기기와 열린 리다이렉트, 버튼은 안내이고 권한은 서버 |
 | [24 계층 구조와 DTO](./concepts/24-layered-architecture-dto.md) | presentation/application/domain, 엔티티 대신 DTO, `open-in-view`와 지연 로딩 |
 | [25 React 폼과 데이터 불러오기](./concepts/25-react-forms-data.md) | 제어 컴포넌트, 폼 제출과 칸별 오류, `useEffect`와 커스텀 훅, 중첩 라우트, 낙관적 갱신, key, `FormData` |
 | [26 WYSIWYG 에디터와 Tiptap](./concepts/26-wysiwyg-editor-tiptap.md) | ProseMirror와 Tiptap, 허용 서식 맞추기, 이중 정화, 에디터 상태 |
