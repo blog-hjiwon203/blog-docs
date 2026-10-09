@@ -23,6 +23,7 @@
 | 10 | [비슷한 글 추천](./step-10.md) | Ollama bge-m3 임베딩, PostgreSQL pgvector, 두 번째 DB, 커밋 뒤 비동기, 비슷한 글 API와 카드 |
 | 11 | [마무리](./step-11.md) | quickstart 시나리오 테스트, 휴대폰 360px 점검과 표→카드, 글 공유 미리보기(Open Graph), README·quickstart 정리 |
 | 12 | [글쓰기 버튼 안내·로그인 유지](./step-12.md) | 대표 블로그 글쓰기 또는 개설 안내 → 만든 뒤 글쓰기, Access 재발급 API, 브라우저 재시작 시나리오 테스트, 로그인 유지 안내 |
+| 13 | [임시저장·대표 이미지](./step-13.md) | 제목 없이 임시저장, 1분 자동 저장, 불러와 이어 쓰고 발행, 대표 이미지 고르기와 본문 첫 이미지 기본값 |
 
 ## 개념 문서
 
@@ -50,6 +51,8 @@
 | [29 댓글 설계](./concepts/29-comments-design.md) | 글에 딸린 데이터의 권한, 보는 사람마다 다른 댓글, 댓글 수, 연타 두 겹, 답글 한 단계 |
 | [31 태그와 다대다 관계](./concepts/31-tags-many-to-many.md) | `@ManyToMany`와 조인 테이블, 이름 정리 규칙, 태그별 목록, 태그 입력 칸 |
 | [32 블로그 안 검색: LIKE와 비정규화 칸](./concepts/32-search-like.md) | 글자만 담은 칸과 마이그레이션, LIKE 이스케이프, EXISTS 서브쿼리, 인덱스 한계, 검색어를 주소에 |
+| [47 임시저장과 자동 저장](./concepts/47-draft-autosave.md) | 글의 상태와 되돌릴 수 없는 이동, 상태별 검증, 처음 POST 그 뒤 PUT, `setInterval`과 낡은 값·`useRef`, 저장 줄 세우기, 스냅숏 |
+| [48 대표 이미지](./concepts/48-representative-image.md) | 고른 번호 검증(본문 안에 있나), `null` = 자동, `ON DELETE SET NULL`, 한 페이지 쿼리 두 번, 파생 값 |
 | [27 소프트 삭제와 일괄 수정](./concepts/27-soft-delete-bulk-update.md) | 소프트 삭제, 딸린 데이터 처리, 변경 감지, `@Modifying`, 수정 시각 지키기 |
 | [23 트랜잭션과 동시성](./concepts/23-transactions-locking.md) | `@Transactional`, 경쟁 조건, 비관적 잠금(`FOR UPDATE`), UNIQUE 제약, 동시성 테스트 |
 | [33 격리 수준, 스냅샷, 데드락](./concepts/33-isolation-deadlock.md) | 격리 수준과 MVCC, 일관된 읽기와 잠금 읽기, 외래 키 공유 잠금과 데드락, 공감 버튼에서 겪은 두 버그 |
