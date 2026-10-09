@@ -335,11 +335,11 @@ description: "지원 서비스 구현 작업 (2주 일정 기준)"
 - [X] T034 [US2] [W1] 공개 범위 변경 API (PUBLIC, PRIVATE; SUBSCRIBERS는 구독 이후) in `post/` (POST-06)
 - [X] T035 [P] [US2] [W1] 화면: Tiptap 에디터(허용 서식만), 글쓰기·수정, 카테고리 관리, 삭제 확인 in `frontend/src/components/editor/`, `pages/manage/`
 - [X] T035a [US2] [W1] 에디터 마크다운 입력: 같은 에디터에서 마크다운 문법(제목·굵게·기울임·목록·인용·코드 블록·`[글자](http/https 주소)`)을 치거나 마크다운 글을 붙여넣으면 서식으로, 저장은 HTML 그대로 in `frontend/src/components/editor/` (POST-01, 2026-10-08 지원 결정)
-- [ ] T036 [US2] [W2a] 이미지 업로드 API: 10MB, 확장자+실제 내용 검사(위장 파일 거절), UUID 파일명으로 `app.upload.dir`(개발: `/Users/chosun-nhn54/IdeaProjects/blog/uploads`)에 저장, `/uploads/**`로 서빙, 리사이즈·썸네일, EXIF 방향 보정, GIF 유지 in `image/` (POST-05, plan 저장소)
+- [X] T036 [US2] [W2a] 이미지 업로드 API: 10MB, 확장자+실제 내용 검사(위장 파일 거절), UUID 파일명으로 `app.upload.dir`(개발: `/Users/chosun-nhn54/IdeaProjects/blog/uploads`)에 저장, `/uploads/**`로 서빙, 리사이즈·썸네일, EXIF 방향 보정, GIF 유지 in `image/` (POST-05, plan 저장소)
 - [X] T037 [US2] [W2a] 에디터 이미지 버튼 ↔ 업로드 API 연결, 여러 장은 고른 순서대로 in `frontend/src/components/editor/` (POST-05)
-- [ ] T038 [P] [US2] [W2a] `tag`, `post_tag` 엔티티, 글 작성·수정 시 태그 최대 10개·중복 제거·없는 이름 자동 생성 in `tag/` (TAG-01)
-- [ ] T036a [US2] 이미지 확장자 검사: 이름의 확장자가 jpg·jpeg·png·gif·webp가 아니거나 매직 넘버로 본 실제 형식과 다르면 400 `UNSUPPORTED_IMAGE`(jpg·jpeg 같게, 대소문자 무시), EXIF 방향 정보가 든 JPEG가 바로 선 모양으로 저장되는지 테스트 in `image/` (POST-05, R-15, 스텝 9a)
-- [ ] T038a [US2] `post_tag`를 `PostTag` 중간 엔티티(@ManyToOne post·tag, 복합 키)로 바꾸고 `Post.tags`의 @ManyToMany를 없앰. 태그 달기·바꾸기·태그별 목록·검색·태그 글 수는 그대로 in `tag/`, `post/` (TAG-01, TAG-02, TAG-03, 스텝 9a)
+- [X] T038 [P] [US2] [W2a] `tag`, `post_tag` 엔티티, 글 작성·수정 시 태그 최대 10개·중복 제거·없는 이름 자동 생성 in `tag/` (TAG-01)
+- [X] T036a [US2] 이미지 확장자 검사: 이름의 확장자가 jpg·jpeg·png·gif·webp가 아니거나 매직 넘버로 본 실제 형식과 다르면 400 `UNSUPPORTED_IMAGE`(jpg·jpeg 같게, 대소문자 무시), EXIF 방향 정보가 든 JPEG가 바로 선 모양으로 저장되는지 테스트 in `image/` (POST-05, R-15, 스텝 9a)
+- [X] T038a [US2] `post_tag`를 `PostTag` 중간 엔티티(@ManyToOne post·tag, 복합 키)로 바꾸고 `Post.tags`의 @ManyToMany를 없앰. 태그 달기·바꾸기·태그별 목록·검색·태그 글 수는 그대로 in `tag/`, `post/` (TAG-01, TAG-02, TAG-03, 스텝 9a)
 - [X] T039 [US2] [W2a] 태그별 글 목록 `/tag/{name}` in `post/` (TAG-02)
 - [X] T040 [US2] [W1] 통합 테스트: 수정 후 주소·순서 불변, 카테고리 삭제 시 미분류, 비공개 전환 시 목록·개수에서 빠짐 in `src/test/.../post/`
 
