@@ -257,10 +257,10 @@ description: "지원 서비스 구현 작업 (2주 일정 기준)"
 
 ## 1단계: 프로젝트 준비 (Setup)
 
-- [ ] T001 [W1] 이미 만든 Maven 프로젝트(Spring Boot 4.1.1, Java 21, Web MVC·Security·Data JPA·Validation·MySQL 드라이버 있음)에 의존성 추가: Cache, Data Redis, Flyway(`spring-boot-starter-flyway`, `flyway-mysql`), Testcontainers MySQL in `pom.xml`. 커밋된 `.DS_Store`를 지우고 `.gitignore`에 추가
-- [ ] T002 [P] [W1] Vite + React + TypeScript 프로젝트, `/api` → 8080 프록시 in `frontend/vite.config.ts`
-- [ ] T003 [P] [W1] `application.properties`를 `application.yml`로 바꾸고 프로필 분리(dev: docker compose MySQL, prod: MySQL), `jpa.hibernate.ddl-auto=validate`, `TZ=Asia/Seoul`, `app.upload.dir`(dev 기본값 `/Users/chosun-nhn54/IdeaProjects/blog/uploads`, `.gitignore`에 `uploads/`), 문서 저장소의 `erd/schema.sql`을 `db/migration/V1__init.sql`로 복사 in `src/main/resources/` (R-02)
-- [ ] T004 [P] [W1] 프론트 빌드 결과를 `src/main/resources/static`으로 복사하는 빌드 스크립트
+- [X] T001 [W1] 이미 만든 Maven 프로젝트(Spring Boot 4.1.1, Java 21, Web MVC·Security·Data JPA·Validation·MySQL 드라이버 있음)에 의존성 추가: Cache, Data Redis, Flyway(`spring-boot-starter-flyway`, `flyway-mysql`), Testcontainers MySQL in `pom.xml`. 커밋된 `.DS_Store`를 지우고 `.gitignore`에 추가
+- [X] T002 [P] [W1] Vite + React + TypeScript 프로젝트, `/api` → 8080 프록시 in `frontend/vite.config.ts`
+- [X] T003 [P] [W1] `application.properties`를 `application.yml`로 바꾸고 프로필 분리(dev: docker compose MySQL, prod: MySQL), `jpa.hibernate.ddl-auto=validate`, `TZ=Asia/Seoul`, `app.upload.dir`(dev 기본값 `/Users/chosun-nhn54/IdeaProjects/blog/uploads`, `.gitignore`에 `uploads/`), 문서 저장소의 `erd/schema.sql`을 `db/migration/V1__init.sql`로 복사 in `src/main/resources/` (R-02)
+- [X] T004 [P] [W1] 프론트 빌드 결과를 `src/main/resources/static`으로 복사하는 빌드 스크립트
 
 ---
 
@@ -268,19 +268,19 @@ description: "지원 서비스 구현 작업 (2주 일정 기준)"
 
 **⚠️ 이 단계가 끝나야 스토리 작업을 시작한다**
 
-- [ ] T005 [W1] 공통 엔티티 기반(BaseTimeEntity), `member` 엔티티(role, status) in `member/` (data-model)
-- [ ] T006 [W1] 공통 오류 응답 형식과 `@RestControllerAdvice` (400 fieldErrors, 401, 403, 404, 409, 500은 내부 정보 없이) in `global/error/` (COM-02)
-- [ ] T007 [W1] JWT 발급·검증 필터(`.blog.com` HttpOnly 쿠키로 발급, SameSite=Lax + CSRF 대책, R-03), Spring Security 설정(`/api/admin/**` hasRole ADMIN, 나머지 permitAll + 메서드 단위 인증) in `global/config/SecurityConfig.java` (COM-01, ADMIN-01, AUTH-03)
-- [ ] T008 [W1] 요청마다 member.status 확인(SUSPENDED → API 요청은 403 + 사유·기한, WITHDRAWN → 쿠키 삭제 후 비회원 처리라 로그인이 필요하면 401) in JWT 필터 (ADMIN-02 대비, R-03)
-- [ ] T009 [W1] Host 헤더 → 블로그 해석 `BlogHostResolver` (플랫폼 도메인 / 서브도메인 / 없으면 404 / 이사 301) in `global/host/` (R-04)
-- [ ] T010 [W1] 화면 주소 처리: `/api/**` 외 요청은 블로그·글 확인 후 `index.html` 포워드, 301은 서버가 직접 in `global/config/SpaForwardController.java` (6장 ①)
-- [ ] T011 [W1] 가시성 판단 `PostVisibilityPolicy` (data-model 글 가시성 판단, 볼 수 없는 글은 401보다 먼저 404)와 목록용 공통 조건(Specification/QueryDSL) in `global/visibility/` (COM-01, POST-04)
-- [ ] T012 [W1] 페이지 요청 검증(page 1부터, size 1~50, 벗어나면 400 VALIDATION_FAILED)과 페이지·커서 응답 DTO in `global/web/` (R-06)
-- [ ] T013 [P] [W1] ADMIN 초기 계정(ERD의 "data.sql")을 Flyway `V2__admin_account.sql`로 넣기 in `src/main/resources/db/migration/` (ADMIN-01)
-- [ ] T014 [P] [W1] XSS: OWASP HTML Sanitizer 허용 목록 `HtmlSanitizer`, jsoup 요약 `SummaryExtractor`, CSP 헤더 in `global/security/` (R-05, 기능 명세 공통 규칙 보안)
-- [ ] T015 [P] [W1] 프론트 라우터: 플랫폼 도메인 / 블로그 서브도메인 분기, API 클라이언트(쿠키 자동 전송 + CSRF 헤더, 401 → 플랫폼 로그인 후 원래 주소 복귀) in `frontend/src/app/`, `frontend/src/api/`
-- [ ] T016 [W1] 연타 방지: `Idempotency-Key` 인터셉터, 키·첫 응답을 Redis에 짧은 TTL로 저장 in `global/web/` (R-09, POST-01, CMT-01)
-- [ ] T016a [P] [W1] Redis 연결 설정, Spring Cache 저장소를 Redis로, 로컬 `docker-compose.yml`(MySQL 8, Redis) in `global/config/`, 저장소 루트 (R-02)
+- [X] T005 [W1] 공통 엔티티 기반(BaseTimeEntity), `member` 엔티티(role, status) in `member/` (data-model)
+- [X] T006 [W1] 공통 오류 응답 형식과 `@RestControllerAdvice` (400 fieldErrors, 401, 403, 404, 409, 500은 내부 정보 없이) in `global/error/` (COM-02)
+- [X] T007 [W1] JWT 발급·검증 필터(`.blog.com` HttpOnly 쿠키로 발급, SameSite=Lax + CSRF 대책, R-03), Spring Security 설정(`/api/admin/**` hasRole ADMIN, 나머지 permitAll + 메서드 단위 인증) in `global/config/SecurityConfig.java` (COM-01, ADMIN-01, AUTH-03)
+- [X] T008 [W1] 요청마다 member.status 확인(SUSPENDED → API 요청은 403 + 사유·기한, WITHDRAWN → 쿠키 삭제 후 비회원 처리라 로그인이 필요하면 401) in JWT 필터 (ADMIN-02 대비, R-03)
+- [X] T009 [W1] Host 헤더 → 블로그 해석 `BlogHostResolver` (플랫폼 도메인 / 서브도메인 / 없으면 404 / 이사 301) in `global/host/` (R-04)
+- [X] T010 [W1] 화면 주소 처리: `/api/**` 외 요청은 블로그·글 확인 후 `index.html` 포워드, 301은 서버가 직접 in `global/config/SpaForwardController.java` (6장 ①)
+- [X] T011 [W1] 가시성 판단 `PostVisibilityPolicy` (data-model 글 가시성 판단, 볼 수 없는 글은 401보다 먼저 404)와 목록용 공통 조건(Specification/QueryDSL) in `global/visibility/` (COM-01, POST-04)
+- [X] T012 [W1] 페이지 요청 검증(page 1부터, size 1~50, 벗어나면 400 VALIDATION_FAILED)과 페이지·커서 응답 DTO in `global/web/` (R-06)
+- [X] T013 [P] [W1] ADMIN 초기 계정(ERD의 "data.sql")을 Flyway `V2__admin_account.sql`로 넣기 in `src/main/resources/db/migration/` (ADMIN-01)
+- [X] T014 [P] [W1] XSS: OWASP HTML Sanitizer 허용 목록 `HtmlSanitizer`, jsoup 요약 `SummaryExtractor`, CSP 헤더 in `global/security/` (R-05, 기능 명세 공통 규칙 보안)
+- [X] T015 [P] [W1] 프론트 라우터: 플랫폼 도메인 / 블로그 서브도메인 분기, API 클라이언트(쿠키 자동 전송 + CSRF 헤더, 401 → 플랫폼 로그인 후 원래 주소 복귀) in `frontend/src/app/`, `frontend/src/api/`
+- [X] T016 [W1] 연타 방지: `Idempotency-Key` 인터셉터, 키·첫 응답을 Redis에 짧은 TTL로 저장 in `global/web/` (R-09, POST-01, CMT-01)
+- [X] T016a [P] [W1] Redis 연결 설정, Spring Cache 저장소를 Redis로, 로컬 `docker-compose.yml`(MySQL 8, Redis) in `global/config/`, 저장소 루트 (R-02)
 
 **중간 점검**: 인증·권한·Host 해석·가시성 판단이 준비됨
 
@@ -291,17 +291,17 @@ description: "지원 서비스 구현 작업 (2주 일정 기준)"
 **목표**: 가입 → 블로그 개설 → 블로그 메인·사이드바 → 로그아웃
 **독립 테스트**: quickstart "P0 한 바퀴" 1~2
 
-- [ ] T017 [P] [US1] [W1] 이메일 인증 코드 발송·확인 (개발은 로그 출력, 메일 발송은 2주차로 미뤄도 됨) in `auth/` (OWN-01, 가입에 필요해 1주차)
-- [ ] T018 [US1] [W1] 가입 API: 인증 코드 확인 후 회원 생성, 이메일·닉네임 중복, 비밀번호 8자+영문+숫자, bcrypt in `auth/` (AUTH-01)
-- [ ] T019 [US1] [W1] 로그인 API: 실패 문구 통일, 정지 회원 안내, 토큰 발급 in `auth/` (AUTH-01)
-- [ ] T020 [US1] [W1] 로그아웃: 모든 블로그 주소에서 로그아웃 상태 (쿠키 삭제 + 토큰 무효화) (AUTH-02)
-- [ ] T021 [P] [US1] [W1] `blog` 엔티티(address UNIQUE, is_primary, moved_to_blog_id, deleted_at) in `blog/`
-- [ ] T022 [US1] [W1] 주소 확인 API(정규식·예약어·중복, 삭제된 주소 포함) + 개설 API(활성 5개 한도, 첫 블로그 대표) in `blog/` (BLOG-01)
-- [ ] T023 [US1] [W1] 블로그 정보 조회·수정 API (주소 수정 불가) in `blog/` (BLOG-02)
-- [ ] T024 [US1] [W1] 블로그 메인 글 목록 API(published_at DESC, id DESC, 페이지 10, 가시성 조건) in `post/` (BLOG-03)
-- [ ] T025 [US1] [W1] 사이드바 API: 이름·소개, 카테고리·글 수(CAT-03 전에는 한 단계, '미분류'는 글이 없으면 숨김), 최근 글 5, 최근 댓글 5 (볼 수 없는 글과 그 댓글 제외) in `blog/` (BLOG-04)
-- [ ] T026 [P] [US1] [W1] 화면: 가입, 로그인, 블로그 개설(주소 변경 불가 안내), 블로그 메인, 사이드바, 블로그 설정 in `frontend/src/pages/`
-- [ ] T027 [US1] [W1] 통합 테스트: 주소 규칙·중복·삭제된 주소 거절, 6번째 블로그 거절 in `src/test/.../blog/`
+- [X] T017 [P] [US1] [W1] 이메일 인증 코드 발송·확인 (개발은 로그 출력, 메일 발송은 2주차로 미뤄도 됨) in `auth/` (OWN-01, 가입에 필요해 1주차)
+- [X] T018 [US1] [W1] 가입 API: 인증 코드 확인 후 회원 생성, 이메일·닉네임 중복, 비밀번호 8자+영문+숫자, bcrypt in `auth/` (AUTH-01)
+- [X] T019 [US1] [W1] 로그인 API: 실패 문구 통일, 정지 회원 안내, 토큰 발급 in `auth/` (AUTH-01)
+- [X] T020 [US1] [W1] 로그아웃: 모든 블로그 주소에서 로그아웃 상태 (쿠키 삭제 + 토큰 무효화) (AUTH-02)
+- [X] T021 [P] [US1] [W1] `blog` 엔티티(address UNIQUE, is_primary, moved_to_blog_id, deleted_at) in `blog/`
+- [X] T022 [US1] [W1] 주소 확인 API(정규식·예약어·중복, 삭제된 주소 포함) + 개설 API(활성 5개 한도, 첫 블로그 대표) in `blog/` (BLOG-01)
+- [X] T023 [US1] [W1] 블로그 정보 조회·수정 API (주소 수정 불가) in `blog/` (BLOG-02)
+- [X] T024 [US1] [W1] 블로그 메인 글 목록 API(published_at DESC, id DESC, 페이지 10, 가시성 조건) in `post/` (BLOG-03)
+- [X] T025 [US1] [W1] 사이드바 API: 이름·소개, 카테고리·글 수(CAT-03 전에는 한 단계, '미분류'는 글이 없으면 숨김), 최근 글 5, 최근 댓글 5 (볼 수 없는 글과 그 댓글 제외) in `blog/` (BLOG-04)
+- [X] T026 [P] [US1] [W1] 화면: 가입, 로그인, 블로그 개설(주소 변경 불가 안내), 블로그 메인, 사이드바, 블로그 설정 in `frontend/src/pages/`
+- [X] T027 [US1] [W1] 통합 테스트: 주소 규칙·중복·삭제된 주소 거절, 6번째 블로그 거절 in `src/test/.../blog/`
 
 **중간 점검**: US1 단독 동작
 
@@ -312,20 +312,20 @@ description: "지원 서비스 구현 작업 (2주 일정 기준)"
 **목표**: 블로그 주인이 글을 발행·수정·삭제, 카테고리·태그·이미지
 **독립 테스트**: quickstart "P0 한 바퀴" 3, spec US2 수용 시나리오
 
-- [ ] T028 [P] [US2] [W1] `post`, `category` 엔티티 in `post/`, `category/`
-- [ ] T029 [US2] [W1] 카테고리 추가·이름 변경(1~30자)·삭제(소속 글 미분류로) API in `category/` (CAT-01)
-- [ ] T030 [US2] [W1] 카테고리별 글 목록 `/category/{id}` (상위는 하위 포함·합산, CAT-03 이후 적용) in `post/` (CAT-02)
-- [ ] T031 [US2] [W1] 글 발행 API: 제목 1~200자 필수, 주제·카테고리(기본 미분류)·공개 범위, 서버 정화, 요약 생성, published_at 기록, Idempotency-Key in `post/` (POST-01)
-- [ ] T032 [US2] [W1] 글 수정 API: 주인만, 주소·published_at·수치·순서 불변 in `post/` (POST-02)
-- [ ] T033 [US2] [W1] 글 삭제 API: 주인만, 소프트 삭제(`deleted_at`), 댓글·공감·알림 함께 처리(한 트랜잭션), 글 수·공감 수에서 바로 빠짐 in `post/` (POST-03)
-- [ ] T034 [US2] [W1] 공개 범위 변경 API (PUBLIC, PRIVATE; SUBSCRIBERS는 구독 이후) in `post/` (POST-06)
-- [ ] T035 [P] [US2] [W1] 화면: Tiptap 에디터(허용 서식만), 글쓰기·수정, 카테고리 관리, 삭제 확인 in `frontend/src/components/editor/`, `pages/manage/`
-- [ ] T035a [US2] [W1] 에디터 마크다운 입력: 같은 에디터에서 마크다운 문법(제목·굵게·기울임·목록·인용·코드 블록·`[글자](http/https 주소)`)을 치거나 마크다운 글을 붙여넣으면 서식으로, 저장은 HTML 그대로 in `frontend/src/components/editor/` (POST-01, 2026-10-08 지원 결정)
-- [ ] T036 [US2] [W2a] 이미지 업로드 API: 10MB, 확장자+실제 내용 검사(위장 파일 거절), UUID 파일명으로 `app.upload.dir`(개발: `/Users/chosun-nhn54/IdeaProjects/blog/uploads`)에 저장, `/uploads/**`로 서빙, 리사이즈·썸네일, EXIF 방향 보정, GIF 유지 in `image/` (POST-05, plan 저장소)
-- [ ] T037 [US2] [W2a] 에디터 이미지 버튼 ↔ 업로드 API 연결, 여러 장은 고른 순서대로 in `frontend/src/components/editor/` (POST-05)
-- [ ] T038 [P] [US2] [W2a] `tag`, `post_tag` 엔티티, 글 작성·수정 시 태그 최대 10개·중복 제거·없는 이름 자동 생성 in `tag/` (TAG-01)
-- [ ] T039 [US2] [W2a] 태그별 글 목록 `/tag/{name}` in `post/` (TAG-02)
-- [ ] T040 [US2] [W1] 통합 테스트: 수정 후 주소·순서 불변, 카테고리 삭제 시 미분류, 비공개 전환 시 목록·개수에서 빠짐 in `src/test/.../post/`
+- [X] T028 [P] [US2] [W1] `post`, `category` 엔티티 in `post/`, `category/`
+- [X] T029 [US2] [W1] 카테고리 추가·이름 변경(1~30자)·삭제(소속 글 미분류로) API in `category/` (CAT-01)
+- [X] T030 [US2] [W1] 카테고리별 글 목록 `/category/{id}` (상위는 하위 포함·합산, CAT-03 이후 적용) in `post/` (CAT-02)
+- [X] T031 [US2] [W1] 글 발행 API: 제목 1~200자 필수, 주제·카테고리(기본 미분류)·공개 범위, 서버 정화, 요약 생성, published_at 기록, Idempotency-Key in `post/` (POST-01)
+- [X] T032 [US2] [W1] 글 수정 API: 주인만, 주소·published_at·수치·순서 불변 in `post/` (POST-02)
+- [X] T033 [US2] [W1] 글 삭제 API: 주인만, 소프트 삭제(`deleted_at`), 댓글·공감·알림 함께 처리(한 트랜잭션), 글 수·공감 수에서 바로 빠짐 in `post/` (POST-03)
+- [X] T034 [US2] [W1] 공개 범위 변경 API (PUBLIC, PRIVATE; SUBSCRIBERS는 구독 이후) in `post/` (POST-06)
+- [X] T035 [P] [US2] [W1] 화면: Tiptap 에디터(허용 서식만), 글쓰기·수정, 카테고리 관리, 삭제 확인 in `frontend/src/components/editor/`, `pages/manage/`
+- [X] T035a [US2] [W1] 에디터 마크다운 입력: 같은 에디터에서 마크다운 문법(제목·굵게·기울임·목록·인용·코드 블록·`[글자](http/https 주소)`)을 치거나 마크다운 글을 붙여넣으면 서식으로, 저장은 HTML 그대로 in `frontend/src/components/editor/` (POST-01, 2026-10-08 지원 결정)
+- [X] T036 [US2] [W2a] 이미지 업로드 API: 10MB, 확장자+실제 내용 검사(위장 파일 거절), UUID 파일명으로 `app.upload.dir`(개발: `/Users/chosun-nhn54/IdeaProjects/blog/uploads`)에 저장, `/uploads/**`로 서빙, 리사이즈·썸네일, EXIF 방향 보정, GIF 유지 in `image/` (POST-05, plan 저장소)
+- [X] T037 [US2] [W2a] 에디터 이미지 버튼 ↔ 업로드 API 연결, 여러 장은 고른 순서대로 in `frontend/src/components/editor/` (POST-05)
+- [X] T038 [P] [US2] [W2a] `tag`, `post_tag` 엔티티, 글 작성·수정 시 태그 최대 10개·중복 제거·없는 이름 자동 생성 in `tag/` (TAG-01)
+- [X] T039 [US2] [W2a] 태그별 글 목록 `/tag/{name}` in `post/` (TAG-02)
+- [X] T040 [US2] [W1] 통합 테스트: 수정 후 주소·순서 불변, 카테고리 삭제 시 미분류, 비공개 전환 시 목록·개수에서 빠짐 in `src/test/.../post/`
 
 **중간 점검**: US1 + US2 동작
 
@@ -336,15 +336,15 @@ description: "지원 서비스 구현 작업 (2주 일정 기준)"
 **목표**: 홈 → 글 상세 → 검색 → 댓글·공감
 **독립 테스트**: quickstart "P0 한 바퀴" 4~6
 
-- [ ] T041 [US3] [W1] 글 상세 API: 글 가시성 판단(질문 4개), 다른 블로그 소속이면 301/404, 주인에게만 수정·삭제 플래그 in `post/` (POST-04)
-- [ ] T042 [US3] [W1] 홈 최신 글 API: 커서 `(published_at, id)`, 20개, 숨긴 글·블로그 제외 in `home/` (HOME-01)
-- [ ] T043 [P] [US3] [W1] `comment` 엔티티 (parent_id, deleted_at, is_secret, is_blinded) in `comment/`
-- [ ] T044 [US3] [W1] 댓글 작성(회원만, 1~1,000자(채움), Idempotency-Key)·조회(작성순 더보기 20)·본인 삭제·주인 삭제 API in `comment/` (CMT-01, CMT-02)
-- [ ] T045 [P] [US3] [W1] 화면: 홈, 글 상세(DOMPurify 후 렌더), 댓글 in `frontend/src/pages/`
-- [ ] T046 [US3] [W2a] 공감 API: PUT/DELETE 멱등, `post_like` UNIQUE, like_count 트랜잭션 갱신 in `reaction/` (SOC-01)
-- [ ] T047 [US3] [W2a] 블로그 내 검색 API: 제목·본문·태그, 대소문자 무시, trim·공백만 거절, 최신순 페이지 10, 가시성 조건 in `search/` (SRCH-01)
-- [ ] T048 [P] [US3] [W2a] 화면: 공감 버튼(즉시 반영), 블로그 검색(검색어 유지, 결과 주소 공유 가능) in `frontend/src/`
-- [ ] T049 [US3] [W2a] 통합 테스트: 비회원 댓글·공감 401, 공감 연타 1개, 댓글 수·공감 수 일치 in `src/test/`
+- [X] T041 [US3] [W1] 글 상세 API: 글 가시성 판단(질문 4개), 다른 블로그 소속이면 301/404, 주인에게만 수정·삭제 플래그 in `post/` (POST-04)
+- [X] T042 [US3] [W1] 홈 최신 글 API: 커서 `(published_at, id)`, 20개, 숨긴 글·블로그 제외 in `home/` (HOME-01)
+- [X] T043 [P] [US3] [W1] `comment` 엔티티 (parent_id, deleted_at, is_secret, is_blinded) in `comment/`
+- [X] T044 [US3] [W1] 댓글 작성(회원만, 1~1,000자(채움), Idempotency-Key)·조회(작성순 더보기 20)·본인 삭제·주인 삭제 API in `comment/` (CMT-01, CMT-02)
+- [X] T045 [P] [US3] [W1] 화면: 홈, 글 상세(DOMPurify 후 렌더), 댓글 in `frontend/src/pages/`
+- [X] T046 [US3] [W2a] 공감 API: PUT/DELETE 멱등, `post_like` UNIQUE, like_count 트랜잭션 갱신 in `reaction/` (SOC-01)
+- [X] T047 [US3] [W2a] 블로그 내 검색 API: 제목·본문·태그, 대소문자 무시, trim·공백만 거절, 최신순 페이지 10, 가시성 조건 in `search/` (SRCH-01)
+- [X] T048 [P] [US3] [W2a] 화면: 공감 버튼(즉시 반영), 블로그 검색(검색어 유지, 결과 주소 공유 가능) in `frontend/src/`
+- [X] T049 [US3] [W2a] 통합 테스트: 비회원 댓글·공감 401, 공감 연타 1개, 댓글 수·공감 수 일치 in `src/test/`
 
 ---
 
@@ -353,9 +353,9 @@ description: "지원 서비스 구현 작업 (2주 일정 기준)"
 **목표**: 화면이 아니라 서버에서 권한이 지켜짐
 **독립 테스트**: quickstart "권한·가시성" 표
 
-- [ ] T050 [US4] [W1] 서비스 계층 주인 검사 공통화 `BlogOwnerGuard` in `global/` (COM-01)
-- [ ] T051 [P] [US4] [W1] 화면: 404·403 페이지, 입력 오류 항목 표시(입력 유지), 관리자 영역 진입 보호 `/admin` in `frontend/src/` (COM-02, ADMIN-01)
-- [ ] T052 [US4] [W1] 통합 테스트: 남의 비공개 글 404, 남의 수정 403, 일반 회원 `/api/admin/**` 403, 다른 블로그 주소+글 번호 301/404, 500 응답에 스택 없음 in `src/test/.../security/`
+- [X] T050 [US4] [W1] 서비스 계층 주인 검사 공통화 `BlogOwnerGuard` in `global/` (COM-01)
+- [X] T051 [P] [US4] [W1] 화면: 404·403 페이지, 입력 오류 항목 표시(입력 유지), 관리자 영역 진입 보호 `/admin` in `frontend/src/` (COM-02, ADMIN-01)
+- [X] T052 [US4] [W1] 통합 테스트: 남의 비공개 글 404, 남의 수정 403, 일반 회원 `/api/admin/**` 403, 다른 블로그 주소+글 번호 301/404, 500 응답에 스택 없음 in `src/test/.../security/`
 
 **중간 점검**: P0 24개 중 1주차 분량 완성 → "가입 → 개설 → 발행 → 홈 발견 → 읽기·댓글" 한 바퀴
 
@@ -368,7 +368,7 @@ description: "지원 서비스 구현 작업 (2주 일정 기준)"
 - [X] T055 [US5] [W2b] 회원정보 수정: 닉네임·프로필·비밀번호 in `member/` (AUTH-05)
 - [X] T055a [US5] [W2b] 비밀번호·인증 코드 시도 제한: 로그인(이메일별)·인증 코드(이메일별)·비밀번호 변경(회원별) 15분 안에 5번 틀리면 15분 동안 429, 같은 IP는 셋을 합쳐 15분 안에 20번, Redis in `global/auth/` (AUTH-01, OWN-01, AUTH-05, R-17)
 - [X] T056 [US5] [W2b] 주제 enum, 글 작성 시 주제 선택 in `post/` (POST-11, 밀리면 확장으로)
-- [ ] T057 [US5] [W1] 이전·다음 글(볼 수 없는 글 건너뜀) (POST-10, POST-04가 P0라 스텝 6으로 앞당김, 2026-10-08 지원 결정)
+- [X] T057 [US5] [W1] 이전·다음 글(볼 수 없는 글 건너뜀) (POST-10, POST-04가 P0라 스텝 6으로 앞당김, 2026-10-08 지원 결정)
 - [ ] T058 [US5] 대표 이미지 선택, 미지정 시 첫 이미지 (POST-07)
 - [ ] T059 [US5] 임시저장 수동·자동(1분) + 이어쓰기 (POST-08)
 - [X] T060 [US5] [W2b] 하위 카테고리 2단계, 사이드바 트리와 상위 목록 합산 켜기 in `category/`, `blog/` (CAT-03, 원본 검토 6)
@@ -390,7 +390,7 @@ description: "지원 서비스 구현 작업 (2주 일정 기준)"
 
 ## 10단계: US11 일부 앞당김 (P3)
 
-- [ ] T069 [US11] [W2a] 답글 1단계, 답글 있는 댓글 삭제 시 '삭제된 댓글입니다' 표시 in `comment/` (CMT-05)
+- [X] T069 [US11] [W2a] 답글 1단계, 답글 있는 댓글 삭제 시 '삭제된 댓글입니다' 표시 in `comment/` (CMT-05)
 
 ---
 
