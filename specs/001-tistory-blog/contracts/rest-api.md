@@ -337,7 +337,7 @@
 | POST | /api/posts/{id}/views | B | 누구나 | 204(셌든 안 셌든 같음). 같은 조회자 5분 안 중복은 세지 않음. 비회원에게 `visitor_id` 쿠키가 없으면 응답에 `Set-Cookie`로 준다. 볼 수 없는 글은 상세와 같이 404·403. 주인 본인 조회도 셈 | POST-09 |
 | POST | /api/images | \* | 회원 | multipart `file` → 201 `{ id, url, thumbnailUrl }`. 400 `UNSUPPORTED_IMAGE`·`IMAGE_TOO_LARGE`. 본문·프로필·블로그 이미지 공통 | POST-05, AUTH-05, BLOG-02 |
 | GET | /api/topics | \* | 누구나 | 고정 주제 10개 `[{ code, name }]` | POST-11, HOME-03 |
-| GET | /api/posts/{id}/same-category?size=5 | B | 누구나 | 같은 카테고리의 다른 글(볼 수 있는 글만) `PostSummary[]` | OWN-05 |
+| GET | /api/posts/{id}/same-category?size=5 | B | 누구나 | 같은 카테고리의 다른 글(볼 수 있는 글만, 최신순, 이 글 빼고) `PostSummary[]`. 하위 카테고리까지 넓히지 않는다. 미분류 글이면 빈 배열. 글을 볼 수 없으면 글 상세와 같이 404·403. `size` 1~10(밖이면 400) | OWN-05 |
 | GET | /api/posts/{id}/similar?size=5 | B | 누구나 | 비슷한 글(pgvector, 볼 수 있는 글만, 다른 블로그 포함) `PostSummary[]`. 추천이 준비 안 됐으면 빈 배열 | OWN-06 |
 
 #### 글 저장 본문
@@ -361,7 +361,9 @@
 | --- | --- | --- |
 | `DRAFT` | 임시저장 | 제목이 비어도 된다. 주인에게만 보인다 |
 | `PUBLISHED` | 발행 | 제목 1~200자 필수. 처음 발행이면 `publishedAt`을 지금으로, 다시 저장해도 바뀌지 않는다 |
-| `SCHEDULED` | 예약 발행 | `scheduledAt`(지금보다 뒤) 필수. 그 시각에 서버가 `PUBLISHED`·`PUBLIC`으로 바꾸고 그 시각이 `publishedAt` |
+| `SCHEDULED` | 예약 발행 | 제목과 `scheduledAt`(지금보다 뒤, 아니면 400 `scheduledAt`) 필수. 그 시각에 서버(1분마다 도는 작업)가 `PUBLISHED`·`PUBLIC`으로 바꾸고 그 시각이 `publishedAt`. 발행한 글을 `SCHEDULED`로 저장하면 400 `status`, 예약 글을 `DRAFT`로 저장하면 예약이 풀린다. `scheduledAt`은 `SCHEDULED`일 때만 보낸다(아니면 400). 편집용 조회(`GET /api/manage/posts/{id}`)에 `scheduledAt`이 있다 |
+
+`commentAllowed`(CMT-07)는 보내지 않으면 새 글은 `true`, 수정은 그대로다. `false`인 글에는 댓글을 쓸 수 없고(403 `COMMENTS_DISABLED`) 이미 달린 댓글은 보인다. 댓글 쓰기의 `secret: true`는 비밀댓글이다(CMT-06, 글 주인과 작성자만 내용).
 
 - `categoryId`가 `null`이면 미분류. `topic`이 `null`이면 주제 없음.
 - `tagNames` 최대 10개(넘으면 400 `TOO_MANY_TAGS`). 블로그에 없는 이름은 새 태그가 된다(TAG-01). 이름은 앞뒤 공백과 앞의 `#`을 떼고 30자까지, `/`가 들어 있으면 400(`fieldErrors[].field = tagNames`). 대소문자·악센트만 다른 이름은 같은 태그다.
@@ -376,11 +378,11 @@
 | --- | --- | --- | --- | --- | --- |
 | GET | /api/categories | B | 누구나 | 트리. 주인이 아니면 비공개 카테고리와 그 글 수는 빠짐 | CAT-01, CAT-05, BLOG-04 |
 | POST | /api/categories | B | 주인 | `{ name, parentId? }` → 201 `{ id, name, parentId, sortOrder }`. 같은 자리(최상위끼리, 같은 상위의 하위끼리) 이름 중복 409 `NAME_TAKEN`, 하위의 하위 409 `CATEGORY_DEPTH`, 이 블로그 카테고리가 아닌 `parentId`는 400 | CAT-01, CAT-03 |
-| PATCH | /api/categories/{id} | B | 주인 | `{ name?, isPrivate? }` → 204. `parentId`를 보내면 400(상위 바꾸기는 `PUT /api/categories/order`) | CAT-01, CAT-05 |
+| PATCH | /api/categories/{id} | B | 주인 | `{ name?, isPrivate? }` → 204. 보낸 칸만 바꾸고 둘 다 없으면 400. `parentId`를 보내면 400(상위 바꾸기는 `PUT /api/categories/order`). 비공개 카테고리와 그 하위의 글은 주인 말고는 목록·글 수·글 상세·검색·홈·피드에서 없는 글(404) | CAT-01, CAT-05 |
 | DELETE | /api/categories/{id} | B | 주인 | 204. 글은 미분류로. 하위가 있으면 409 `CATEGORY_HAS_CHILDREN` | CAT-01 |
-| PUT | /api/categories/order | B | 주인 | `[{ id, parentId, sortOrder }]` 전체 → 204. 드래그 앤 드롭 결과 한 번에 | CAT-04 |
+| PUT | /api/categories/order | B | 주인 | `[{ id, parentId, sortOrder }]` 전체 → 204. 드래그 앤 드롭 결과 한 번에. 이 블로그 카테고리가 하나라도 빠지거나 두 번·남의 번호면 400 `fieldErrors[].field = order`, 하위가 있는 카테고리를 하위로·자기 자신을 상위로 두면 409 `CATEGORY_DEPTH`, 같은 자리에 같은 이름이면 409 `NAME_TAKEN`. 같은 자리 안에서 `sortOrder` 순으로 0부터 다시 매긴다 | CAT-04 |
 | GET | /api/tags | B | 누구나 | `[{ id, name, postCount }]` 글 수순 | TAG-03 |
-| PATCH | /api/tags/{id} | B | 주인 | `{ name }` → 204. 중복 409 `NAME_TAKEN` | TAG-04 |
+| PATCH | /api/tags/{id} | B | 주인 | `{ name }` → 204. 이름 규칙은 글에 달 때와 같다(앞뒤 공백·앞의 # 제거, 1~30자, `/` 금지, 아니면 400 `fieldErrors[].field = name`). 같은 블로그의 다른 태그와 같은 이름(대소문자·악센트 무시) 409 `NAME_TAKEN`, 자기 이름의 대소문자만 바꾸기는 됨 | TAG-04 |
 | DELETE | /api/tags/{id} | B | 주인 | 204. 글은 남고 연결만 끊김 | TAG-04 |
 
 카테고리 트리 응답:
