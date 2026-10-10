@@ -273,7 +273,7 @@
 | PATCH | /api/me | P | 회원 | `{ nickname?, profileImageId? }` → `Me`. 보내지 않은 칸은 그대로. 닉네임 중복 409(대소문자만 바꾸기는 됨). `profileImageId`는 본인이 올린 이미지만(아니면 400 `fieldErrors[].field = profileImageId`). `Me.profileImageUrl`은 썸네일 주소 | AUTH-05 |
 | PUT | /api/me/password | P | 회원 | `{ currentPassword, newPassword }` → 204. 이메일 가입 회원만(아니면 403). 지금 비밀번호가 틀리면 400(`fieldErrors[].field = currentPassword`), 새 비밀번호는 가입 규칙(`newPassword`). 지금 로그인과 다른 기기 로그인은 그대로 | AUTH-05 |
 | DELETE | /api/me/social/{provider} | P | 회원 | 204. 남는 로그인 수단이 없으면 409 `LAST_LOGIN_METHOD`. 연동은 `authorize?mode=link` | OWN-03 |
-| DELETE | /api/me | P | 회원 | `{ password }`(이메일 가입) 또는 `{}`(소셜 재인증 10분 안) → 204 + 쿠키 삭제. 본인 확인 실패 401 | AUTH-06 |
+| DELETE | /api/me | P | 회원 | `{ password }`(이메일 가입) 또는 `{}`(소셜 재인증 10분 안, 소셜 로그인과 함께 스텝 20) → 204 + 쿠키 삭제. 본인 확인 실패 401 `LOGIN_FAILED`, 비밀번호 변경과 같은 횟수 제한(회원별 15분 5번, 429). 처리: 그 회원의 블로그를 모두 삭제(대표 포함, 블로그 삭제와 같은 규칙), 그 회원이 누른 공감·구독을 지우고 공감 수를 맞추며, 그 회원의 댓글·방명록을 소프트 삭제하고 댓글 수를 맞추고, 소셜 연동을 끊고, 회원은 `WITHDRAWN`과 이메일·비밀번호를 비운다(같은 이메일로 다시 가입할 수 있음). 글·댓글의 수정 시각은 그대로 | AUTH-06 |
 | GET | /api/me/blogs | P | 회원 | 내 활성 블로그 `[{ id, address, name, isPrimary, movedTo, postCount }]`, 만든 순서. `movedTo`는 이사한 블로그의 새 주소(아니면 `null`), `postCount`는 지우지 않은 발행 글 수(비공개·숨김 포함, 임시저장 제외). 마이페이지가 이 목록 아래에 "블로그 만들기 (n/5)"를 둔다 | BLOG-08, BLOG-01 |
 | PUT | /api/me/primary-blog | P | 회원 | `{ blogId }` → 204. 내 활성 블로그만(아니거나 비면 400 `fieldErrors[].field = blogId`). 이미 대표면 그대로 204 | BLOG-08 |
 | GET | /api/me/bookmarks?cursor= | P | 회원 | 저장한 글 20, 저장 최신순. 볼 수 있으면 `{ post: PostSummary, savedAt, visible: true }`, 볼 수 없으면 `{ postId, visible: false, titleSnapshot, blogNameSnapshot, savedAt }` | SOC-03 |
@@ -292,15 +292,15 @@
 | GET | /api/blogs/address-availability?address= | P | 회원 | `{ available, reason }`. `reason`: `INVALID`·`RESERVED`·`TAKEN` | BLOG-01 |
 | POST | /api/blogs | P | 회원 | `{ address, name, description? }` → 201 `Blog`. 6번째 409 `BLOG_LIMIT_EXCEEDED`. 첫 블로그는 대표 | BLOG-01 |
 | GET | /api/blog | B | 누구나 | `Blog` | BLOG-03, SUB-03 |
-| PATCH | /api/blog | B | 주인 | `{ name?, description?, profileImageId?, skin?, listLayout?, accentColor? }` → `Blog`. 보낸 항목만 바뀜. `profileImageId`는 주인이 올린 이미지만(아니면 400 `fieldErrors[].field = profileImageId`), `Blog.profileImageUrl`과 사이드바 PROFILE의 `profileImageUrl`은 그 이미지의 썸네일 주소. `skin`: 미리 만든 2~3종, `listLayout`: `LIST`·`THUMBNAIL`, `accentColor`: `BLUE`·`GREEN`·`ORANGE`·`PINK`·`PURPLE`·`GRAY` | BLOG-02, BLOG-05 |
+| PATCH | /api/blog | B | 주인 | `{ name?, description?, profileImageId?, skin?, listLayout?, accentColor? }` → `Blog`. 보낸 항목만 바뀜. `profileImageId`는 주인이 올린 이미지만(아니면 400 `fieldErrors[].field = profileImageId`), `Blog.profileImageUrl`과 사이드바 PROFILE의 `profileImageUrl`은 그 이미지의 썸네일 주소. `skin`: `BASIC`(기본)·`MAGAZINE`(매거진)·`NOTE`(노트), `listLayout`: `LIST`·`THUMBNAIL`, `accentColor`: `BLUE`·`GREEN`·`ORANGE`·`PINK`·`PURPLE`·`GRAY`. 정해 둔 값이 아니면 그 칸 400 | BLOG-02, BLOG-05 |
 | GET | /api/blog/sidebar | B | 누구나 | 보이는 모듈만 주인이 정한 순서로 `{ modules: [{ type, data }] }`. 아래 [사이드바 응답](#사이드바-응답) | BLOG-04, BLOG-05 |
 | GET | /api/blog/sidebar/modules | B | 주인 | 모듈 8개 전부 `[{ moduleType, isVisible }]` 순서대로(숨긴 것 포함) | BLOG-05 |
-| PUT | /api/blog/sidebar/modules | B | 주인 | `[{ moduleType, isVisible }]` 8개를 원하는 순서로 전체 교체 → 204. 8종이 정확히 한 번씩이 아니거나 `PROFILE`을 숨기면 400 `VALIDATION_FAILED` | BLOG-05 |
-| POST | /api/blog/move-posts | B | 주인 | `{ postIds, targetBlogId }` → `{ movedCount }`. 카테고리는 미분류, 태그는 이름으로 다시 연결 | BLOG-06 |
-| PUT | /api/blog/moved-to | B | 주인 | `{ targetBlogId }` → 204. 연쇄는 최종 블로그로 저장, 순환이면 400 `INVALID_MOVE_TARGET` | BLOG-06 |
+| PUT | /api/blog/sidebar/modules | B | 주인 | `[{ moduleType, isVisible }]` 8개를 원하는 순서로 전체 교체 → 204. 8종이 정확히 한 번씩이 아니거나, 모르는 종류거나, `PROFILE`을 숨기면 400 `VALIDATION_FAILED`(`fieldErrors[].field = modules`). 블로그를 만들 때 8개 행이 생기고(새 3종은 숨김), 스텝 19 전에 만든 블로그는 V4 마이그레이션이 같은 기본 행을 채웠다 | BLOG-05 |
+| POST | /api/blog/move-posts | B | 주인 | `{ postIds, targetBlogId }` → `{ movedCount }`. 카테고리는 미분류, 태그는 이름으로 다시 연결(대상 블로그에 없으면 만듦, 옛 블로그에 글이 없어진 태그는 지움). 이 블로그의 지우지 않은 글만 옮기고 다른 번호는 건너뛴다(임시저장·예약 글도 옮김). `postIds` 1~100(아니면 400 `postIds`). 대상이 이 블로그·지운 블로그·남의 블로그면 400 `INVALID_MOVE_TARGET`. 글 번호와 수정 시각은 그대로 | BLOG-06 |
+| PUT | /api/blog/moved-to | B | 주인 | `{ targetBlogId }` → 204. 대상이 이미 이사했으면 그 최종 블로그로 저장하고, 이 블로그로 이사해 오던 블로그들도 새 최종 블로그로 바꾼다. 최종이 이 블로그(순환)거나 지운 블로그, 대상이 남의 블로그면 400 `INVALID_MOVE_TARGET` | BLOG-06 |
 | DELETE | /api/blog/moved-to | B | 주인 | 204. 이사 지정 취소 | BLOG-06 |
-| GET | /api/blog/deletion-preview | B | 주인 | `{ remainingPostCount, isPrimary }`. 삭제 경고 "옮기지 않은 글 N개" | BLOG-07 |
-| DELETE | /api/blog | B | 주인 | `{ confirmAddress }`(주소를 다시 입력) → 204. 대표면 409 `PRIMARY_BLOG` | BLOG-07 |
+| GET | /api/blog/deletion-preview | B | 주인 | `{ remainingPostCount, isPrimary }`. 삭제 경고 "옮기지 않은 글 N개"(지우지 않은 글 전부: 발행·임시저장·예약) | BLOG-07 |
+| DELETE | /api/blog | B | 주인 | `{ confirmAddress }`(주소를 다시 입력) → 204. 주소가 다르면 400 `confirmAddress`, 대표면 409 `PRIMARY_BLOG`. 남은 글과 그 댓글은 소프트 삭제, 글의 공감·알림은 지움(글 하나 삭제와 같은 규칙). 블로그 행은 남아 주소를 다시 쓸 수 없고 이사 연결도 그대로 | BLOG-07 |
 
 #### 사이드바 응답
 
@@ -320,6 +320,8 @@
 ```
 
 - 숨긴 모듈은 `modules`에 없다. `PROFILE`은 항상 있다. 새 블로그는 `VISITOR`·`POPULAR_POST`·`SUBSCRIBE`가 숨김으로 시작한다(BLOG-05).
+- `VISITOR`의 `today`는 오늘 `blog_visit` 수, `yesterday`는 어제 모은 값(없으면 어제 `blog_visit` 수), `total`은 어제까지의 누적(`blog.total_visitor_count`)에 오늘을 더한 값이다. 방문 기록과 새벽 집계는 스텝 20(T082)이라 그 전에는 모두 0이다.
+- `SUBSCRIBE`의 `subscribed`는 보는 사람 기준(비회원 `false`). 화면은 블로그 주인에게 구독 버튼을 그리지 않는다.
 - 개수는 고정이다: 최근 글·최근 댓글·인기 글 각 5개. 인기 글은 누적 조회수 순, 볼 수 있는 글만.
 - 비밀댓글·숨긴 댓글은 `RECENT_COMMENT`에서 `state`만 주고 `content`는 `null`이다. 볼 수 없는 글의 댓글은 빠진다.
 
@@ -517,8 +519,8 @@
 
 | 일 | 규칙 | ID |
 | --- | --- | --- |
-| 블로그 확인 | 없거나 볼 수 없는 블로그 404 화면. 이사한 블로그는 새 블로그 같은 경로로 301 (주인의 `/manage/**`는 예외). 이사 간 블로그가 삭제됐으면 404. 글 주소 `/{id}`는 아래 글 확인이 먼저다 | BLOG-06, COM-01 |
-| 글 확인 | `/{id}`가 다른 블로그 소속이고 볼 수 있으면 지금 블로그로 301, 아니면 404 화면. 이사한 블로그에 남은(옮기지 않은) 글은 옛 주소에서 그대로 보인다(블로그 301을 먼저 하면 옛 주소↔새 주소 무한 리다이렉트, 2026-10-08 지원 확인) | POST-04, SC-005 |
+| 블로그 확인 | 없거나 볼 수 없는 블로그 404 화면. 이사한 블로그는 새 블로그 같은 경로로 301 (주인의 `/manage/**`는 예외). 옛 블로그가 지워졌어도 이사 대상이 있으면 301(지운 블로그의 관리 화면은 없음). 이사 간 블로그가 삭제됐으면 404. 글 주소 `/{id}`는 아래 글 확인이 먼저다 | BLOG-06, BLOG-07, COM-01 |
+| 글 확인 | `/{id}`가 다른 블로그 소속이고 볼 수 있으면 지금 블로그로 301, 아니면 404 화면. 옛 블로그가 지워졌어도 옮긴 글은 301, 옮기지 않은 글은 함께 지워져 404. 이사한 블로그에 남은(옮기지 않은) 글은 옛 주소에서 그대로 보인다(블로그 301을 먼저 하면 옛 주소↔새 주소 무한 리다이렉트, 2026-10-08 지원 확인) | POST-04, SC-005 |
 | 방문 기록 | 블로그 주소의 화면 요청마다 `blog_visit`에 블로그·날짜·방문자 하나를 남긴다. 유입 종류·호스트는 `Referer`로 정하고, 주인 본인은 세지 않는다 | MNG-03 |
 | 공유 미리보기 | 글 주소면 `index.html`에 `og:title`·`og:description`(요약)·`og:image`(대표 이미지)를 넣는다. 볼 수 없는 글이면 넣지 않는다 | SOC-02 |
 
