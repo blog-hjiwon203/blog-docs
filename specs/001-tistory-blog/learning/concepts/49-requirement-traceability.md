@@ -1,6 +1,6 @@
 # 49. 완료의 정의와 요구사항 추적: 명세 문장에서 화면 입구까지
 
-> 관련 스텝: [스텝 13b](../step-13b.md) (T023a, T045a, T054a) · 관련 개념: [38 회원정보 수정](./38-member-profile-update.md) 5.7, [46 상태에 따라 갈 곳 정하기](./46-entry-routing-write-button.md) 3.3, [16 인가와 가시성](./16-authorization-visibility.md), [05 Spring 테스트](./05-spring-testing.md), [44 휴대폰 화면 점검](./44-mobile-responsive-check.md)
+> 관련 스텝: [스텝 13b](../step-13b.md) (T023a, T045a, T054a, 그리고 전체 점검에서 나온 T055d·T034a·T033a·T030a·T067a·T051a·T055e·T008a) · 관련 개념: [38 회원정보 수정](./38-member-profile-update.md) 5.7, [46 상태에 따라 갈 곳 정하기](./46-entry-routing-write-button.md) 3.3, [16 인가와 가시성](./16-authorization-visibility.md), [05 Spring 테스트](./05-spring-testing.md), [44 휴대폰 화면 점검](./44-mobile-responsive-check.md)
 
 ## 1. 이 문서로 배우는 것
 
@@ -10,6 +10,7 @@
 - 계층별(수평)로 만들 때와 기능별(수직)로 만들 때 빈 곳이 어디에 생기나
 - 테스트 고정 데이터(fixture)가 조건을 안 맞춰서 "서버 버그처럼 보이는" 실패
 - 이 스텝에서 채운 세 빈 곳(블로그 프로필 이미지, 닉네임 링크, 관리 화면 태그 목록)의 코드
+- 한 번 더, 이번에는 **전부** 찾기: 서버 API 전체와 화면 호출을 기계로 대조하고, 기능 영역을 나눠 명세 문장을 대조하는 법(5.7)
 
 ## 2. 왜 필요한가
 
@@ -286,6 +287,64 @@ list(post, null, null).andExpect(jsonPath("$.content[0].author.primaryBlogAddres
 
 확인 중에 스크립트가 글 저장 본문에 `tags`라고 써서(실제 칸 이름은 `tagNames`) 태그 표가 비어 나왔다. 서버는 모르는 칸을 무시한다. 이것도 5.4와 같은 종류의 실수다. "화면이 비었다"를 보고 바로 화면 코드를 의심하지 않고, `GET /api/tags`를 직접 불러 **입력 데이터부터** 확인했다.
 
+### 5.7 두 번째 점검: 이번에는 전부 찾는다
+
+세 빈 곳을 채워 PR을 올린 뒤, 지원이 "스텝 14로 넘어가기 전에 **기능 명세 기준으로** 화면에 연결 안 된 것을 **전부** 찾아 고친다"고 정했다. 처음 점검은 손으로 떠오르는 곳을 본 것이라 빠뜨린 것이 있을 수 있다. 이번에는 두 방향으로 빠짐없이 훑었다.
+
+**(가) 서버 API → 화면 호출: 기계로 전부.** 컨트롤러의 매핑 주석을 모두 뽑고, 경로마다 `frontend/src`에서 부르는 곳을 찾았다.
+
+```bash
+# 컨트롤러의 모든 API (메서드 경로)
+grep -rhoE '@(Get|Post|Put|Patch|Delete)Mapping\("[^"]+"' src/main/java \
+  | sed -E 's/@([A-Za-z]+)Mapping\("/\1 /;s/"$//' | sort -u > endpoints.txt
+
+# 경로마다 화면에서 부르는 파일 ({id} 같은 자리는 아무 글자로)
+while read m p; do
+  case "$p" in /api/*) ;; *) continue ;; esac   # 화면 주소(SpaForwardController)는 뺀다
+  re=$(echo "$p" | sed -E 's/\{[^}]+\}/[^"`'"'"' ]*/g; s#/#\\/#g')
+  hits=$(grep -rlE "$re" frontend/src | grep -v '\.test\.' | xargs -n1 basename | tr '\n' ' ')
+  printf "%-7s %-45s %s\n" "$m" "$p" "${hits:-—— 없음}"
+done < endpoints.txt
+```
+
+API 45개 중 "없음"은 둘이었다. `PATCH /api/posts/{id}/visibility`(빈 곳)와 `POST /api/auth/token/refresh`(필터가 알아서 재발급해서 화면이 부를 필요가 없게 **설계된** 것, [45](./45-remember-me.md)). 이 대조는 경로 앞부분만 맞아도 걸리는 느슨한 방법이라, "있음"으로 나온 줄도 실제 호출(메서드까지)을 한 번 더 뽑아 확인했다(`grep -rnE "api(<[^>]*>)?\(" frontend/src`).
+
+**(나) 명세 문장 → API·화면·입구: 영역별로 나눠 전부.** tasks.md에서 `[X]` 작업의 기능 코드를 모두 뽑았다(50개 남짓). 사람 하나가 한 번에 보기에는 많아서 세 묶음(인증·홈·관리자 / 블로그·카테고리·태그 / 글·댓글·검색)으로 나눠 동시에 대조했다. 묶음마다 같은 지시를 줬다: 3.3처럼 문장을 항목으로 쪼개고, 4절의 세 질문을 묻고, 목업의 번호와 대조하고, 3.4의 숨는 자리를 찾고, **백로그로 미룬 항목은 빈 곳으로 세지 말 것**, 모든 주장은 파일과 줄로.
+
+**결과와 처리.** 백로그(비밀댓글, 구독, 태그 이름 변경, 꾸미기·이사·삭제, 서비스 관리 기능 본체)는 빼고, 이미 만든 기능에서 나온 것은 모두 고쳤다.
+
+| 작업 | 명세 | 빠진 것 | 종류(3.4) |
+| --- | --- | --- | --- |
+| T023a 추가분 | BLOG-02 | 블로그 메인 위쪽 프로필 상자가 빈 동그라미(사이드바에만 사진을 넣음) | 같은 값을 그리는 곳 하나를 빠뜨림 |
+| T055d | AUTH-05 | 글쓴이·댓글 작성자 사진. `MemberSummaryResponse`가 `profileImageUrl`에 `null`을 써 둠 | `null` 응답 칸 |
+| T034a | POST-06 | 글 상세에서 주인이 공개 범위 바꾸기(목업 12번) | 부르지 않는 API |
+| T033a | POST-03 | 글 상세 삭제가 실패해도 아무 반응 없음 | 오류 경로가 없음 |
+| T030a | CAT-02 | 글 상세·목록·글 관리의 카테고리 이름이 링크가 아님 | 보이지 않는 입구 |
+| T067a | MNG-01 | 상태 필터에 백로그 기능 "예약"이 보임 | 없는 기능의 칸 |
+| T051a | ADMIN-01 | `/admin`으로 가는 버튼이 없음 | 입구 없음 |
+| T055e | BLOG-08 | 블로그·관리 머리글에 "내 블로그"가 없음(플랫폼에만) | 입구가 한쪽에만 |
+| T008a | ADMIN-02 | 로그인한 채로 정지되면 사유가 안 보임. 확인하다 보니 블로그 글은 **500 화면**이었다 | 화면이 오류를 삼킴 + 버그 |
+
+T008a의 500은 점검 표만 봤으면 몰랐다. 브라우저로 직접 정지 회원이 되어 열어 봐서 찾았다(원인과 고친 법은 [19](./19-react-router-api-client.md) 5.8). **표의 "빠진 것"을 고친 뒤에도 실제로 눌러 보는 것**이 4.3이 따로 있는 이유다.
+
+**T055d에서 피한 함정 두 개.**
+
+```java
+// image/application/ProfileImages.java
+public Map<Long, String> thumbnailUrls(Collection<Long> imageIds) {
+    var ids = imageIds.stream().filter(Objects::nonNull).distinct().toList();
+    if (ids.isEmpty()) {
+        return new HashMap<>();
+    }
+    return imageRepository.findAllById(ids).stream()
+            .filter(image -> image.getThumbnailPath() != null)
+            .collect(Collectors.toMap(Image::getId, Image::getThumbnailPath, (a, b) -> a, HashMap::new));
+}
+```
+
+- **N+1**: 댓글 20개의 작성자 사진을 하나씩 `findById`로 읽으면 쿼리 20번이다. 작성자들의 사진 번호를 모아 `findAllById` 한 번으로 읽는다. 대표 블로그 주소(`PrimaryBlogAddresses.of`)를 한 번에 구하던 것과 같은 방식이다([48](./48-representative-image.md) "한 페이지 쿼리 두 번").
+- **`Map.of().get(null)`은 예외다.** 사진이 없는 회원은 사진 번호가 `null`이고, 부르는 쪽은 `photos.get(member.getProfileImageId())`로 꺼낸다. `Map.of()`(불변 맵)는 `get(null)`에 `NullPointerException`을 던진다. 일반 `HashMap`은 `null`을 돌려준다. 그래서 빈 경우에도, `toMap`의 결과도 `HashMap`으로 만들었다. `Collectors.toMap`의 기본 결과도 지금은 `HashMap`이지만 문서가 그 종류를 약속하지 않으므로 네 번째 인자(`HashMap::new`)로 못 박았다.
+
 ## 6. 자주 하는 실수와 함정
 
 - **"테스트가 다 통과하니 끝"**: 테스트는 쓴 것만 본다. 명세 문장을 항목으로 쪼개 대조한다.
@@ -302,15 +361,9 @@ list(post, null, null).andExpect(jsonPath("$.content[0].author.primaryBlogAddres
 
 ### 7.1 점검을 직접 해 본다
 
-아직 남은 낮은 항목 하나로 4절 순서를 그대로 따라 해 본다. 예: 명세 POST-06 "공개 / 비공개 / 구독자 공개 중 하나이고 **발행 후에도 바꾼다**"와 목업 post-detail 12번(글 상세에서 주인이 공개 범위 바꾸기). 글 수정 화면과 내 글 관리의 일괄 변경으로는 바꿀 수 있지만, 글 상세의 그 칸은 아직 없다.
+5.7 (가)의 스크립트를 코드 저장소 루트에서 그대로 돌려 본다. 지금은 "없음"이 `POST /api/auth/token/refresh` 하나만 나와야 한다. 다음 스텝(14)에서 API를 만들면 다시 돌려, 새 API가 "없음"으로 나오지 않는지 본다.
 
-```bash
-cd ~/IdeaProjects/blog
-grep -n "visibility" ../blog-docs/specs/001-tistory-blog/contracts/rest-api.md | head   # PATCH /api/posts/{id}/visibility
-grep -rn "/visibility" frontend/src                                                      # 부르는 화면이 있나(지금은 없음)
-```
-
-화면에서 부르는 곳이 없으면, 3.3처럼 표를 만들어 어느 칸이 비었는지 적어 본다.
+그다음 4절 순서를 손으로 따라 해 본다. 예: 스텝 14가 만들 CMT-03 "댓글 수정"의 명세 문장을 읽고, 목업 post-detail 7번(`PATCH /api/comments/{id}`, 본인만)과 대조해 "API · 화면이 부르나 · 입구(댓글의 '수정' 버튼)" 표를 미리 만들어 둔다. 스텝이 끝날 때 이 표의 칸이 다 차 있어야 완료다.
 
 ### 7.2 `null` 응답 칸 찾기
 
@@ -368,6 +421,12 @@ grep -rn ", null" src/main/java --include='*Response.java'
 
 10. 계층별(수평)로 나눠 만들 때 빈 곳이 잘 생기는 자리는 어디이고, 이 프로젝트는 어떻게 다시 이었나?
 <details><summary>답</summary>여러 계층·기능에 걸친 항목(블로그 사진 = 이미지 기능 + 블로그 API + 설정 화면 + 사이드바)이 "다른 계층이 하겠지"로 떨어진다. 잘린 조각에 T번호(T023a처럼 원래 번호 + 글자)를 붙여 한 스텝에서 API부터 입구까지 수직으로 채웠다.</details>
+
+11. 두 번째 점검에서 "서버 API → 화면 호출" 대조를 기계로 하고도, 명세 문장 대조를 따로 한 이유는?
+<details><summary>답</summary>API 대조는 "만든 API를 화면이 부르나"만 안다. 명세에는 있는데 API부터 없는 항목(블로그 프로필 이미지 저장처럼)이나, API는 불리는데 응답 칸이 null인 것, 입구가 안 보이는 것은 API 목록에 나타나지 않는다. 명세 문장에서 출발해야 보인다.</details>
+
+12. 사진이 없는 회원의 `photos.get(member.getProfileImageId())`가 예외를 낼 수 있는 경우는?
+<details><summary>답</summary>photos가 Map.of() 같은 불변 맵이면 get(null)에 NullPointerException을 던진다. 사진이 없는 회원의 사진 번호는 null이다. 그래서 thumbnailUrls는 늘 null 키 조회를 받는 HashMap을 돌려준다.</details>
 
 ## 9. 더 읽을거리
 

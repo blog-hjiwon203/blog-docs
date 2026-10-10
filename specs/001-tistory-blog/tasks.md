@@ -273,7 +273,7 @@ description: "지원 서비스 구현 작업 (2주 일정 기준)"
 
 ### 스텝 13b. 보완: 화면·명세 점검에서 나온 빈 곳 (2026-10-11 지원 결정)
 
-**무엇을 만드나**: 스텝 13 뒤 완료 작업과 화면·입구를 대조한 점검에서 나온 빈 곳 중 높음·중간 3개. 완료로 체크됐지만 명세 문장의 일부(프로필 이미지, 닉네임 링크, 관리 화면 태그 목록)가 API나 화면에서 빠져 있었다.
+**무엇을 만드나**: 스텝 13 뒤 완료 작업과 화면·입구를 대조한 점검에서 나온 빈 곳. 처음에는 높음·중간 3개(T023a·T045a·T054a)였고, 지원이 "스텝 14 전에 기능 명세 기준으로 화면에 연결 안 된 것을 전부 찾아 고친다"고 정해 완료된 기능 코드 전체(서버 API 45개, `[X]` 작업의 명세 문장)를 다시 대조해 나온 것을 모두 더했다. 백로그로 미룬 기능(비밀댓글, 구독, 태그 관리, 꾸미기 등)은 빈 곳으로 세지 않았다.
 
 **끝나면**: 블로그 설정에서 프로필 이미지를 바꾸면 사이드바에 보이고, 글·댓글 작성자 닉네임을 누르면 그 사람의 대표 블로그로 가고, 관리 화면에서 태그와 글 수를 본다.
 
@@ -282,8 +282,16 @@ description: "지원 서비스 구현 작업 (2주 일정 기준)"
 | T023a | 블로그 프로필 이미지: `PATCH /api/blog`의 `profileImageId`(주인이 올린 이미지만), `Blog`·사이드바의 `profileImageUrl`, 설정 화면 사진 칸, 사이드바 사진 (BLOG-02) |
 | T045a | 글·댓글 작성자 닉네임 → 대표 블로그 링크(대표 블로그가 없거나 볼 수 없으면 글자만) (BLOG-08) |
 | T054a | 관리 화면 카테고리·태그에 태그 목록과 글 수 (TAG-03) |
+| T055d | 글쓴이·댓글 작성자·블로그 주인의 회원 프로필 사진 (AUTH-05) |
+| T034a | 글 상세에서 주인이 공개 범위 바꾸기 (POST-06) |
+| T033a | 글 상세 삭제 실패 안내 (POST-03) |
+| T030a | 글 상세·목록·글 관리의 카테고리 이름 링크 (CAT-02) |
+| T067a | 글 관리 상태 필터에서 백로그 "예약" 빼기 (MNG-01) |
+| T051a | 관리자 머리글의 "서비스 관리" 입구 (ADMIN-01) |
+| T055e | 블로그·관리 머리글의 "내 블로그" (BLOG-08) |
+| T008a | 로그인한 채로 정지된 회원 화면의 정지 안내 (ADMIN-02) |
 
-**확인할 것**: 설정에서 사진을 고르고 저장 → 블로그 사이드바 맨 위에 그 사진, 남이 올린 이미지 번호로 저장하면 400. 대표 블로그가 있는 회원의 댓글 닉네임을 누르면 그 블로그로 간다(블로그 없는 회원은 링크 없음). 관리 → 카테고리·태그에 태그별 글 수(비공개 글 포함).
+**확인할 것**: 설정에서 사진을 고르고 저장 → 블로그 사이드바 맨 위와 블로그 메인 프로필 상자에 그 사진, 남이 올린 이미지 번호로 저장하면 400. 대표 블로그가 있는 회원의 댓글 닉네임을 누르면 그 블로그로 간다(블로그 없는 회원은 링크 없음). 관리 → 카테고리·태그에 태그별 글 수(비공개 글 포함). 마이페이지에서 사진을 바꾼 회원의 댓글 옆에 그 사진. 글 상세에서 주인이 공개 범위를 비공개로 바꾸면 비회원에게 404. 카테고리 이름을 누르면 그 카테고리 목록(글 관리에서는 그 카테고리로 거르기), 글 관리 상태 필터에 "예약"이 없음. 남의 블로그에서 "내 블로그", 관리자 계정이면 "서비스 관리". 로그인한 채로 정지되면(개발 DB에서 `status='SUSPENDED'`) 어느 화면이든 정지 사유·기한이 보이고 글은 비회원처럼 읽힌다.
 
 ### 스텝 14. 댓글 수정·방명록·댓글 관리 (백로그 추천 순서 3)
 
@@ -356,6 +364,7 @@ description: "지원 서비스 구현 작업 (2주 일정 기준)"
 - [X] T006 [W1] 공통 오류 응답 형식과 `@RestControllerAdvice` (400 fieldErrors, 401, 403, 404, 409, 500은 내부 정보 없이) in `global/error/` (COM-02)
 - [X] T007 [W1] JWT 발급·검증 필터(`.blog.com` HttpOnly 쿠키로 발급, SameSite=Lax + CSRF 대책, R-03), Spring Security 설정(`/api/admin/**` hasRole ADMIN, 나머지 permitAll + 메서드 단위 인증) in `global/config/SecurityConfig.java` (COM-01, ADMIN-01, AUTH-03)
 - [X] T008 [W1] 요청마다 member.status 확인(SUSPENDED → API 요청은 403 + 사유·기한, WITHDRAWN → 쿠키 삭제 후 비회원 처리라 로그인이 필요하면 401) in JWT 필터 (ADMIN-02 대비, R-03)
+- [X] T008a 보완: 로그인한 채로 정지된 회원 화면 — 머리글 아래 정지 사유·기한(`SuspensionNotice`), 로그인 화면으로 보내지 않음. 한 화면이 동시에 부른 API가 모두 403 `MEMBER_SUSPENDED`라 500 화면이던 것을 api 클라이언트가 사유를 적어 두고 읽기 요청은 비회원으로 다시 받게 고침 (2026-10-11 지원 결정, 스텝 13b) in `frontend/src/api/client.ts`, `app/useMe.ts` (ADMIN-02)
 - [X] T009 [W1] Host 헤더 → 블로그 해석 `BlogHostResolver` (플랫폼 도메인 / 서브도메인 / 없으면 404 / 이사 301) in `global/host/` (R-04)
 - [X] T010 [W1] 화면 주소 처리: `/api/**` 외 요청은 블로그·글 확인 후 `index.html` 포워드, 301은 서버가 직접 in `global/config/SpaForwardController.java` (6장 ①)
 - [X] T011 [W1] 가시성 판단 `PostVisibilityPolicy` (data-model 글 가시성 판단, 볼 수 없는 글은 401보다 먼저 404)와 목록용 공통 조건(Specification/QueryDSL) in `global/visibility/` (COM-01, POST-04)
@@ -400,10 +409,13 @@ description: "지원 서비스 구현 작업 (2주 일정 기준)"
 - [X] T028 [P] [US2] [W1] `post`, `category` 엔티티 in `post/`, `category/`
 - [X] T029 [US2] [W1] 카테고리 추가·이름 변경(1~30자)·삭제(소속 글 미분류로) API in `category/` (CAT-01)
 - [X] T030 [US2] [W1] 카테고리별 글 목록 `/category/{id}` (상위는 하위 포함·합산, CAT-03 이후 적용) in `post/` (CAT-02)
+- [X] T030a [US2] 보완: 글 상세·블로그 목록 한 줄의 카테고리 이름 → `/category/{id}`(미분류 `/category/0`), 글 관리 표의 카테고리 → 그 카테고리로 거르기 (2026-10-11 지원 결정, 스텝 13b) in `frontend/src/` (CAT-02)
 - [X] T031 [US2] [W1] 글 발행 API: 제목 1~200자 필수, 주제·카테고리(기본 미분류)·공개 범위, 서버 정화, 요약 생성, published_at 기록, Idempotency-Key in `post/` (POST-01)
 - [X] T032 [US2] [W1] 글 수정 API: 주인만, 주소·published_at·수치·순서 불변 in `post/` (POST-02)
 - [X] T033 [US2] [W1] 글 삭제 API: 주인만, 소프트 삭제(`deleted_at`), 댓글·공감·알림 함께 처리(한 트랜잭션), 글 수·공감 수에서 바로 빠짐 in `post/` (POST-03)
+- [X] T033a [US2] 보완: 글 상세의 삭제가 실패하면(이미 지움 등) 오류 문장을 보이고 화면에 남는다. 전에는 아무 반응 없이 끝났다 (2026-10-11 지원 결정, 스텝 13b) in `frontend/src/pages/post/PostPage.tsx` (POST-03)
 - [X] T034 [US2] [W1] 공개 범위 변경 API (PUBLIC, PRIVATE; SUBSCRIBERS는 구독 이후) in `post/` (POST-06)
+- [X] T034a [US2] 보완: 글 상세에서 주인이 공개 범위 바꾸기(목업 post-detail 12, `PATCH /api/posts/{id}/visibility`). API는 스텝 5부터 있었지만 부르는 화면이 없었다 (2026-10-11 지원 결정, 스텝 13b) in `frontend/src/pages/post/PostPage.tsx` (POST-06)
 - [X] T035 [P] [US2] [W1] 화면: Tiptap 에디터(허용 서식만), 글쓰기·수정, 카테고리 관리, 삭제 확인 in `frontend/src/components/editor/`, `pages/manage/`
 - [X] T035a [US2] [W1] 에디터 마크다운 입력: 같은 에디터에서 마크다운 문법(제목·굵게·기울임·목록·인용·코드 블록·`[글자](http/https 주소)`)을 치거나 마크다운 글을 붙여넣으면 서식으로, 저장은 HTML 그대로 in `frontend/src/components/editor/` (POST-01, 2026-10-08 지원 결정)
 - [X] T036 [US2] [W2a] 이미지 업로드 API: 10MB, 확장자+실제 내용 검사(위장 파일 거절), UUID 파일명으로 `app.upload.dir`(개발: `/Users/chosun-nhn54/IdeaProjects/blog/uploads`)에 저장, `/uploads/**`로 서빙, 리사이즈·썸네일, EXIF 방향 보정, GIF 유지 in `image/` (POST-05, plan 저장소)
@@ -443,6 +455,7 @@ description: "지원 서비스 구현 작업 (2주 일정 기준)"
 
 - [X] T050 [US4] [W1] 서비스 계층 주인 검사 공통화 `BlogOwnerGuard` in `global/` (COM-01)
 - [X] T051 [P] [US4] [W1] 화면: 404·403 페이지, 입력 오류 항목 표시(입력 유지), 관리자 영역 진입 보호 `/admin` in `frontend/src/` (COM-02, ADMIN-01)
+- [X] T051a [US4] 보완: 서비스 관리자에게 플랫폼·블로그·관리 머리글의 "서비스 관리" 버튼(`/admin`). 진입 보호만 있고 입구가 없었다 (2026-10-11 지원 결정, 스텝 13b) in `frontend/src/components/` (ADMIN-01)
 - [X] T052 [US4] [W1] 통합 테스트: 남의 비공개 글 404, 남의 수정 403, 일반 회원 `/api/admin/**` 403, 다른 블로그 주소+글 번호 301/404, 500 응답에 스택 없음 in `src/test/.../security/`
 
 **중간 점검**: P0 24개 중 1주차 분량 완성 → "가입 → 개설 → 발행 → 홈 발견 → 읽기·댓글" 한 바퀴
@@ -456,6 +469,8 @@ description: "지원 서비스 구현 작업 (2주 일정 기준)"
 - [X] T054a [US5] 보완: 관리 화면 "카테고리·태그"에 태그 목록과 글 수(`GET /api/tags`, 주인은 비공개 글도 셈). API는 T054에 있었지만 부르는 화면이 없었다(2026-10-11 지원 결정, 스텝 13b) in `frontend/src/pages/manage/CategoriesPage.tsx` (TAG-03)
 - [X] T055 [US5] [W2b] 회원정보 수정: 닉네임·프로필·비밀번호 in `member/` (AUTH-05)
 - [X] T055c [US5] [W2b] 보완: 마이페이지 내 블로그 — `GET /api/me/blogs`(활성 블로그·글 수·대표·이사), `PUT /api/me/primary-blog`(내 활성 블로그만, 회원 잠금, 끄고 flush 켜기), 화면 "블로그 만들기 (n/5)", 플랫폼·블로그·관리 머리글의 "마이페이지" 버튼. 5개 한도는 스텝 4에 있었지만 블로그가 있는 회원이 두 번째 블로그로 갈 입구가 없었다(2026-10-11 지원 결정, 스텝 13) in `blog/`, `frontend/src/pages/me/` (BLOG-08, BLOG-01)
+- [X] T055d [US5] 보완: 글쓴이·댓글 작성자·블로그 주인의 회원 프로필 사진 — `MemberSummary.profileImageUrl`을 썸네일로 채움(댓글은 한 페이지에 이미지 쿼리 한 번), 댓글 옆 사진. 스텝 2부터 늘 `null`이었다 (2026-10-11 지원 결정, 스텝 13b) in `image/application/ProfileImages`, `comment/`, `post/`, `blog/` (AUTH-05)
+- [X] T055e [US5] 보완: 블로그·관리 머리글의 "내 블로그"(내 대표 블로그가 아닌 곳에서). 플랫폼 머리글에만 있었다 (2026-10-11 지원 결정, 스텝 13b) in `frontend/src/components/BlogHeader.tsx`, `pages/manage/ManagePage.tsx` (BLOG-08)
 - [X] T055a [US5] [W2b] 비밀번호·인증 코드 시도 제한: 로그인(이메일별)·인증 코드(이메일별)·비밀번호 변경(회원별) 15분 안에 5번 틀리면 15분 동안 429, 같은 IP는 셋을 합쳐 15분 안에 20번, Redis in `global/auth/` (AUTH-01, OWN-01, AUTH-05, R-17)
 - [X] T056 [US5] [W2b] 주제 enum, 글 작성 시 주제 선택 in `post/` (POST-11, 밀리면 확장으로)
 - [X] T057 [US5] [W1] 이전·다음 글(볼 수 없는 글 건너뜀) (POST-10, POST-04가 P0라 스텝 6으로 앞당김, 2026-10-08 지원 결정)
@@ -476,6 +491,7 @@ description: "지원 서비스 구현 작업 (2주 일정 기준)"
 ## 9단계: US8 내 블로그 관리 (P2) — 2주 범위 일부
 
 - [X] T067 [US8] [W2b] 내 글 관리 API·화면: 상태·카테고리 필터, 검색, 페이지 20, 블라인드 사유 표시(최신 BLIND 관리 이력), 일괄 공개 범위 변경·삭제 in `manage/` (MNG-01)
+- [X] T067a [US8] 보완: 글 관리 상태 필터에서 백로그 기능인 "예약" 빼기(POST-13 전까지) (2026-10-11 지원 결정, 스텝 13b) in `frontend/src/pages/manage/ManagePostsPage.tsx` (MNG-01)
 - [ ] T068 [US8] 댓글 관리 (MNG-02)
 
 ## 10단계: US11 일부 앞당김 (P3)

@@ -1,6 +1,6 @@
 # 19. React 화면 나누기와 API 클라이언트
 
-> 관련 스텝: [스텝 3](../step-03.md) (T015), [스텝 1](../step-01.md) (T002), [스텝 4](../step-04.md) (화면 라우트 추가, 본문 없는 2xx 처리), [스텝 5](../step-05.md) (연타 방지 키 대체 구현, 글쓰기·카테고리 라우트) · 관련 개념: [25-react-forms-data](./25-react-forms-data.md), [21-signup-login](./21-signup-login.md), [15-subdomain-host-routing](./15-subdomain-host-routing.md), [18-spa-server-routing](./18-spa-server-routing.md), [13-csrf-samesite-cors](./13-csrf-samesite-cors.md), [17-idempotency-redis](./17-idempotency-redis.md), [07-spring-mvc-exception-handling](./07-spring-mvc-exception-handling.md)
+> 관련 스텝: [스텝 3](../step-03.md) (T015), [스텝 1](../step-01.md) (T002), [스텝 4](../step-04.md) (화면 라우트 추가, 본문 없는 2xx 처리), [스텝 5](../step-05.md) (연타 방지 키 대체 구현, 글쓰기·카테고리 라우트), [스텝 13b](../step-13b.md) (5.8 동시에 나간 요청과 정지 응답) · 관련 개념: [25-react-forms-data](./25-react-forms-data.md), [21-signup-login](./21-signup-login.md), [15-subdomain-host-routing](./15-subdomain-host-routing.md), [18-spa-server-routing](./18-spa-server-routing.md), [13-csrf-samesite-cors](./13-csrf-samesite-cors.md), [17-idempotency-redis](./17-idempotency-redis.md), [07-spring-mvc-exception-handling](./07-spring-mvc-exception-handling.md)
 
 ## 1. 이 문서로 배우는 것
 
@@ -587,6 +587,86 @@ const error = (await api('/api/posts').catch((e: unknown) => e)) as ApiError
 - `rules-of-hooks`: 훅을 조건문·반복문 안에서 부르면 오류.
 - `only-export-components`: 컴포넌트 파일에서 컴포넌트가 아닌 것을 함께 내보내면 HMR이 페이지 전체를 새로고침하게 되어 경고한다.
 
+### 5.8 동시에 나간 요청이 같은 상태 변화를 만날 때: 정지 응답 (스텝 13b, T008a)
+
+**무슨 일이 있었나.** 관리자가 회원을 정지하면(ADMIN-02) 서버는 그 회원의 다음 API 요청에 403 `MEMBER_SUSPENDED`와 사유·기한을 주고, 같은 응답에서 로그인 쿠키를 지운다(`JwtAuthenticationFilter`, contracts "정지된 회원이 이미 로그인한 상태로…"). 스텝 13b 점검에서 로그인한 채로 정지된 회원으로 글 상세를 열어 보니 **500 화면**이 나왔다.
+
+글 상세는 열자마자 API를 여러 개 **동시에** 부른다.
+
+```
+화면 열기 ─┬─ GET /api/me            (useMe)
+           ├─ GET /api/blog          (useBlog)
+           ├─ GET /api/blog/sidebar
+           └─ GET /api/posts/20
+```
+
+네 요청은 모두 **보내는 순간의 쿠키**를 싣고 나간다. 첫 응답이 쿠키를 지워도, 이미 떠난 나머지 요청에는 옛 쿠키가 들어 있다. 그래서 넷 다 403이다. `useBlog`는 403을 "알 수 없는 오류"로 보고 500 화면을 그렸고, `useMe`는 오류를 모두 비회원으로 삼켜 사유가 사라졌다.
+
+이것은 정지만의 문제가 아니다. **응답이 상태를 바꾸는 요청**(쿠키 삭제, 토큰 재발급, 세션 만료)을 여러 개 동시에 보내면 늘 생길 수 있는 경쟁이다. 처리 방법은 대개 둘 중 하나다.
+
+1. 상태를 바꾼 응답을 **한 곳에 기억**하고, 나머지 요청은 바뀐 상태로 **다시 보낸다**.
+2. 요청을 **한 줄로 세워** 하나가 끝난 뒤 다음을 보낸다(느려진다).
+
+이 프로젝트는 1을 골랐다. 모든 요청이 지나가는 `api()` 한 곳에서 처리할 수 있기 때문이다.
+
+```ts
+// frontend/src/api/client.ts
+let suspension: Record<string, unknown> | null = null
+
+export function suspensionDetail(): Record<string, unknown> | null {
+  return suspension
+}
+
+export async function api<T>(path: string, options: RequestOptions = {}): Promise<T> {
+  return request<T>(path, options, true)
+}
+
+async function request<T>(path: string, options: RequestOptions, retryIfSuspended: boolean): Promise<T> {
+  ...
+  const error = new ApiError(response.status, await readError(response))
+  if (error.code === 'MEMBER_SUSPENDED' && path !== '/api/auth/login') {
+    suspension = error.detail ?? {}
+    // 내 정보(/api/me)는 그대로 실패시켜 useMe가 안내를 띄우게 하고, 다른 읽기는 비회원으로 다시 받는다
+    if (retryIfSuspended && method === 'GET' && path !== '/api/me') {
+      return request<T>(path, options, false)
+    }
+  }
+  // 정지 안내를 띄워야 하면 로그인 화면으로 보내지 않는다
+  if (response.status === 401 && !options.allowAnonymous && !suspension) {
+    redirectToLogin()
+  }
+  throw error
+}
+```
+
+- `let suspension`: **모듈 변수**. 이 파일은 한 페이지에서 한 번만 실행되므로, 모든 `api()` 호출이 같은 변수를 본다. React 상태(`useState`)가 아니라서 화면을 다시 그리게 하지는 않는다. 읽는 쪽(`useMe`)이 필요할 때 꺼내 본다. 페이지를 새로 열면 사라진다(그때는 서버가 다시 알려 준다).
+- `path !== '/api/auth/login'`: 로그인 화면은 정지 회원이 로그인을 **시도**할 때 같은 오류를 받아 자기 화면에 안내를 그린다(`LoginPage`). 이것까지 "로그인한 채로 정지됨"으로 기억하면 안 된다.
+- `retryIfSuspended`: 다시 보낸 요청은 `false`로 불러 **한 번만** 다시 보낸다. 다시 보낸 요청이 또 403이면(서버가 쿠키를 못 지웠다든가) 무한히 돌지 않는다.
+- `method === 'GET'`만 다시 보낸다. 읽기는 몇 번 보내도 결과가 같다(안전한 메서드). 글 저장·댓글 쓰기 같은 쓰기를 비회원으로 다시 보내면 401이 나거나, 연타 방지 키가 없는 요청이면 두 번 실행될 수도 있다. 쓰기는 그대로 실패시켜 화면이 오류를 보이게 둔다.
+- `/api/me`는 다시 보내지 않는다. 다시 보내면 401 → "비회원"이 되고 끝이다. 실패시켜야 `useMe`가 "정지 때문에 비회원"인 것을 안다.
+- 마지막 `!suspension`: 다시 보낸 요청이 로그인이 필요한 API(`/api/manage/posts` 등)면 401이다. 원래는 로그인 화면으로 보내지만, 그러면 정지 안내를 볼 틈이 없다. 정지를 알고 있으면 보내지 않는다.
+
+`useMe` 쪽:
+
+```ts
+// frontend/src/app/useMe.ts
+.catch((error: unknown) => {
+  ...
+  // 다른 API가 먼저 403을 받아 쿠키가 지워졌으면 /api/me는 401이다. 그때도 적어 둔 사유를 쓴다
+  const detail = error instanceof ApiError && error.code === 'MEMBER_SUSPENDED' ? error.detail : suspensionDetail()
+  setState(detail
+    ? { status: 'anonymous', suspension: detail as unknown as SuspensionDetail }
+    : { status: 'anonymous' })
+})
+```
+
+- 요청이 정말 동시에 떠나면 `/api/me`도 403을 받는다. 그런데 브라우저가 요청을 조금 늦게 보내 첫 응답이 쿠키를 지운 **뒤에** 떠나면 `/api/me`는 401이다. 두 경우 모두 사유를 찾도록 둘 다 본다. "아마 동시에 나가겠지"에 기대지 않는다.
+- `MeState`의 비회원에 `suspension?`를 더했다. 머리글(`PlatformHeader`, `BlogHeader`)이 이 값이 있으면 아래에 `SuspensionNotice`를 그린다. 로그인이 필요한 화면(마이페이지, 관리, 블로그 만들기, 서비스 관리)은 `shouldRedirectToLogin(me)`가 `false`라 로그인 화면으로 보내지 않고 안내를 보인다.
+
+**테스트** (`client.test.ts`의 마지막 묶음): 읽기 요청은 두 번 보내고 두 번째 응답을 돌려준다, 사유가 기억된다, `/api/me`는 한 번만 보내고 실패한다, 사유를 아는 동안은 401에도 로그인 화면으로 보내지 않는다. 모듈 변수는 테스트 사이에 남으므로 이 묶음을 **파일 맨 끝**에 두었다(앞 테스트의 "401이면 로그인으로 보낸다"가 깨지지 않게). 테스트 사이에 값을 지우는 함수를 따로 내보내는 방법도 있지만, 테스트만을 위한 공개 함수를 늘리지 않았다.
+
+**화면 확인**: 헤드리스 Chrome으로 정지 회원의 쿠키를 넣고 글 상세·블로그 메인·플랫폼 홈·관리·마이페이지를 열었다. 다섯 곳 모두 "이용이 정지된 계정입니다 / 정지 기한: …까지"가 보이고, 글 상세·블로그 메인은 비회원처럼 내용이 그대로 보인다.
+
 ## 6. 자주 하는 실수와 함정
 
 1. **fetch가 404·500에서 예외를 낼 거라 기대하기**: 내지 않는다. `response.ok`를 본다(`api()`가 대신 함).
@@ -600,6 +680,8 @@ const error = (await api('/api/posts').catch((e: unknown) => e)) as ApiError
 9. **`npm test`만 돌리고 커밋**: 타입 오류는 빌드에서만 잡힌다.
 10. **`credentials: 'include'`로 바꾸기**: 필요 없고, 다른 출처 요청까지 쿠키를 싣게 된다.
 11. **`vi.stubGlobal` 후 되돌리지 않기**: 다음 테스트가 가짜 `fetch`를 그대로 쓴다.
+12. **응답이 상태를 바꾸는 요청을 동시에 보내고 하나만 생각하기**: 첫 응답이 쿠키를 지워도 이미 떠난 요청은 옛 쿠키로 같은 응답을 받는다(5.8). 한 곳(api 클라이언트)에서 기억하고 다시 보낸다.
+13. **실패한 쓰기 요청을 자동으로 다시 보내기**: 읽기(GET)와 달리 두 번 실행될 수 있다. 다시 보내는 것은 안전한 메서드만.
 
 ## 7. 직접 해 보기
 
@@ -688,6 +770,12 @@ Array.from(b, (x) => x.toString(16).padStart(2, '0')).join('')   // 13번째 글
 
 12. (스텝 5) `bytes[6] = (bytes[6] & 0x0f) | 0x40`은 무엇을 하나?
 <details><summary>답</summary>7번째 바이트의 위쪽 4비트를 지우고(<code>&amp; 0x0f</code>) <code>0100</code>을 넣어(<code>| 0x40</code>) UUID의 버전 자리를 4로 만든다. 문자열로는 세 번째 묶음의 첫 글자가 <code>4</code>가 된다.</details>
+
+13. (스텝 13b) 로그인한 채로 정지된 회원이 글 상세를 열었을 때 500 화면이 나온 이유는? 첫 응답이 쿠키를 지웠는데도.
+<details><summary>답</summary>글 상세가 /api/me, /api/blog, /api/blog/sidebar, /api/posts/{id}를 동시에 부르고, 각 요청은 보내는 순간의 쿠키를 싣는다. 첫 응답이 쿠키를 지우기 전에 이미 떠난 요청은 모두 403 MEMBER_SUSPENDED를 받았고, useBlog가 그것을 알 수 없는 오류로 보아 500 화면을 그렸다.</details>
+
+14. (스텝 13b) 정지 응답을 받은 요청 중 GET만 다시 보내고, /api/me는 다시 보내지 않는 이유는?
+<details><summary>답</summary>GET은 몇 번 보내도 결과가 같은 안전한 메서드라 쿠키가 지워진 상태(비회원)로 다시 받아 화면을 그릴 수 있다. 쓰기는 다시 보내면 401이 나거나 두 번 실행될 수 있다. /api/me를 다시 보내면 401 → 그냥 비회원이 되어 정지 사유를 잃으므로, 실패시켜 useMe가 사유를 보게 한다.</details>
 
 ## 9. 더 읽을거리
 

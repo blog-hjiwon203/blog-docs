@@ -33,7 +33,7 @@
 
 - 인증은 `Domain=.blog.com; HttpOnly; Secure; SameSite=Lax` 쿠키다(Q6, [조사](../research.md) R-03). Refresh Token 쿠키를 함께 준다. 로그인 유지(AUTH-03)를 고르면 14일 남는 쿠키, 고르지 않으면 브라우저를 닫으면 사라지는 쿠키이고 30분 동안 요청이 없으면 서버에서 끝난다(R-03). Access 토큰이 끝나면 서버가 요청을 처리하면서 새 Access 쿠키를 준다.
 - 상태를 바꾸는 요청(POST·PUT·PATCH·DELETE)은 `X-Requested-With: XMLHttpRequest` 헤더가 없으면 403 `CSRF_REJECTED`다.
-- 정지된 회원이 이미 로그인한 상태로 API를 부르면 그 요청부터 403 `MEMBER_SUSPENDED`와 쿠키 삭제다(ADMIN-02). 화면 주소 요청은 403 대신 비회원으로 그리고, 화면이 부르는 첫 API에서 정지 안내를 받는다(화면이 JSON 오류로 깨지지 않게, 2026-10-08 지원 확인).
+- 정지된 회원이 이미 로그인한 상태로 API를 부르면 그 요청부터 403 `MEMBER_SUSPENDED`와 쿠키 삭제다(ADMIN-02). 화면 주소 요청은 403 대신 비회원으로 그리고, 화면이 부르는 첫 API에서 정지 안내를 받는다(화면이 JSON 오류로 깨지지 않게, 2026-10-08 지원 확인). 한 화면이 API 여러 개를 동시에 부르면 쿠키가 지워지기 전에 나간 요청은 모두 403이다. 화면(api 클라이언트)은 사유를 적어 두고 읽기(GET) 요청을 비회원으로 한 번 더 보내 화면을 그린다(스텝 13b).
 - 탈퇴한 회원의 쿠키가 남아 있으면 쿠키를 지우고 비회원으로 처리한다. 로그인이 필요한 요청은 그대로 401이다(2026-10-08 지원 확인).
 - 본문 HTML(`contentHtml`)은 서버가 허용 목록으로 정화해 저장하고, 그 밖의 문자열은 글자 그대로 돌려준다. 프론트는 `contentHtml`만 DOMPurify를 한 번 더 거쳐 넣고, 나머지는 텍스트로 넣는다.
 
@@ -149,7 +149,7 @@
 { "id": 7, "nickname": "지원", "profileImageUrl": "/uploads/a1.webp", "primaryBlogAddress": "jiwon" }
 ```
 
-`primaryBlogAddress`는 대표 블로그가 없거나 볼 수 없으면 `null`이다(BLOG-08 닉네임 링크).
+`primaryBlogAddress`는 대표 블로그가 없거나 볼 수 없으면 `null`이다(BLOG-08 닉네임 링크). `profileImageUrl`은 회원 프로필 사진(AUTH-05)의 썸네일 주소, 없으면 `null`이다(예시는 원본 주소처럼 보이지만 실제로는 `/uploads/t_….png` 꼴).
 
 **Me** — `GET /api/me`
 
