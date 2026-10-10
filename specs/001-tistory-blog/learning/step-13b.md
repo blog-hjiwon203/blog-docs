@@ -8,7 +8,7 @@
 
 | 작업 | 빠져 있던 것 | 채운 것 | 핵심 파일 |
 | --- | --- | --- | --- |
-| T023a (BLOG-02) | 블로그 프로필 이미지: 요청 칸 없음, 응답은 늘 `null`, 설정 화면에 사진 칸 없음, 사이드바는 빈 동그라미 | `PATCH /api/blog`의 `profileImageId`(주인이 올린 이미지만, 아니면 400), `Blog`·사이드바 PROFILE의 `profileImageUrl`(썸네일), 설정 화면 "이미지 바꾸기"(고르면 올리고 미리 보기, 저장할 때 반영), 사이드바 사진 | `BlogService.updateInfo`, `image/application/ProfileImages`, `BlogQueryService`, `SidebarService`, `BlogSettingsPage.tsx`, `Sidebar.tsx`, `BlogInfoIntegrationTest` |
+| T023a (BLOG-02) | 블로그 프로필 이미지: 요청 칸 없음, 응답은 늘 `null`, 설정 화면에 사진 칸 없음, 사이드바는 빈 동그라미 | `PATCH /api/blog`의 `profileImageId`(주인이 올린 이미지만, 아니면 400), `Blog`·사이드바 PROFILE의 `profileImageUrl`(썸네일), 설정 화면 "이미지 바꾸기"(고르면 올리고 미리 보기, 저장할 때 반영), 사이드바 사진, 블로그 메인 위쪽 프로필 상자 사진 | `BlogService.updateInfo`, `image/application/ProfileImages`, `BlogQueryService`, `SidebarService`, `BlogSettingsPage.tsx`, `Sidebar.tsx`, `BlogInfoIntegrationTest` |
 | T045a (BLOG-08) | 댓글·글 작성자 닉네임이 그냥 글자. 서버는 스텝 6부터 `primaryBlogAddress`를 줬다 | `AuthorName` 컴포넌트: 대표 블로그가 있으면 그 블로그로 가는 `<a>`, 없거나 볼 수 없으면 글자만 | `components/AuthorName.tsx`, `Comments.tsx`, `PostPage.tsx`, `CommentIntegrationTest`, `support/TestBlogs.createPrimary` |
 | T054a (TAG-03) | `GET /api/tags`를 부르는 화면이 없음(사이드바는 사이드바 응답 안에서 받음) | 관리 → "카테고리·태그" 화면 아래 태그 표(이름 → 태그별 글 목록, 글 수, 주인이라 비공개 글도 셈), 메뉴 이름 바꿈 | `pages/manage/CategoriesPage.tsx`(`TagSection`), `ManagePage.tsx` |
 
@@ -43,6 +43,7 @@
 - **확인 스크립트의 칸 이름**: 브라우저 확인용 글을 만들 때 저장 본문에 `tags`라고 써서(실제는 `tagNames`) 태그 표가 비어 나왔다. 서버는 모르는 칸을 무시한다. 화면 코드를 의심하기 전에 `GET /api/tags`를 직접 불러 데이터부터 확인했다.
 - **zsh와 헤더 변수**: `H='-H X-Requested-With:...'` 같은 변수를 `curl $H`로 쓰면 zsh는 단어를 나누지 않아 헤더가 하나로 붙고, 서버가 403 `CSRF_REJECTED`를 줬다. bash 배열(`H=(-H "..." -H "...")`, `"${H[@]}"`)로 바꿨다.
 - **올리기와 저장 사이**: 설정 화면은 사진을 고르면 바로 올리고 저장 때 블로그에 반영한다(목업의 두 단계). 올리는 중에 저장하면 새 번호 없이 저장되므로 그동안 저장 버튼을 막았다. 고르고 저장하지 않으면 이미지가 쓰이지 않은 채 남는다(아래 표).
+- **사진이 보이는 곳을 하나 빠뜨림**: 사이드바에만 사진을 넣고, 블로그 메인 위쪽 프로필 상자(`BlogMainPage.tsx`의 `BlogProfile`)는 빈 동그라미로 남겼다. PR을 올린 뒤 전체 점검에서 찾아 고쳤다. 같은 값(`profileImageUrl`)을 그리는 곳을 `grep -rn 'className="avatar' frontend/src`로 모두 찾아봤어야 했다([49](./concepts/49-requirement-traceability.md) 4.2).
 - **화면은 실제 브라우저로 확인**: 8081 확인용 서버와 헤드리스 Chrome으로 회원 셋(갑: 주인, 을: 대표 블로그 있음, 병: 블로그 없음)을 만들어 (1) 설정에서 사진 고르기 → "저장을 눌러야…" → 저장 → 사이드바에 같은 썸네일(실제로 읽힘), (2) 글 상세에서 갑·을 닉네임은 각자 블로그 링크, 병은 글자, (3) 관리 → 카테고리·태그에 spring 2·jpa 1·secret 1(같은 API를 비회원이 부르면 spring 1·jpa 1). 확인용 회원(`b13-a-22029@example.com` 등, 비밀번호 `check1234`)·블로그(`b13a22029`, `b13b22029`)가 개발 DB에 남아 있다.
 
 ## 명세와 다르거나 아직 채우지 않은 것
