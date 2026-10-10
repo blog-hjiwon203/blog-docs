@@ -278,12 +278,12 @@
 | PUT | /api/me/primary-blog | P | 회원 | `{ blogId }` → 204. 내 활성 블로그만(아니거나 비면 400 `fieldErrors[].field = blogId`). 이미 대표면 그대로 204 | BLOG-08 |
 | GET | /api/me/bookmarks?cursor= | P | 회원 | 저장한 글 20, 저장 최신순. 볼 수 있으면 `{ post: PostSummary, savedAt, visible: true }`, 볼 수 없으면 `{ postId, visible: false, titleSnapshot, blogNameSnapshot, savedAt }` | SOC-03 |
 | DELETE | /api/me/bookmarks/{postId} | P | 회원 | 204. 목록에서 바로 저장 취소(볼 수 없는 글도) | SOC-03 |
-| GET | /api/me/notifications?cursor= | P | 회원 | 알림 20 최신순 `[{ id, type, message, link, read, createdAt }]` | SUB-04 |
-| GET | /api/me/notifications/unread-count | \* | 회원 | `{ count }`. 상단 종 표시 | SUB-04 |
-| PUT | /api/me/notifications/{id}/read | P | 본인 | 204 | SUB-04 |
+| GET | /api/me/notifications?cursor= | P | 회원 | 알림 20 최신순 `{ content: [{ id, type, message, link, read, createdAt }], nextCursor }`. 볼 수 없게 된 대상의 알림은 빠져서 한 묶음이 20개보다 적을 수 있다(다음 커서는 읽은 행 기준) | SUB-04 |
+| GET | /api/me/notifications/unread-count | \* | 회원 | `{ count }`. 상단 종 표시. `Me.unreadNotificationCount`와 같은 값. 볼 수 없게 된 대상의 알림도 읽기 전까지 센다 | SUB-04 |
+| PUT | /api/me/notifications/{id}/read | P | 본인 | 204. 남의 알림·없는 번호 404 | SUB-04 |
 | PUT | /api/me/notifications/read-all | P | 회원 | 204 | SUB-04 |
 
-알림 `type`은 `COMMENT`, `REPLY`, `LIKE`, `SUBSCRIBE`, `SANCTION`. `link`는 눌렀을 때 갈 화면 주소다(`https://jiwon.blog.com/1532#comment-88`). 대상이 지워졌거나 볼 수 없게 된 알림은 목록에서 빠진다.
+알림 `type`은 `COMMENT`, `REPLY`, `LIKE`, `SUBSCRIBE`, `SANCTION`. `link`는 눌렀을 때 갈 화면 주소다(`https://jiwon.blog.com/1532#comment-88`). 대상이 지워졌거나 볼 수 없게 된 알림은 목록에서 빠진다. 언제 만드나(스텝 16): 내 글에 댓글 → `COMMENT`, 내 댓글에 답글 → `REPLY`(글 주인이 부모 댓글 작성자이면 `REPLY` 하나만), 내 글에 새 공감 → `LIKE`, 새 구독자 → `SUBSCRIBE`, 제재·해제 → `SANCTION`(스텝 18). 내가 한 일은 나에게 알리지 않고, 연타한 공감·구독은 하나다. 방명록은 알림 종류가 없어 알리지 않는다. `message`는 만들 때의 닉네임·제목으로 정해 둔다.
 
 ### BLOG 블로그
 
@@ -426,9 +426,9 @@
 
 | 메서드 | 경로 | Host | 권한 | 설명 | ID |
 | --- | --- | --- | --- | --- | --- |
-| PUT | /api/blogs/{blogId}/subscription | \* | 회원 | → `{ subscribed: true, subscriberCount }`. 차단된 회원 403 `BLOCKED_BY_BLOG`, 자기 블로그 400 | SUB-01, SUB-03, MNG-04 |
-| DELETE | /api/blogs/{blogId}/subscription | \* | 회원 | → `{ subscribed: false, subscriberCount }` | SUB-01 |
-| GET | /api/feed?cursor= | P | 회원 | 구독한 블로그의 새 글 `PostSummary` 20 최신순 | SUB-02 |
+| PUT | /api/blogs/{blogId}/subscription | \* | 회원 | → `{ subscribed: true, subscriberCount }`. 멱등(이미 구독이면 그대로). 볼 수 없거나 이사한 블로그 404, 자기 블로그 400 `fieldErrors[].field = blogId`, 차단된 회원 403 `BLOCKED_BY_BLOG`(MNG-04, 백로그). 새로 구독했을 때만 주인에게 알림 | SUB-01, SUB-03, MNG-04 |
+| DELETE | /api/blogs/{blogId}/subscription | \* | 회원 | → `{ subscribed: false, subscriberCount }`. 멱등(구독하지 않았어도 같은 응답) | SUB-01 |
+| GET | /api/feed?cursor= | P | 회원 | 구독한 블로그의 새 글 `PostSummary` 20 최신순 `{ content, nextCursor }`(홈 최신 글과 같은 모양). 보는 사람이 볼 수 있는 글만(구독자 공개 글 포함) | SUB-02 |
 | GET | /api/recommend/blogs | P | 누구나 | 추천 블로그 5 `[{ blog, owner, subscriberCount, recentPostTitle }]`. 비회원은 인기 블로거와 같음 | SUB-06 |
 
 ### SRCH 검색 · HOME 홈
