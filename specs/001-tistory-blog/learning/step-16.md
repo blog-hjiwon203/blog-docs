@@ -47,6 +47,7 @@
 - **같은 일로 알림 두 개**: 처음 생각에는 답글이면 부모 작성자에게 REPLY, 글 주인에게 COMMENT를 늘 보냈다. 내 글의 내 댓글에 답글이 달리면 같은 답글로 두 개가 온다. 주인이 부모 작성자이면 REPLY 하나만 보내게 했다(`replyNotifiesParentAuthorAndOwnerOnce`).
 - **알림 수와 목록 개수가 다를 수 있음**: 목록은 지워졌거나 볼 수 없게 된 대상의 알림을 빼지만 안 읽은 수는 행 수다. 셀 때마다 대상을 확인하면 머리글이 무거워져서 받아들이고 API 명세에 적었다.
 - **컴포넌트 파일에서 함수 내보내기**: 알림 버튼 글자 함수를 `PlatformHeader.tsx`에서 내보냈더니 린터가 Fast Refresh 경고를 냈다. `app/notifications.ts`로 옮기고 단위 테스트를 붙였다.
+- **"모두 읽음" 뒤에도 머리글은 "알림 2"**: 머리글은 화면을 열 때 받은 내 정보(`/api/me`)의 수를 그렸다. 스텝 끝의 API 대조에서 `GET /api/me/notifications/unread-count`를 부르는 화면이 없다고 나와 살펴보다 찾았다. 알림 화면이 읽은 뒤 브라우저 이벤트(`notifications-changed`)를 보내고, 머리글이 그 API로 수를 다시 받게 했다(`app/useUnreadCount.ts`). 브라우저에서 "알림 2" → "모두 읽음" → "알림"을 확인했다.
 - **복사가 실패로 보임**: 헤드리스 Chrome에서 스크립트로 `button.click()`을 부르면 "복사하지 못했습니다". 브라우저가 사용자 입력 중에만 복사를 허락하기 때문이다. 실제 마우스 이벤트(`Input.dispatchMouseEvent`)로 누르니 "주소를 복사했습니다"([51](./concepts/51-subscription-notification.md) 5.7).
 - **화면은 실제 브라우저로 확인**: 8081 확인용 서버와 헤드리스 Chrome으로
   - 을: 갑 블로그 프로필 상자 "구독하기" → "구독 중", "구독자 0명" → "구독자 1명"

@@ -295,6 +295,8 @@ export function notificationLabel(unread: number): string {
 }
 ```
 
+**읽은 뒤 머리글 맞추기.** 머리글은 화면마다 따로 그려지는 부품이라, 알림 화면에서 "모두 읽음"을 눌러도 머리글이 들고 있는 수는 그대로다. 두 부품이 상태를 나누는 방법은 (1) 위 부품(App)에 상태를 두고 내려 주기, (2) 전역 상태 도구(Context 등), (3) 브라우저 이벤트로 알리기가 있다. 이 프로젝트는 머리글이 화면마다 따로 쓰이고 알림 화면 한 곳만 수를 바꾸므로, 가장 작은 (3)을 골랐다: 알림 화면이 `window.dispatchEvent(new Event('notifications-changed'))`를 보내고, 머리글의 `useUnreadCount`가 그 이벤트를 듣다가 `GET /api/me/notifications/unread-count`로 다시 받는다. `useEffect`가 돌려주는 정리 함수에서 `removeEventListener`를 불러, 화면을 떠난 머리글이 이벤트를 계속 듣지 않게 한다.
+
 처음에는 이 함수를 `PlatformHeader.tsx`에 두고 내보냈는데, 린터(oxlint `only-export-components`)가 "컴포넌트 파일이 컴포넌트가 아닌 것을 내보내면 개발 중 화면 새로 고침(Fast Refresh)이 페이지 전체를 다시 불러온다"고 경고해 `app/`으로 옮겼다(스텝 3의 같은 규칙, [19](./19-react-router-api-client.md) 5.7).
 
 ### 5.7 공유: `app/share.ts`
