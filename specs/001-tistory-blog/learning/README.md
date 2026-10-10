@@ -23,7 +23,7 @@
 | 10 | [비슷한 글 추천](./step-10.md) | Ollama bge-m3 임베딩, PostgreSQL pgvector, 두 번째 DB, 커밋 뒤 비동기, 비슷한 글 API와 카드 |
 | 11 | [마무리](./step-11.md) | quickstart 시나리오 테스트, 휴대폰 360px 점검과 표→카드, 글 공유 미리보기(Open Graph), README·quickstart 정리 |
 | 12 | [글쓰기 버튼 안내·로그인 유지](./step-12.md) | 대표 블로그 글쓰기 또는 개설 안내 → 만든 뒤 글쓰기, Access 재발급 API, 브라우저 재시작 시나리오 테스트, 로그인 유지 안내 |
-| 13 | [임시저장·대표 이미지](./step-13.md) | 제목 없이 임시저장, 1분 자동 저장, 불러와 이어 쓰고 발행, 대표 이미지 고르기와 본문 첫 이미지 기본값 |
+| 13 | [임시저장·대표 이미지](./step-13.md) | 제목 없이 임시저장, 1분 자동 저장, 불러와 이어 쓰고 발행, 대표 이미지 고르기와 본문 첫 이미지 기본값, 보완: 마이페이지 내 블로그(두 번째 블로그 입구, 대표 바꾸기) |
 
 ## 개념 문서
 
@@ -54,7 +54,7 @@
 | [47 임시저장과 자동 저장](./concepts/47-draft-autosave.md) | 글의 상태와 되돌릴 수 없는 이동, 상태별 검증, 처음 POST 그 뒤 PUT, `setInterval`과 낡은 값·`useRef`, 저장 줄 세우기, 스냅숏 |
 | [48 대표 이미지](./concepts/48-representative-image.md) | 고른 번호 검증(본문 안에 있나), `null` = 자동, `ON DELETE SET NULL`, 한 페이지 쿼리 두 번, 파생 값 |
 | [27 소프트 삭제와 일괄 수정](./concepts/27-soft-delete-bulk-update.md) | 소프트 삭제, 딸린 데이터 처리, 변경 감지, `@Modifying`, 수정 시각 지키기 |
-| [23 트랜잭션과 동시성](./concepts/23-transactions-locking.md) | `@Transactional`, 경쟁 조건, 비관적 잠금(`FOR UPDATE`), UNIQUE 제약, 동시성 테스트 |
+| [23 트랜잭션과 동시성](./concepts/23-transactions-locking.md) | `@Transactional`, 경쟁 조건, 비관적 잠금(`FOR UPDATE`), UNIQUE 제약, 동시성 테스트, 대표 블로그 바꾸기(끄고 flush 켜기) |
 | [33 격리 수준, 스냅샷, 데드락](./concepts/33-isolation-deadlock.md) | 격리 수준과 MVCC, 일관된 읽기와 잠금 읽기, 외래 키 공유 잠금과 데드락, 공감 버튼에서 겪은 두 버그 |
 | [34 조회수: 누가 봤는지, 5분 중복, 동시 새로고침](./concepts/34-view-count.md) | 조회자 키와 방문자 쿠키, 시간 창 중복 판정, 기록 테이블과 누적 칸, 잠금을 첫 문장으로, StrictMode effect 두 번 |
 | [36 집계 쿼리로 순위 매기기](./concepts/36-ranking-aggregation.md) | `GROUP BY`·`SUM`, `UNION ALL`로 가중치 점수, 시각 인덱스, 동점 처리, `NamedParameterJdbcTemplate`, 태그별 글 수 |

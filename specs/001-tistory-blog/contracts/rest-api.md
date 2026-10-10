@@ -274,8 +274,8 @@
 | PUT | /api/me/password | P | 회원 | `{ currentPassword, newPassword }` → 204. 이메일 가입 회원만(아니면 403). 지금 비밀번호가 틀리면 400(`fieldErrors[].field = currentPassword`), 새 비밀번호는 가입 규칙(`newPassword`). 지금 로그인과 다른 기기 로그인은 그대로 | AUTH-05 |
 | DELETE | /api/me/social/{provider} | P | 회원 | 204. 남는 로그인 수단이 없으면 409 `LAST_LOGIN_METHOD`. 연동은 `authorize?mode=link` | OWN-03 |
 | DELETE | /api/me | P | 회원 | `{ password }`(이메일 가입) 또는 `{}`(소셜 재인증 10분 안) → 204 + 쿠키 삭제. 본인 확인 실패 401 | AUTH-06 |
-| GET | /api/me/blogs | P | 회원 | 내 활성 블로그 `[{ id, address, name, isPrimary, movedTo, postCount }]` | BLOG-08 |
-| PUT | /api/me/primary-blog | P | 회원 | `{ blogId }` → 204. 내 활성 블로그만 | BLOG-08 |
+| GET | /api/me/blogs | P | 회원 | 내 활성 블로그 `[{ id, address, name, isPrimary, movedTo, postCount }]`, 만든 순서. `movedTo`는 이사한 블로그의 새 주소(아니면 `null`), `postCount`는 지우지 않은 발행 글 수(비공개·숨김 포함, 임시저장 제외). 마이페이지가 이 목록 아래에 "블로그 만들기 (n/5)"를 둔다 | BLOG-08, BLOG-01 |
+| PUT | /api/me/primary-blog | P | 회원 | `{ blogId }` → 204. 내 활성 블로그만(아니거나 비면 400 `fieldErrors[].field = blogId`). 이미 대표면 그대로 204 | BLOG-08 |
 | GET | /api/me/bookmarks?cursor= | P | 회원 | 저장한 글 20, 저장 최신순. 볼 수 있으면 `{ post: PostSummary, savedAt, visible: true }`, 볼 수 없으면 `{ postId, visible: false, titleSnapshot, blogNameSnapshot, savedAt }` | SOC-03 |
 | DELETE | /api/me/bookmarks/{postId} | P | 회원 | 204. 목록에서 바로 저장 취소(볼 수 없는 글도) | SOC-03 |
 | GET | /api/me/notifications?cursor= | P | 회원 | 알림 20 최신순 `[{ id, type, message, link, read, createdAt }]` | SUB-04 |

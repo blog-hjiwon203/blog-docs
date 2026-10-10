@@ -12,6 +12,7 @@
 - 이 프로젝트의 선택: 회원 행 잠금(`findByIdForUpdate`), `uk_blog_address`, 계산 컬럼 `primary_owner_id` + UNIQUE
 - `saveAndFlush`를 쓰는 이유, `DataIntegrityViolationException` 처리
 - 동시성 테스트(`concurrentCreatesKeepLimitAndSinglePrimary`)를 읽는 법
+- (스텝 13 보강) 대표 블로그 **바꾸기**: 옛 대표를 끄고 `flush`한 뒤 새 대표를 켜야 하는 이유, Hibernate가 UPDATE를 보내는 때
 
 **먼저 알면 좋은 것**: SQL의 INSERT/SELECT/UPDATE, JPA 엔티티와 영속성 컨텍스트([06](./06-jpa-entity-mapping.md)), 웹 서버가 요청을 여러 스레드로 동시에 처리한다는 것.
 
@@ -307,6 +308,54 @@ void concurrentCreatesKeepLimitAndSinglePrimary() throws Exception {
 
 이 테스트가 통과한다고 "언제나 안전하다"는 증명은 아니다. 동시성 버그는 타이밍에 달려 있어서, 잠금이 없는 코드도 운 좋게 통과할 수 있다(7장 실습 2). 그래도 스레드 수를 한도보다 크게 잡아 경쟁을 일부러 만들면, 잠금이 빠졌을 때 실패할 가능성이 높다.
 
+### 5.6 대표 블로그 바꾸기: 끄고, flush, 켜기 (스텝 13 보강)
+
+스텝 13에서 마이페이지의 "대표로" 버튼(`PUT /api/me/primary-blog`, BLOG-08)을 만들었다. 대표를 A에서 B로 바꾸려면 A의 `is_primary`를 0으로, B를 1로 바꾸면 된다. 그런데 UNIQUE(`primary_owner_id`)가 **행을 바꿀 때마다** 바로 검사된다는 데서 문제가 생긴다.
+
+```
+UPDATE blog SET is_primary = 1 WHERE id = B   → B의 primary_owner_id = 7, A도 아직 7 → Duplicate entry '7' (거절)
+UPDATE blog SET is_primary = 0 WHERE id = A   → (도달하지 못함)
+```
+
+순서가 반대면 괜찮다. 끄는 UPDATE가 먼저 나가면 A의 `primary_owner_id`가 `NULL`이 되고, 그다음 B가 7이 된다. MySQL(InnoDB)은 UNIQUE를 트랜잭션 끝이 아니라 **행을 바꿀 때마다** 확인하므로(PostgreSQL의 `DEFERRABLE` 같은 "나중에 확인"이 없다) 트랜잭션 안에서 잠깐이라도 둘이 겹치면 안 된다.
+
+JPA에서는 순서를 코드 순서로 정할 수 없다. 엔티티의 필드를 바꾸면 Hibernate가 **flush** 때(보통 커밋 직전) 바뀐 엔티티의 UPDATE를 모아 보내는데, 그 순서는 우리가 필드를 바꾼 순서와 같다는 보장이 없다. 그래서 중간에 직접 flush한다.
+
+```java
+@Transactional
+public void changePrimary(Long memberId, Long blogId) {
+    memberRepository.findByIdForUpdate(memberId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.UNAUTHORIZED));
+    List<Blog> blogs = blogRepository.findActiveByMemberId(memberId);
+    Blog target = blogs.stream().filter(blog -> blog.getId().equals(blogId)).findFirst()
+            .orElseThrow(() -> BusinessException.invalidField("blogId", "내 블로그를 골라 주세요."));
+    if (target.isPrimary()) {
+        return;
+    }
+    blogs.stream().filter(Blog::isPrimary).forEach(blog -> blog.markPrimary(false));
+    blogRepository.flush();
+    target.markPrimary(true);
+}
+```
+
+- 2~3줄: 개설(5.2)과 같은 회원 행 잠금. 같은 회원이 "대표로"를 두 번 연달아 누르거나, 대표를 바꾸는 중에 새 블로그를 만들어도 차례로 처리된다.
+- 4~6줄: 내 활성 블로그 중에서만 찾는다. 남의 블로그 번호, 지운 블로그 번호는 400 `blogId`.
+- 7~9줄: 이미 대표면 바꿀 것이 없다.
+- 10줄: 옛 대표를 끈다(엔티티 필드만 바뀌고 SQL은 아직).
+- 11줄: **여기서 flush**. 끄는 UPDATE가 지금 DB로 나간다. 트랜잭션은 아직 열려 있어서, 뒤에서 실패하면 이것도 함께 롤백된다.
+- 12줄: 새 대표를 켠다. 이 UPDATE는 커밋 직전 flush 때 나간다. 이때 옛 대표는 이미 `NULL`이라 겹치지 않는다.
+
+**정말 필요한가 확인해 봤다.** 11줄을 주석으로 막고 `MyBlogIntegrationTest`를 돌리면 대표 바꾸기 테스트가 실패하고 로그에 이렇게 나온다.
+
+```
+Duplicate entry '7' for key 'blog.uk_blog_primary_owner_id'
+[update blog set accent_color=?, ..., is_primary=?, ... where id=?]
+```
+
+이 Hibernate 설정에서는 켜는 UPDATE가 먼저 나갔다는 뜻이다. 로그의 UPDATE에 바뀌지 않은 칸까지 다 들어 있는 것도 볼 수 있다. Hibernate는 기본으로 엔티티의 모든 칸을 넣은 UPDATE 문 하나를 미리 만들어 두고 다시 쓴다(바뀐 칸만 넣으려면 `@DynamicUpdate`).
+
+다른 방법도 있다. 한 문장으로 두 행을 함께 바꾸면 MySQL은 그 문장이 끝난 뒤의 상태로 UNIQUE를 확인하지 않고 행마다 확인하므로, `UPDATE blog SET is_primary = (id = ?) WHERE member_id = ?`도 행 처리 순서에 따라 실패할 수 있다. 끄고-flush-켜기가 가장 단순하고 확실하다.
+
 ## 6. 자주 하는 실수와 함정
 
 1. **확인 후 저장만 믿기**: `exists` → `save`는 동시 요청에 뚫린다. 중복은 UNIQUE, 개수는 잠금.
@@ -319,6 +368,7 @@ void concurrentCreatesKeepLimitAndSinglePrimary() throws Exception {
 8. **`UNIQUE(member_id, is_primary)`로 대표 하나 표현**: 대표 아닌 블로그도 하나밖에 못 만든다. 계산 컬럼 + UNIQUE.
 9. **잠금 범위가 너무 큼**: 테이블 전체나 많은 행을 오래 잠그면 다른 사용자가 줄줄이 기다린다. 회원 행 하나처럼 작게, 트랜잭션은 짧게(트랜잭션 안에서 메일 발송 같은 느린 일을 하지 않는다).
 10. **동시성 테스트 한 번 통과로 안심**: 타이밍이 우연히 좋았을 수 있다.
+11. **UNIQUE가 걸린 값을 맞바꾸면서 flush 순서를 Hibernate에 맡기기**: 대표 블로그처럼 "하나만" 규칙이 있는 값을 옮길 때는 먼저 끄고 `flush`한 뒤 켠다(5.6).
 
 ## 7. 직접 해 보기
 
@@ -399,6 +449,9 @@ DELETE FROM blog WHERE address IN ('primary-a', 'normal-c');
 
 9. 낙관적 잠금(`@Version`)이 블로그 개설 경쟁에 잘 맞지 않는 이유는?
 <details><summary>답</summary>낙관적 잠금은 이미 있는 행을 수정할 때 버전이 그대로인지 비교하는 방식이다. 블로그 개설은 새 행을 INSERT하는 일이라 비교할 행이 없고, 실패하면 재시도 코드도 필요하다.</details>
+
+10. 대표 블로그를 A에서 B로 바꿀 때 `blogRepository.flush()`를 빼면 왜 실패할 수 있나?
+<details><summary>답</summary>MySQL은 UNIQUE를 행을 바꿀 때마다 바로 확인하고, Hibernate는 바뀐 엔티티의 UPDATE를 flush 때 모아 보내며 그 순서가 코드 순서라는 보장이 없다. B를 켜는 UPDATE가 A를 끄는 UPDATE보다 먼저 나가면 그 순간 둘 다 <code>primary_owner_id</code>가 같은 회원 번호라 <code>Duplicate entry</code>로 거절된다. 끄고 flush해서 끄는 UPDATE를 먼저 DB에 보낸 뒤 켠다.</details>
 
 ## 9. 더 읽을거리
 
