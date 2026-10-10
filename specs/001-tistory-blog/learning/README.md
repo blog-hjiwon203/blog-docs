@@ -57,7 +57,7 @@
 | [50 같은 규칙의 두 기능을 한 코드로](./concepts/50-shared-rules-comment-guestbook.md) | 댓글과 방명록: 공통 인터페이스(`CommentEntry`)와 조립기(`CommentViews`), 상속·복사와 비교, 페이지 번호 목록의 기준(최상위 글), Spring Data `findBy`의 `project`·`page`, "받은" 댓글 목록, 화면 부품 나누기와 그 자리에서 고치기 |
 | [51 구독과 알림](./concepts/51-subscription-notification.md) | 멱등한 PUT·DELETE와 INSERT IGNORE의 "넣은 행 수", 부수 효과(알림)를 같은 트랜잭션에서 만들기와 다른 방법(이벤트·비동기), 쓸 때 정하는 것(문구)과 읽을 때 정하는 것(링크·가시성), 거르는 커서 목록, 구독자 공개와 "있지만 못 보는" 403, 클립보드와 보안 컨텍스트 |
 | [52 예약 작업과 프록시 자기 호출](./concepts/52-scheduled-jobs-proxy.md) | `@Scheduled`(fixedDelay·fixedRate·cron), DB 훑기 vs 메모리 타이머, 정한 시각과 돈 시각, 글 상태 기계에 예약 더하기, 같은 객체 안 호출에 `@Transactional`이 안 걸리는 이유와 실제 버그, 테스트에서 백그라운드 작업 끄기 |
-| [31 태그와 다대다 관계](./concepts/31-tags-many-to-many.md) | `@ManyToMany`와 조인 테이블, 이름 정리 규칙, 태그별 목록, 태그 입력 칸, 태그 이름 바꾸기·지우기(같은 이름 규칙, 연결 먼저 지우기) |
+| [31 태그와 다대다 관계](./concepts/31-tags-many-to-many.md) | `@ManyToMany`와 조인 테이블, 이름 정리 규칙, 태그별 목록, 태그 입력 칸, 태그 이름 바꾸기·지우기(같은 이름 규칙, CASCADE), 글 없는 태그 자동 삭제와 빈 자리 잠금 데드락 |
 | [32 블로그 안 검색: LIKE와 비정규화 칸](./concepts/32-search-like.md) | 글자만 담은 칸과 마이그레이션, LIKE 이스케이프, EXISTS 서브쿼리, 인덱스 한계, 검색어를 주소에, 전체 검색(범위만 바꾸는 Specification, 블로그 검색, 구독자 수 한 번에) |
 | [47 임시저장과 자동 저장](./concepts/47-draft-autosave.md) | 글의 상태와 되돌릴 수 없는 이동, 상태별 검증, 처음 POST 그 뒤 PUT, `setInterval`과 낡은 값·`useRef`, 저장 줄 세우기, 스냅숏 |
 | [48 대표 이미지](./concepts/48-representative-image.md) | 고른 번호 검증(본문 안에 있나), `null` = 자동, `ON DELETE SET NULL`, 한 페이지 쿼리 두 번, 파생 값 |

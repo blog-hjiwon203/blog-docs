@@ -327,7 +327,7 @@
 
 | 메서드 | 경로 | Host | 권한 | 설명 | ID |
 | --- | --- | --- | --- | --- | --- |
-| GET | /api/posts?page=&size=&categoryId=&tag= | B | 누구나 | 블로그 글 목록 10, 최신순. `categoryId`면 하위 카테고리 글 포함, `categoryId=0`은 미분류. 주인에게는 비공개·숨긴 글을 포함한 발행 글 전부(임시저장·예약 제외) | BLOG-03, CAT-02, TAG-02 |
+| GET | /api/posts?page=&size=&categoryId=&tag= | B | 누구나 | 블로그 글 목록 10, 최신순. `categoryId`면 하위 카테고리 글 포함, `categoryId=0`은 미분류. 주인에게는 비공개·숨긴 글을 포함한 발행 글 전부(임시저장·예약 제외). `tag`가 이 블로그에 없거나, 그 태그가 달린 글 가운데 보는 사람이 볼 수 있는 글이 하나도 없으면 404 | BLOG-03, CAT-02, TAG-02 |
 | GET | /api/posts/{id} | B | 누구나 | `PostDetail`. 볼 수 없으면 404, 구독자 공개를 구독 안 한 사람이 열면 403 `SUBSCRIBERS_ONLY` | POST-04, POST-10, POST-12 |
 | POST | /api/posts | B | 주인 | [글 저장 본문](#글-저장-본문) → 201 `{ id, status, url }`. `Idempotency-Key` 필수 | POST-01, POST-08, POST-13 |
 | GET | /api/manage/posts/{id} | B | 주인 | 편집용. 본문 + 임시저장·예약·숨김 상태와 `blind` 사유, 고른 대표 이미지 `thumbnailImageId`(없으면 `null`)와 대표 이미지 후보인 본문 이미지 `images: [{ id, url, thumbnailUrl }]`(본문 순서, 2026-10-10 스텝 13에서 더함) | POST-02, POST-07, POST-08 |
@@ -381,9 +381,10 @@
 | PATCH | /api/categories/{id} | B | 주인 | `{ name?, isPrivate? }` → 204. 보낸 칸만 바꾸고 둘 다 없으면 400. `parentId`를 보내면 400(상위 바꾸기는 `PUT /api/categories/order`). 비공개 카테고리와 그 하위의 글은 주인 말고는 목록·글 수·글 상세·검색·홈·피드에서 없는 글(404) | CAT-01, CAT-05 |
 | DELETE | /api/categories/{id} | B | 주인 | 204. 글은 미분류로. 하위가 있으면 409 `CATEGORY_HAS_CHILDREN` | CAT-01 |
 | PUT | /api/categories/order | B | 주인 | `[{ id, parentId, sortOrder }]` 전체 → 204. 드래그 앤 드롭 결과 한 번에. 이 블로그 카테고리가 하나라도 빠지거나 두 번·남의 번호면 400 `fieldErrors[].field = order`, 하위가 있는 카테고리를 하위로·자기 자신을 상위로 두면 409 `CATEGORY_DEPTH`, 같은 자리에 같은 이름이면 409 `NAME_TAKEN`. 같은 자리 안에서 `sortOrder` 순으로 0부터 다시 매긴다 | CAT-04 |
-| GET | /api/tags | B | 누구나 | `[{ id, name, postCount }]` 글 수순 | TAG-03 |
+| GET | /api/tags | B | 누구나 | `[{ id, name, postCount }]` 글 수순. 블로그 화면용: 보는 사람이 볼 수 있는 글만 세고, 0개인 태그는 빠진다 | TAG-03 |
+| GET | /api/manage/tags | B | 주인 | `[{ id, name, postCount, publishedCount }]` 글 수순. 관리 화면용: `postCount`는 지우지 않은 글 전부(임시저장·예약 포함), `publishedCount`는 그 가운데 블로그 화면에 나오는 발행 글 | TAG-04 |
 | PATCH | /api/tags/{id} | B | 주인 | `{ name }` → 204. 이름 규칙은 글에 달 때와 같다(앞뒤 공백·앞의 # 제거, 1~30자, `/` 금지, 아니면 400 `fieldErrors[].field = name`). 같은 블로그의 다른 태그와 같은 이름(대소문자·악센트 무시) 409 `NAME_TAKEN`, 자기 이름의 대소문자만 바꾸기는 됨 | TAG-04 |
-| DELETE | /api/tags/{id} | B | 주인 | 204. 글은 남고 연결만 끊김 | TAG-04 |
+| DELETE | /api/tags/{id} | B | 주인 | 204. 글은 남고 연결만 끊김. 글을 지우거나(`DELETE /api/posts/{id}`, `DELETE /api/manage/posts`) 고쳐서 지우지 않은 글이 하나도 남지 않은 태그는 서버가 저절로 지운다(2026-10-11 지원 결정) | TAG-04 |
 
 카테고리 트리 응답:
 

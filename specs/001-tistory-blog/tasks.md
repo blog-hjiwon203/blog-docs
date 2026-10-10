@@ -347,7 +347,7 @@ description: "지원 서비스 구현 작업 (2주 일정 기준)"
 | --- | --- |
 | T060a | 드래그로 순서·상하위 변경 (CAT-04) |
 | T097 | 카테고리 비공개 켜기·끄기(`PATCH /api/categories/{id}` `{ isPrivate }`), 비공개 카테고리의 글은 주인에게만, 화면은 관리 카테고리의 "비공개" |
-| T098 | 태그 이름 변경(블로그 안 중복 409 `NAME_TAKEN`)·삭제(글은 남고 연결만 끊김) API와 관리 화면 태그 표의 버튼 |
+| T098 | 태그 이름 변경(블로그 안 중복 409 `NAME_TAKEN`)·삭제(글은 남고 연결만 끊김) API와 관리 화면 태그 표의 버튼. 관리 전용 목록(초안·예약 글의 태그 포함), 글이 남지 않은 태그 자동 삭제(2026-10-11 지원 결정) |
 | T101 | 비밀댓글: 댓글 쓰기의 `secret` 허용(지금 400), 댓글 칸 "비밀댓글". 보는 사람 기준 판단은 스텝 14의 `CommentViews`를 그대로 씀 |
 | T102 | 댓글 허용 설정: 글쓰기 화면의 "댓글 허용"(`commentAllowed`), 막힌 글은 403 `COMMENTS_DISABLED`(이미 있음) |
 | T103 | 예약 발행: 글 저장의 `SCHEDULED`·`scheduledAt`(지금 400), 정한 시각에 발행으로 바꾸는 예약 작업(그 시각이 처음 발행 시각), 글 관리 "예약" 필터 다시 켜기 |
@@ -653,7 +653,7 @@ description: "지원 서비스 구현 작업 (2주 일정 기준)"
 
 - [X] T060a [US5] 드래그로 순서·상하위 변경 (CAT-04)
 - [X] T097 [US11] 카테고리 비공개 켜기·끄기(`PATCH /api/categories/{id}` `{ isPrivate }`), 비공개 카테고리의 글은 주인에게만, 화면은 관리 카테고리의 "비공개" in `category/`, `frontend/src/pages/manage/` (CAT-05, 2026-10-11 추가)
-- [X] T098 [US11] 태그 이름 변경(블로그 안 중복 409 `NAME_TAKEN`)·삭제(글은 남고 연결만 끊김) API와 관리 화면 태그 표의 버튼 in `tag/`, `frontend/src/pages/manage/` (TAG-04, 2026-10-11 추가)
+- [X] T098 [US11] 태그 이름 변경(블로그 안 중복 409 `NAME_TAKEN`)·삭제(글은 남고 연결만 끊김) API와 관리 화면 태그 표의 버튼, 관리 전용 목록 `GET /api/manage/tags`(초안·예약 글의 태그 포함), 글을 지우거나 고쳐 글이 남지 않은 태그 자동 삭제, 볼 수 있는 글이 없는 태그 주소 404 in `tag/`, `post/application/`, `frontend/src/pages/manage/` (TAG-03, TAG-04, 2026-10-11 추가·지원 결정)
 - [X] T101 [US11] 비밀댓글: 댓글 쓰기의 `secret` 허용(지금 400), 댓글 칸 "비밀댓글". 보는 사람 기준 판단은 스텝 14의 `CommentViews`를 그대로 씀 in `comment/`, `frontend/src/components/` (CMT-06, 2026-10-11 추가)
 - [X] T102 [US11] 댓글 허용 설정: 글쓰기 화면의 "댓글 허용"(`commentAllowed`), 막힌 글은 403 `COMMENTS_DISABLED`(이미 있음) in `post/`, `frontend/src/pages/manage/` (CMT-07, 2026-10-11 추가)
 - [X] T103 [US11] 예약 발행: 글 저장의 `SCHEDULED`·`scheduledAt`(지금 400), 정한 시각에 발행으로 바꾸는 예약 작업(그 시각이 처음 발행 시각), 글 관리 "예약" 필터 다시 켜기 in `post/` (POST-13, 2026-10-11 추가)
