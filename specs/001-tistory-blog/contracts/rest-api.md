@@ -448,8 +448,8 @@
 | GET | /api/ranking/posts?snapshotAt=&offset= | P | 누구나 | 인기 글 100위까지 20개씩. 처음엔 `snapshotAt` 없이. 스냅숏이 바뀌었으면 409 `RANKING_UPDATED` | HOME-05 |
 | GET | /api/ranking/bloggers?snapshotAt=&offset= | P | 누구나 | 인기 블로거 100위까지 20개씩. 같은 규칙 | HOME-05 |
 | GET | /api/notices?page= | P | 누구나 | 공지 목록 10 최신순 `[{ id, title, createdAt }]` | ADMIN-06 |
-| GET | /api/notices/latest | P | 누구나 | 홈 상단 최신 공지 1개 또는 `null` | ADMIN-06 |
-| GET | /api/notices/{id} | P | 누구나 | `{ id, title, content, createdAt, updatedAt }` | ADMIN-06 |
+| GET | /api/notices/latest | P | 누구나 | 홈 상단 최신 공지 1개 `{ id, title, createdAt }`. 공지가 없으면 본문 없이 200(화면은 띠를 숨김) | ADMIN-06 |
+| GET | /api/notices/{id} | P | 누구나 | `{ id, title, content, createdAt, updatedAt }`. `content`는 HTML이 아니라 글자(화면은 줄바꿈만 살려 글자로 넣음). 없으면 404 | ADMIN-06 |
 
 ### MNG 블로그 관리
 
@@ -480,7 +480,7 @@
 
 | 메서드 | 경로 | Host | 권한 | 설명 | ID |
 | --- | --- | --- | --- | --- | --- |
-| POST | /api/reports | \* | 회원 | `{ targetType, targetId, reason, description? }` → 201. `targetType`: `POST`·`COMMENT`·`BLOG`. 같은 대상 다시 신고 409 `ALREADY_REPORTED`, 볼 수 없는 대상 404 | ADMIN-04 |
+| POST | /api/reports | \* | 회원 | `{ targetType, targetId, reason, description? }` → 201. `targetType`: `POST`·`COMMENT`·`BLOG`(아니면 400 `targetType`). 같은 대상 다시 신고 409 `ALREADY_REPORTED`(처리한 뒤에도, 회원·대상마다 한 번), 볼 수 없는 대상 404(비밀댓글을 볼 수 없는 사람, 이미 숨긴 댓글, 이사한 블로그 포함). `ETC`면 `description` 필수(400 `description`), 500자. 순서: 대상 종류 400 → 대상 404 → 비회원 401 → 사유 400 → 409 | ADMIN-04 |
 
 ### ADMIN 서비스 관리
 
@@ -488,26 +488,27 @@
 
 | 메서드 | 경로 | 설명 | ID |
 | --- | --- | --- | --- |
-| GET | /api/admin/dashboard | `{ todaySignups, todayPosts, pendingReports, recentModerations[5] }` | ADMIN-06 |
-| GET | /api/admin/members?q=&status=&page= | 이메일·닉네임 검색, 상태 필터. 20 | ADMIN-02 |
-| GET | /api/admin/members/{id} | `{ member, createdAt, blogs[], reportCount, moderations[] }` | ADMIN-02 |
-| POST | /api/admin/members/{id}/suspension | `{ period: 7D\|30D\|PERMANENT, reason, reasonDetail? }` → 204. 그 회원의 모든 블로그를 숨기고 알림 | ADMIN-02, SUB-04 |
-| DELETE | /api/admin/members/{id}/suspension | 204. 해제 이력 남김 | ADMIN-02 |
-| POST | /api/admin/posts/{id}/blind | `{ reason, reasonDetail? }` → 204 | ADMIN-03 |
-| DELETE | /api/admin/posts/{id}/blind | 204 | ADMIN-03 |
-| POST | /api/admin/comments/{id}/blind | `{ reason, reasonDetail? }` → 204 | ADMIN-03 |
+| GET | /api/admin/dashboard | `{ todaySignups, todayPosts, pendingReports, recentModerations[5] }`. 오늘은 한국 시간 0시부터. `todayPosts`는 오늘 발행된 글(지운 글 빼고), `pendingReports`는 신고 건수가 아니라 처리할 **대상** 수(신고 목록의 묶음 수), `recentModerations`는 아래 관리 이력 한 줄 모양 | ADMIN-06 |
+| GET | /api/admin/members?q=&status=&page= | 이메일·닉네임 검색(들어 있는 글자, 대소문자 무시), 상태 필터 `ACTIVE`·`SUSPENDED`·`WITHDRAWN`. 가입 최신순 20. 한 줄 `{ id, nickname, email, role, status, suspendedUntil, createdAt }`. `status`는 지금 기준(정지 기간이 지났으면 `ACTIVE`), `suspendedUntil`은 정지 중일 때만(영구면 `null`) | ADMIN-02 |
+| GET | /api/admin/members/{id} | `{ member, blogs[], reportCount, suspension, moderations[] }`. `member`는 목록 한 줄(가입일 `createdAt` 포함), `blogs`는 지운 것까지 `{ id, address, name, isPrimary, deleted, restricted }`, `reportCount`는 그 회원의 글·댓글·블로그가 받은 신고 수(처리한 것 포함), `suspension`은 정지 중일 때 `{ reason, reasonMessage, suspendedUntil }`, `moderations`는 회원과 그 회원의 블로그·글·댓글에 대한 관리 이력 최신 50 | ADMIN-02 |
+| POST | /api/admin/members/{id}/suspension | `{ period: 7D\|30D\|PERMANENT, reason, reasonDetail? }` → 204. 그 회원의 모든 블로그를 숨기고 알림. 없거나 탈퇴한 회원 404, 관리자 400 `member`, 기간 400 `period`. 정지 중에 다시 하면 기간·사유를 새로 정한다. 기간이 끝나면 따로 풀지 않아도 풀린다(요청마다 `suspended_until`과 지금을 비교) | ADMIN-02, SUB-04 |
+| DELETE | /api/admin/members/{id}/suspension | 204. 해제 이력과 알림을 남김. 정지 중이 아니면 이력 없이 204 | ADMIN-02 |
+| POST | /api/admin/posts/{id}/blind | `{ reason, reasonDetail? }` → 204. 없거나 지운 글 404. 글의 수정 시각(`updatedAt`)은 바꾸지 않는다(작성자가 고친 것이 아님). 작성자에게 알림 | ADMIN-03 |
+| DELETE | /api/admin/posts/{id}/blind | 204. 숨긴 글이 아니면 이력 없이 204 | ADMIN-03 |
+| POST | /api/admin/comments/{id}/blind | `{ reason, reasonDetail? }` → 204. 글과 같음(수정 시각 그대로, 작성자에게 알림) | ADMIN-03 |
 | DELETE | /api/admin/comments/{id}/blind | 204 | ADMIN-03 |
-| POST | /api/admin/blogs/{id}/restriction | `{ reason, reasonDetail? }` → 204 | ADMIN-05 |
+| POST | /api/admin/blogs/{id}/restriction | `{ reason, reasonDetail? }` → 204. 없거나 지운 블로그 404. 주인에게 알림 | ADMIN-05 |
 | DELETE | /api/admin/blogs/{id}/restriction | 204 | ADMIN-05 |
-| GET | /api/admin/reports?status=PENDING&page= | 대상별 묶음, 신고 수 많은 순 `[{ targetType, targetId, targetPreview, reportCount, reasons: { SPAM: 3 }, firstReportedAt }]` | ADMIN-04 |
-| GET | /api/admin/reports/{targetType}/{targetId} | 그 대상의 신고 목록 `[{ reporter, reason, description, createdAt }]` | ADMIN-04 |
-| POST | /api/admin/reports/{targetType}/{targetId}/resolve | `{ result: BLIND\|RESTRICT_BLOG\|SUSPEND\|REJECT, reason?, reasonDetail?, period? }` → 204. 대상의 대기 신고 모두 처리 완료, 관리 이력 남김. `SUSPEND`는 작성자 정지(`period` 필수) | ADMIN-04 |
-| GET | /api/admin/moderation-logs?targetType=&targetId=&adminId=&from=&to=&page= | 조회만 20 최신순. 수정·삭제 API 없음 | ADMIN-06 |
-| POST | /api/admin/notices | `{ title, content }` → 201 | ADMIN-06 |
+| GET | /api/admin/reports?status=PENDING&page= | 대상별 묶음, 신고 수 많은 순(같으면 먼저 신고된 순), 20. `[{ targetType, targetId, targetPreview, target, reportCount, reasons: { SPAM: 3 }, firstReportedAt }]`. `targetPreview`는 글 제목·댓글 앞 60자·블로그 이름, `target`은 아래 대상 한 줄. `status`는 `PENDING`만(다른 값 400) | ADMIN-04 |
+| GET | /api/admin/reports/{targetType}/{targetId} | `{ target, reports: [{ id, reporter: { id, nickname }, reason, reasonMessage, description, status, result, createdAt, processedAt }] }` 먼저 신고한 순(처리한 것 포함). 모르는 대상 종류 404 | ADMIN-04 |
+| POST | /api/admin/reports/{targetType}/{targetId}/resolve | `{ result: BLIND\|RESTRICT_BLOG\|SUSPEND\|REJECT, reason?, reasonDetail?, period? }` → 204. 대상의 대기 신고 모두 처리 완료, 관리 이력 남김. 대기 신고가 없으면 404. `REJECT`가 아니면 `reason` 필수. `BLIND`는 글·댓글만(블로그 400 `result`), `RESTRICT_BLOG`는 블로그 또는 글이 속한 블로그(댓글 400 `result`), `SUSPEND`는 글·블로그 주인이나 댓글 작성자를 정지(`period` 필수). `REJECT`의 관리 이력은 `REJECT_REPORT`와 신고된 대상(종류·번호) 그대로 | ADMIN-04 |
+| GET | /api/admin/moderation-logs?targetType=&targetId=&adminId=&from=&to=&page= | 조회만 20 최신순. 수정·삭제 API 없음. `from`·`to`는 날짜(`2026-10-11`, 양 끝 포함, 틀리면 400). 한 줄 `{ id, createdAt, admin: { id, nickname }, action, reason, reasonMessage, reasonDetail, target }` | ADMIN-06 |
+| POST | /api/admin/notices | `{ title, content }` → 201 공지 상세. 제목 1~200자, 내용 1~10,000자(앞뒤 공백 제거, 틀린 칸 모두 400) | ADMIN-06 |
 | PUT | /api/admin/notices/{id} | `{ title, content }` → 204 | ADMIN-06 |
 | DELETE | /api/admin/notices/{id} | 204 | ADMIN-06 |
 
-- 제재 대상이 받는 알림(`SANCTION`)과 화면 안내는 `reasonMessage`로 정해진 문구를 쓴다.
+- 제재 대상이 받는 알림(`SANCTION`)과 화면 안내는 `reasonMessage`로 정해진 문구를 쓴다. 알림은 정지·해제(회원, 누르면 마이페이지), 글·댓글 숨김·해제(작성자, 누르면 그 글), 블로그 제한·해제(주인, 누르면 그 블로그)마다 하나다(스텝 18).
+- **대상 한 줄**(`target`, 관리 화면 공통): `{ type, id, label, blogAddress, postId, memberId, exists, sanctioned }`. `label`은 글 제목·댓글 앞부분·"블로그 이름 (주소)"·닉네임, `blogAddress`·`postId`로 화면이 링크를 만든다. `exists`가 `false`면 지워진 대상, `sanctioned`는 지금 숨김·제한·정지 중인가(관리 화면의 "해제" 버튼).
 - 관리자는 남의 글·댓글을 고치거나 지우는 API가 없다(헌법 원칙 V).
 
 ## 화면 주소 단계에서 서버가 하는 일 (API 없음)
