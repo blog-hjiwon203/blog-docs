@@ -1,6 +1,6 @@
 # 38. 회원정보 수정: 부분 수정, 비밀번호 바꾸기, 남의 것을 가리키는 번호
 
-> 관련 스텝: [스텝 9](../step-09.md) (T055, T055a) · 관련 개념: [40-attempt-limit](./40-attempt-limit.md), [09-password-hashing](./09-password-hashing.md), [21-signup-login](./21-signup-login.md), [22-bean-validation](./22-bean-validation.md), [30-image-upload](./30-image-upload.md), [23-transactions-locking](./23-transactions-locking.md), [25-react-forms-data](./25-react-forms-data.md)
+> 관련 스텝: [스텝 9](../step-09.md) (T055, T055a), [스텝 13b](../step-13b.md) (T023a, 5.7 블로그 프로필 이미지) · 관련 개념: [40-attempt-limit](./40-attempt-limit.md), [09-password-hashing](./09-password-hashing.md), [21-signup-login](./21-signup-login.md), [22-bean-validation](./22-bean-validation.md), [30-image-upload](./30-image-upload.md), [23-transactions-locking](./23-transactions-locking.md), [25-react-forms-data](./25-react-forms-data.md)
 
 ## 1. 이 문서로 배우는 것
 
@@ -239,6 +239,78 @@ async function changePhoto(event: ChangeEvent<HTMLInputElement>) {
 | `passwordChangeNeedsCurrentPasswordAndFollowsSignupRule` | 지금 비밀번호 틀림 400(currentPassword), 규칙 위반 400(newPassword), 바꾼 뒤 옛 비밀번호로 로그인 실패·새 비밀번호로 성공 |
 | `socialMemberHasNoPasswordToChange` | 소셜 회원 403 |
 
+### 5.7 같은 규칙, 다른 주인: 블로그 프로필 이미지 (스텝 13b, T023a)
+
+명세 BLOG-02는 "블로그 이름(1~50자), 소개글, **프로필 이미지**를 바꾼다"다. 스텝 4(T023)는 이름·소개만 만들고 이미지는 "스텝 7에서 더한다"고 주석에 남겼는데, 그 일에 T번호가 없어 스텝 7에서도 빠졌다. 그래서 응답의 `profileImageUrl`은 늘 `null`이었고 사이드바는 빈 동그라미였다. 어떻게 이런 빈 곳을 찾는지는 [49 완료의 정의와 요구사항 추적](./49-requirement-traceability.md)에 따로 정리했다. 여기서는 회원 사진과 무엇이 같고 무엇이 다른지만 본다.
+
+**같은 것: 번호를 믿지 않는다.** 블로그 사진도 `profileImageId`라는 **번호**로 온다. 회원 사진과 똑같이 "그 이미지를 올린 사람이 이 블로그의 주인인가"를 본다(3.3 IDOR).
+
+```java
+// blog/application/BlogService.java
+@Transactional
+public Blog updateInfo(String address, Long ownerId, String name, String description, Long profileImageId) {
+    Blog blog = blogRepository.findByAddress(address)
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+    if (profileImageId != null) {
+        imageRepository.findById(profileImageId)
+                .filter(image -> ownerId.equals(image.getUploaderId()))
+                .orElseThrow(() -> BusinessException.invalidField("profileImageId", "이미지를 찾을 수 없습니다."));
+        blog.changeProfileImage(profileImageId);
+    }
+    blog.changeInfo(name == null ? null : name.trim(), description);
+    return blog;
+}
+```
+
+- `ownerId`: 컨트롤러가 `blogOwnerGuard.requireOwner(blog, member)`로 **이 블로그의 주인**인지 먼저 확인했으니, 로그인한 회원 id가 곧 주인 id다. 이미지의 `uploader_id`와 비교한다.
+- `profileImageId != null`일 때만 본다. PATCH라서 안 보낸 칸은 그대로 둔다(3.1). 이름만 바꾸면 사진은 남는다.
+- 없는 번호와 남의 번호에 같은 문장을 준다(6절 "남의 것과 없는 것"). 남이 그 번호의 이미지를 올렸다는 사실이 새지 않는다.
+- 저장은 `saveAndFlush`가 없다. 블로그에는 UNIQUE를 걸 칸(닉네임 같은)이 없어 변경 감지(트랜잭션이 끝날 때 UPDATE)로 충분하다([06](./06-jpa-entity-mapping.md)).
+
+**다른 것: 주소를 어디서 만드나.** 회원 사진 주소는 `MeService.me`가 만들었다. 블로그 사진 주소는 `GET /api/blog`(머리글)와 `GET /api/blog/sidebar`(사이드바 맨 위) 두 곳이 쓴다. 같은 일을 두 서비스가 하게 되어 작은 부품으로 뺐다.
+
+```java
+// image/application/ProfileImages.java
+@Component
+public class ProfileImages {
+    /** 이미지 id가 없거나 이미지 행이 없으면 null. */
+    @Transactional(readOnly = true)
+    public String thumbnailUrl(Long imageId) {
+        if (imageId == null) {
+            return null;
+        }
+        return imageRepository.findById(imageId).map(Image::getThumbnailPath).orElse(null);
+    }
+}
+```
+
+- `BlogQueryService.detail`과 `SidebarService.sidebar`가 이것을 불러 `BlogDetail.profileImageUrl`, `Sidebar.profileImageUrl`에 담는다. 응답 DTO(`BlogResponse`, `SidebarResponse.Profile`)는 그 값을 옮기기만 한다. 전에는 DTO가 `null`을 직접 써 넣고 있었다.
+- `image` 패키지에 둔 이유: "이미지 번호 → 화면 주소"는 이미지 기능이 아는 일이다. 블로그 기능은 이미지 테이블의 칸 이름(`thumbnail_path`)을 몰라도 된다.
+- `MeService`는 아직 `imageRepository`를 직접 쓴다. 이번 스텝의 일이 아니라 건드리지 않았다. 세 번째로 같은 코드를 쓰게 되면 모을 후보다.
+
+**다른 것: 화면에서 올리기와 저장을 나눴다.** 마이페이지는 사진을 고르는 순간 올리고 바로 저장했다(5.5). 블로그 설정 화면은 목업(manage-settings)이 "이미지 고를 때 `POST /api/images`" → "저장 `PATCH /api/blog { name, description, profileImageId }`"로 **두 단계**다. 이름·소개를 고치다 사진도 바꾸고, 저장 한 번에 모두 반영하는 폼이기 때문이다.
+
+```tsx
+// frontend/src/pages/manage/BlogSettingsPage.tsx
+/** 새로 올린 사진. 저장하기 전까지는 미리 보기만 한다 */
+const [photo, setPhoto] = useState<{ id: number; thumbnailUrl: string } | null>(null)
+...
+setPhoto(await uploadFile<{ id: number; thumbnailUrl: string }>('/api/images', file))
+...
+const updated = await api<Blog>('/api/blog', { method: 'PATCH', body: { name: name.trim(), description, profileImageId: photo?.id } })
+onSaved(updated)
+setPhoto(null)
+```
+
+- `photo`가 있으면 그 썸네일을, 없으면 지금 블로그 사진(`blog.profileImageUrl`)을 동그라미에 보인다. "저장을 눌러야 블로그에 반영됩니다" 안내를 띄운다.
+- `profileImageId: photo?.id`: 사진을 안 골랐으면 `undefined`다. `JSON.stringify`는 값이 `undefined`인 칸을 **아예 빼고** 보낸다. 서버는 칸이 없으니 `null`로 받고 사진을 건드리지 않는다.
+- 올리는 동안(`uploading`) 저장 버튼을 막는다. 올리기가 끝나기 전에 저장하면 새 사진 번호 없이 저장되기 때문이다.
+- 대가: 사진을 고르고 **저장하지 않고 떠나면** 이미지 행과 파일이 남는다(아무도 쓰지 않는 "고아" 이미지). 글 본문에 넣었다 지운 이미지도 마찬가지라 이 프로젝트에는 이미 같은 종류의 고아가 생긴다. 지우는 일(예: 하루 지난, 어디에도 쓰이지 않는 이미지를 정리하는 예약 작업)은 아직 없다.
+
+**사이드바**: `Sidebar.tsx`의 PROFILE 모듈이 `profileImageUrl`이 있으면 `<img className="avatar lg">`, 없으면 전처럼 빈 동그라미를 그린다. 이미지 옆에 블로그 이름이 글자로 있으니 `alt=""`(꾸밈 이미지)로 두었다. 화면 읽기 프로그램이 이름을 두 번 읽지 않는다.
+
+테스트 `BlogInfoIntegrationTest.ownerSetsProfileImageAndItShowsInBlogInfoAndSidebar`: 남의 이미지·없는 번호 400(`fieldErrors[0].field = profileImageId`), 내 이미지면 `GET /api/blog`와 사이드바 `modules[0].data.profileImageUrl`이 썸네일 주소, 이름만 다시 보내면 사진은 그대로. 이미지 행은 파일 없이 `ImageRepository`에 직접 저장했다(이 테스트가 보는 것은 번호 검사와 주소이지 파일 처리가 아니다. 파일은 `ImageUploadIntegrationTest`가 본다).
+
 ## 6. 자주 하는 실수와 함정
 
 - **PATCH에서 안 보낸 칸을 null로 덮어쓴다.** 닉네임만 바꿨는데 사진이 사라진다. null이면 건드리지 않는다.
@@ -250,6 +322,7 @@ async function changePhoto(event: ChangeEvent<HTMLInputElement>) {
 - **받은 번호를 그대로 믿는다(IDOR).** 남의 이미지·글·카테고리를 내 것처럼 쓰게 된다. "내 것 중에서" 찾는다.
 - **"남의 것"과 "없는 것"에 다른 문장을 준다.** 남의 자원이 있다는 정보를 흘린다.
 - **`@Valid`로 검사해 401보다 400이 먼저 난다.** 로그인 확인 뒤에 검사한다.
+- **응답 칸을 DTO에서 `null`로 써 두고 잊는다.** 계약에 칸이 있으니 화면도 그 칸을 읽는데, 늘 비어 있어 "사진 기능이 없다"는 것이 아무 오류 없이 숨는다(5.7). 나중에 채울 칸이면 T번호를 붙여 둔다.
 - **처음 불러온 서버 값을 effect로 상태에 복사한다.** 한 번 더 그리고, 값이 둘로 갈라진다. 그릴 때 계산하거나 저장 결과만 따로 둔다.
 
 ## 7. 직접 해 보기
@@ -312,6 +385,12 @@ curl -s -H "$X" -H "$J" -X PATCH -d '{"nickname":""}' localhost:8080/api/me -H "
 
 9. 마이페이지가 서버에서 받은 내 정보를 effect로 상태에 복사하지 않고 그릴 때 계산하는 이유는?
 <details><summary>답</summary>effect 안에서 바로 상태를 바꾸면 한 번 더 그리게 되고(린터 경고), 같은 값이 두 곳에 갈라진다. 저장 결과(saved)가 있으면 그것, 없으면 처음 불러온 값을 쓰면 된다.</details>
+
+10. 블로그 설정 화면은 사진을 고를 때 올리고 저장 버튼을 누를 때 블로그에 반영한다. 마이페이지처럼 고르는 즉시 저장하지 않은 이유와, 그 대가는?
+<details><summary>답</summary>이름·소개와 함께 저장 한 번에 반영하는 폼이고 목업도 두 단계(올리기 → PATCH)다. 고른 사진을 미리 보고 마음을 바꿀 수 있다. 대가는 고르고 저장하지 않으면 올린 이미지 행과 파일이 쓰이지 않은 채 남는다는 것이다.</details>
+
+11. 블로그 사진 저장에서 "이미지를 올린 사람 = 로그인한 회원"만 확인해도 되는 이유는?
+<details><summary>답</summary>컨트롤러가 먼저 `BlogOwnerGuard`로 로그인한 회원이 이 블로그의 주인인지 확인했다. 그러니 로그인한 회원의 이미지 = 블로그 주인의 이미지다. 주인 검사를 빼면 남의 블로그에 내 사진을 걸 수 있다.</details>
 
 ## 9. 더 읽을거리
 

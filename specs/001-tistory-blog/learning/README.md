@@ -24,6 +24,7 @@
 | 11 | [마무리](./step-11.md) | quickstart 시나리오 테스트, 휴대폰 360px 점검과 표→카드, 글 공유 미리보기(Open Graph), README·quickstart 정리 |
 | 12 | [글쓰기 버튼 안내·로그인 유지](./step-12.md) | 대표 블로그 글쓰기 또는 개설 안내 → 만든 뒤 글쓰기, Access 재발급 API, 브라우저 재시작 시나리오 테스트, 로그인 유지 안내 |
 | 13 | [임시저장·대표 이미지](./step-13.md) | 제목 없이 임시저장, 1분 자동 저장, 불러와 이어 쓰고 발행, 대표 이미지 고르기와 본문 첫 이미지 기본값, 보완: 마이페이지 내 블로그(두 번째 블로그 입구, 대표 바꾸기) |
+| 13b | [보완: 화면·명세 점검에서 나온 빈 곳](./step-13b.md) | 블로그 프로필 이미지(저장·사이드바), 글·댓글 작성자 닉네임 → 대표 블로그 링크, 관리 화면 태그 목록, 명세 문장에서 입구까지 대조하는 법 |
 
 ## 개념 문서
 
@@ -77,7 +78,7 @@
 | [14 XSS, HTML 정화, CSP](./concepts/14-xss-sanitize-csp.md) | XSS 종류, 허용 목록 정화, CSP 지시어 |
 | [20 이메일 인증 코드와 요청 제한](./concepts/20-email-verification.md) | 인증 코드 설계, `SecureRandom`, Redis로 1분 재요청 제한, 메일 발송 인터페이스 |
 | [40 시도 횟수 제한](./concepts/40-attempt-limit.md) | 온라인 무차별 대입, 대상별(15분·5번)·IP별(20번) 실패 횟수, Redis `INCR`로 동시 시도까지 막기, 가입 여부 숨기기, 잠금 악용, 프록시 뒤의 IP |
-| [38 회원정보 수정](./concepts/38-member-profile-update.md) | PATCH 부분 수정, 나를 뺀 닉네임 중복, 지금 비밀번호 확인, IDOR(남의 것을 가리키는 번호), 마이페이지 |
+| [38 회원정보 수정](./concepts/38-member-profile-update.md) | PATCH 부분 수정, 나를 뺀 닉네임 중복, 지금 비밀번호 확인, IDOR(남의 것을 가리키는 번호), 마이페이지, 블로그 프로필 이미지(올리기와 저장 나누기) |
 | [21 가입·로그인·로그아웃 설계](./concepts/21-signup-login.md) | 가입 트랜잭션, 계정 열거·타이밍 공격 방어, 정지 안내, 로그아웃, 열린 리다이렉트 |
 | [45 로그인 유지](./concepts/45-remember-me.md) | 세션 쿠키와 영속 쿠키, 브라우저 재시작, 미끄러지는 만료와 고정 만료, 필터 재발급과 재발급 API, 재시작 흉내 테스트 |
 
@@ -93,6 +94,7 @@
 | [28 Thymeleaf에서 React로](./concepts/28-thymeleaf-to-react.md) | 서버 렌더링과 클라이언트 렌더링, 같은 화면 두 가지 구현, 빌드가 하는 일, 개발 서버와 빌드 스크립트 (Thymeleaf를 알면 React 문서보다 먼저) |
 | [19 React Router와 API 클라이언트](./concepts/19-react-router-api-client.md) | React 기초, React Router 7, fetch, TypeScript, Vitest |
 | [46 상태에 따라 갈 곳 정하기: 글쓰기 버튼](./concepts/46-entry-routing-write-button.md) | 판단을 순수 함수 하나에, `Pick`과 단위 테스트, 호스트를 넘는 이동, `?from=`으로 하려던 일 넘기기와 열린 리다이렉트, 버튼은 안내이고 권한은 서버 |
+| [49 완료의 정의와 요구사항 추적](./concepts/49-requirement-traceability.md) | 완료의 정의, 명세 문장을 항목으로 쪼개 API·화면·입구 대조, 반쯤 된 기능이 숨는 자리(`null` 응답 칸, 번호 없는 "나중에", 부르지 않는 API), 수평·수직으로 만들기, 테스트 고정 데이터가 조건을 숨길 때 |
 | [24 계층 구조와 DTO](./concepts/24-layered-architecture-dto.md) | presentation/application/domain, 엔티티 대신 DTO, `open-in-view`와 지연 로딩 |
 | [25 React 폼과 데이터 불러오기](./concepts/25-react-forms-data.md) | 제어 컴포넌트, 폼 제출과 칸별 오류, `useEffect`와 커스텀 훅, 중첩 라우트, 낙관적 갱신, key, `FormData` |
 | [26 WYSIWYG 에디터와 Tiptap](./concepts/26-wysiwyg-editor-tiptap.md) | ProseMirror와 Tiptap, 허용 서식 맞추기, 이중 정화, 에디터 상태 |
