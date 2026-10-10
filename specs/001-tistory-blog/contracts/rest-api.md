@@ -436,8 +436,8 @@
 | 메서드 | 경로 | Host | 권한 | 설명 | ID |
 | --- | --- | --- | --- | --- | --- |
 | GET | /api/search?q=&page= | B | 누구나 | 블로그 안 제목·본문·태그 검색 `PostSummary` 10 최신순 | SRCH-01 |
-| GET | /api/search?q=&type=post&page= | P | 누구나 | 전체 글 검색 `PostSummary` 10 | SRCH-02 |
-| GET | /api/search?q=&type=blog&page= | P | 누구나 | 블로그 이름·소개 검색 `[{ blog, owner, subscriberCount }]` 10 | SRCH-02 |
+| GET | /api/search?q=&type=post&page= | P | 누구나 | 전체 글 검색 `PostSummary` 10 최신순. 남에게 보이는 글만(홈 최신 글과 같은 조건이라 주인도 자기 비공개 글은 여기서 안 나오고 블로그 안 검색에서 찾는다). `type`을 빼면 `post`, 그 밖의 값은 400 | SRCH-02 |
+| GET | /api/search?q=&type=blog&page= | P | 누구나 | 블로그 이름·소개 검색 `[{ blog: { id, address, name, description, profileImageUrl }, owner: MemberSummary, subscriberCount }]` 10, 새로 만든 순. 지운·이용 제한·주인 정지·이사한 블로그는 빠진다 | SRCH-02 |
 | GET | /api/home/latest?cursor= | P | 누구나 | 모든 블로그 공개 글 `PostSummary` 20 최신순 | HOME-01 |
 | GET | /api/home/popular | P | 누구나 | 인기 점수 상위 10 `{ snapshotAt, items: [{ rank, post }] }`. 5분 스냅숏 | HOME-02 |
 | GET | /api/home/topics/{topic} | P | 누구나 | 주제별 `PostSummary[]` 6. 인기 점수 순(주제마다 5분 캐시), 모자라면 그 주제의 최신 글. `topic`은 주제 code(`IT_DEV` 등), 모르는 값은 404 | HOME-03 |

@@ -1,6 +1,6 @@
 # 32. 블로그 안 검색: LIKE와 비정규화 칸
 
-> 관련 스텝: [스텝 7](../step-07.md) (T047, T048), [스텝 9](../step-09.md) (T067) · 관련 개념: [37-filtered-list-bulk-actions](./37-filtered-list-bulk-actions.md), [03-flyway-migration](./03-flyway-migration.md), [06-jpa-entity-mapping](./06-jpa-entity-mapping.md), [08-pagination](./08-pagination.md), [14-xss-sanitize-csp](./14-xss-sanitize-csp.md), [16-authorization-visibility](./16-authorization-visibility.md), [19-react-router-api-client](./19-react-router-api-client.md), [25-react-forms-data](./25-react-forms-data.md), [28-thymeleaf-to-react](./28-thymeleaf-to-react.md), [31-tags-many-to-many](./31-tags-many-to-many.md)
+> 관련 스텝: [스텝 7](../step-07.md) (T047, T048), [스텝 9](../step-09.md) (T067), [스텝 15](../step-15.md) (T065 전체 검색, 5.9) · 관련 개념: [37-filtered-list-bulk-actions](./37-filtered-list-bulk-actions.md), [03-flyway-migration](./03-flyway-migration.md), [06-jpa-entity-mapping](./06-jpa-entity-mapping.md), [08-pagination](./08-pagination.md), [14-xss-sanitize-csp](./14-xss-sanitize-csp.md), [16-authorization-visibility](./16-authorization-visibility.md), [19-react-router-api-client](./19-react-router-api-client.md), [25-react-forms-data](./25-react-forms-data.md), [28-thymeleaf-to-react](./28-thymeleaf-to-react.md), [31-tags-many-to-many](./31-tags-many-to-many.md)
 
 ## 1. 이 문서로 배우는 것
 
@@ -509,6 +509,87 @@ cb.like(root.get("title"), pattern, LikePatterns.ESCAPE)
 
 같은 규칙을 두 곳에 복사해 두면 한쪽만 고치는 실수가 생기고, 기능 패키지(`manage`)가 다른 기능 패키지(`search`)를 가져다 쓰는 것도 피하고 싶었다. 이 문서 5장의 코드 발췌는 스텝 7 당시 모습이다. 자세한 것은 [37](./37-filtered-list-bulk-actions.md) 5.4.
 
+### 5.9 (스텝 15) 전체 검색: 같은 찾기, 다른 범위
+
+명세 SRCH-02: "플랫폼 전체에서 글·블로그를 검색한다." API 명세는 플랫폼 주소의 `GET /api/search?q=&type=post|blog&page=`이고, 목업(search)은 글·블로그 탭 두 개다. 스텝 15의 확인할 것은 "볼 수 없는 글(비공개, 구독자 공개, 숨김, 제한 블로그)은 결과에 나오지 않는다"다.
+
+**글 검색은 "어디에서 찾나"만 다르다.** 무엇이 맞는 글인가(제목·본문 글자·태그 이름에 검색어)는 블로그 안 검색과 같다. 그래서 그 조건을 메서드 하나로 꺼냈다.
+
+```java
+// search/application/SearchService.java
+@Transactional(readOnly = true)
+public Page<Post> search(Blog blog, Long viewerId, String rawQuery, PageQuery page) {
+    return postRepository.findAll(
+            PostSpecifications.listedIn(blog, viewerId, LocalDateTime.now(clock)).and(matches(rawQuery)),
+            page.toPageable(LATEST));
+}
+
+@Transactional(readOnly = true)
+public Page<Post> searchAll(Long viewerId, String rawQuery, PageQuery page) {
+    Specification<Post> condition = PostSpecifications.visibleTo(viewerId, LocalDateTime.now(clock))
+            .and(matches(rawQuery));
+    return postRepository.findBy(condition, query -> query.project("blog", "category")
+            .page(page.toPageable(LATEST)));
+}
+```
+
+- 두 메서드의 차이는 **범위 조건** 하나다.
+  - 블로그 안: `listedIn(blog, …)` = 그 블로그의 글, 주인이면 자기 비공개 글까지(블로그 화면과 같음, 5.4).
+  - 전체: `visibleTo(viewerId, …)` = 모든 블로그의 글 중 **남에게 보이는** 것(홈 최신 글과 같은 조건, [16](./16-authorization-visibility.md)). 비공개, 구독하지 않은 구독자 공개, 숨긴 글, 지운 글, 이용 제한 블로그, 정지된 회원의 블로그가 빠진다. 구독한 회원에게는 구독자 공개 글이 나온다.
+- `Specification.and(...)`: 조건 두 개를 `AND`로 잇는다. 찾기 조건(`matches`)은 그대로 두고 범위만 갈아 끼우는 것이 Specification을 쓰는 이유다.
+- 주인도 전체 검색에서는 자기 비공개 글이 안 나온다. 플랫폼 화면은 "남들이 보는 세상"이고(홈과 같음), 자기 비공개 글은 자기 블로그 안 검색에서 찾는다. API 명세에 적었다.
+- `project("blog", "category")`: 전체 검색은 글마다 블로그가 다르다. 한 줄에 블로그 이름·주소가 나가므로 함께 읽는다(블로그 안 검색은 블로그를 이미 알아서 필요 없었다).
+
+**블로그 검색은 다른 표에서 찾는다.**
+
+```java
+Specification<Blog> condition = (root, query, cb) -> {
+    Join<Blog, Member> owner = root.join("member");
+    return cb.and(
+            cb.isNull(root.get("deletedAt")),
+            cb.isFalse(root.get("restricted")),
+            cb.isNull(root.get("movedToBlog")),
+            cb.or(cb.notEqual(owner.get("status"), MemberStatus.SUSPENDED),
+                    cb.and(cb.isNotNull(owner.get("suspendedUntil")),
+                            cb.lessThanOrEqualTo(owner.<LocalDateTime>get("suspendedUntil"), now))),
+            cb.or(cb.like(root.get("name"), pattern, LikePatterns.ESCAPE),
+                    cb.like(root.get("description"), pattern, LikePatterns.ESCAPE)));
+};
+```
+
+- 가시성은 `BlogVisibilityPolicy.isOpenToOthers`(지우지 않음, 이용 제한 아님, 주인이 정지 중이 아님)를 쿼리 조건으로 옮긴 것이다. 한 개를 볼 때 쓰는 판단과 목록 조건이 같아야 한다(5.4의 글 쪽과 같은 원칙).
+- **이사한 블로그는 뺀다.** 옛 블로그는 새 블로그로 301되는 자리라, 둘 다 나오면 같은 블로그가 두 번 보인다.
+- `description`이 `NULL`이면 `LIKE`의 결과도 `NULL`(참이 아님)이라 그 블로그는 이름으로만 걸린다. 따로 처리할 것이 없다.
+- 정렬은 새로 만든 순(`createdAt DESC, id DESC`)이다. 명세에 정렬이 없어 정했고 API 명세에 적었다. 구독자 수 순은 구독(스텝 16)이 생긴 뒤에 의미가 있다.
+
+**한 페이지에 붙는 값은 종류마다 한 번에 읽는다.** 블로그 한 줄에는 구독자 수, 블로그 사진, 주인 사진, 주인의 대표 블로그 주소가 붙는다. 10개를 하나씩 읽으면 40번이다. `BlogSearchService`가 종류마다 한 번씩 읽는다.
+
+```java
+Map<Long, Long> subscribers = content.isEmpty() ? Map.of()
+        : subscriptionRepository.countByBlogIds(content.stream().map(Blog::getId).toList()).stream()
+                .collect(Collectors.toMap(row -> (Long) row[0], row -> (Long) row[1]));
+```
+
+```java
+// subscription/domain/SubscriptionRepository.java
+@Query("select s.blog.id, count(s) from Subscription s where s.blog.id in :blogIds group by s.blog.id")
+List<Object[]> countByBlogIds(@Param("blogIds") Collection<Long> blogIds);
+```
+
+- `group by`로 블로그마다 센 줄을 받는다. 구독자가 없는 블로그는 줄이 없어서 `getOrDefault(id, 0L)`로 0을 넣는다.
+- `Object[]`: JPQL에서 엔티티가 아닌 값 여러 개를 고르면 줄마다 배열로 온다. `row[0]`이 블로그 id, `row[1]`이 `count`(JPQL의 `count`는 `Long`)다.
+
+**화면.** 플랫폼 머리글에 검색창을 더했다(블로그 머리글의 검색창은 그 블로그 안 검색). `/search?q=&type=&page=`가 원천이라(5.8) 탭을 바꾸면 주소의 `type`이 바뀐다. 글 한 줄은 홈 최신 글과 같은 모양이라 `PlatformPostItem`으로 나눠 둘이 같이 쓴다. 글마다 블로그가 달라 제목·블로그 이름은 그 블로그 주소로 가는 `<a>`다([46](./46-entry-routing-write-button.md) 3.3).
+
+테스트 `GlobalSearchIntegrationTest`는 테스트마다 아무도 안 쓸 검색어(`"q" + UUID 10자`)를 만든다. 전체 검색은 **DB 전체**가 범위라, 다른 테스트가 남긴 글에 같은 단어가 있으면 개수가 틀린다. 블로그 안 검색 테스트는 새 블로그 하나가 범위라 이런 걱정이 없었다.
+
+| 테스트 | 확인하는 것 |
+| --- | --- |
+| `findsPostsOfEveryBlogByTitleTextOrTagNewestFirst` | 두 블로그의 글이 함께, 최신순, 본문의 대문자도 걸림, `type=post`는 기본과 같음 |
+| `postsNobodyElseMaySeeAreNotFound` | 비공개·구독자 공개·숨김·지움·제한 블로그·정지 회원 블로그의 글 제외, 주인에게도 자기 비공개 글 없음, 구독한 회원에게는 구독자 공개 글 |
+| `findsBlogsByNameOrDescriptionWithOwnerAndSubscriberCount` | 이름·소개로 찾음, 제한·지운 블로그 제외, 구독자 수, 주인 닉네임과 대표 블로그 주소 |
+| `badInputIs400AndBlogAddressStillSearchesOnlyThatBlog` | 빈 검색어·알 수 없는 `type` 400, 블로그 주소에서는 그 블로그 글만 |
+
 ## 6. 자주 하는 실수와 함정
 
 - **HTML 칸에서 LIKE로 찾는다.** `strong`, `href`, `amp`로 엉뚱한 글이 걸리고 `&` 검색이 틀린다. 글자만 담은 칸에서 찾는다.
@@ -522,6 +603,8 @@ cb.like(root.get("title"), pattern, LikePatterns.ESCAPE)
 - **NOT NULL 칸을 한 번에 더한다.** 기존 행이 빈 값이 되거나 마이그레이션이 실패한다. 더하기 → 채우기 → NOT NULL.
 - **검색어를 화면 상태에만 둔다.** 새로고침하면 사라지고 주소를 나눌 수 없다. 주소의 쿼리 문자열을 원천으로 쓴다.
 - **쿼리 문자열을 문자열 이어 붙이기로 만든다.** `&`, `#`, `%`, 한글에서 깨진다. `URLSearchParams`를 쓴다.
+- (스텝 15) **전체 검색에 블로그 안 검색의 범위(`listedIn`)를 쓴다.** 블로그가 없어 쓸 수도 없지만, 억지로 주인 기준을 넣으면 주인의 비공개 글이 플랫폼 검색에 섞인다. 플랫폼은 `visibleTo`.
+- (스텝 15) **전체 검색 테스트를 흔한 단어로 쓴다.** DB 전체가 범위라 다른 테스트의 글이 섞여 개수가 틀린다. 테스트마다 고유한 단어를 만든다.
 - **"LIKE는 늘 느리다"거나 "늘 괜찮다"고 단정한다.** 표 크기와 다른 조건으로 좁힐 수 있는지에 달렸다. `EXPLAIN`으로 확인한다.
 
 ## 7. 직접 해 보기
@@ -637,6 +720,12 @@ EXPLAIN SELECT id FROM post WHERE blog_id = 1 AND status = 'PUBLISHED' AND title
 
 11. 검색에도 `PostSpecifications.listedIn`을 쓰는 이유는?
 <details><summary>답</summary>검색 결과도 글 목록이라 볼 수 없는 글의 제목·요약이 보이면 안 된다. 목록과 같은 조건 하나를 써야 규칙이 어긋나지 않는다(주인에게는 비공개 글도 나온다).</details>
+
+12. (스텝 15) 블로그 안 검색과 전체 검색에서 같은 코드와 다른 코드는 각각 무엇인가?
+<details><summary>답</summary>무엇이 맞는 글인가(제목·본문 글자·태그 이름 LIKE, <code>matches</code>)는 같다. 범위가 다르다: 블로그 안은 <code>listedIn(blog, …)</code>(그 블로그, 주인이면 자기 비공개 글까지), 전체는 <code>visibleTo(viewerId, …)</code>(모든 블로그에서 남에게 보이는 글). Specification을 <code>and</code>로 이어 범위만 바꾼다.</details>
+
+13. (스텝 15) 블로그 검색 결과 10개의 구독자 수를 쿼리 한 번으로 세는 방법과, 구독자가 없는 블로그를 어떻게 처리하나?
+<details><summary>답</summary><code>select s.blog.id, count(s) … where s.blog.id in :blogIds group by s.blog.id</code>로 블로그마다 센 줄을 받는다. 구독자가 없는 블로그는 줄이 없으므로 맵에서 <code>getOrDefault(id, 0L)</code>로 0을 쓴다.</details>
 
 ## 9. 더 읽을거리
 
