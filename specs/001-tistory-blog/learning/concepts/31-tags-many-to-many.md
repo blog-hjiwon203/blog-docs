@@ -1,6 +1,6 @@
 # 31. 태그와 다대다 관계
 
-> 관련 스텝: [스텝 7](../step-07.md) (T038, T039), [스텝 8](../step-08.md) (T054), [스텝 9a](../step-09a.md) (T038a) · 관련 개념: [36-ranking-aggregation](./36-ranking-aggregation.md), [06-jpa-entity-mapping](./06-jpa-entity-mapping.md), [08-pagination](./08-pagination.md), [16-authorization-visibility](./16-authorization-visibility.md), [22-bean-validation](./22-bean-validation.md), [25-react-forms-data](./25-react-forms-data.md), [28-thymeleaf-to-react](./28-thymeleaf-to-react.md), [32-search-like](./32-search-like.md)
+> 관련 스텝: [스텝 7](../step-07.md) (T038, T039), [스텝 8](../step-08.md) (T054), [스텝 9a](../step-09a.md) (T038a), [스텝 17](../step-17.md) (T098 이름 바꾸기·지우기 5.12, 글 없는 태그 지우기 5.13) · 관련 개념: [36-ranking-aggregation](./36-ranking-aggregation.md), [06-jpa-entity-mapping](./06-jpa-entity-mapping.md), [08-pagination](./08-pagination.md), [16-authorization-visibility](./16-authorization-visibility.md), [22-bean-validation](./22-bean-validation.md), [25-react-forms-data](./25-react-forms-data.md), [28-thymeleaf-to-react](./28-thymeleaf-to-react.md), [32-search-like](./32-search-like.md)
 
 ## 1. 이 문서로 배우는 것
 
@@ -78,7 +78,7 @@ ALTER TABLE post_tag ADD CONSTRAINT fk_post_tag_tag FOREIGN KEY (tag_id) REFEREN
 
 - `post_tag`의 기본 키가 `(post_id, tag_id)` 두 칸 묶음이다. 같은 글에 같은 태그가 두 번 달릴 수 없다.
 - 태그는 **블로그마다** 따로다. A 블로그의 "spring"과 B 블로그의 "spring"은 다른 행이다. `UNIQUE (blog_id, name)`이 블로그 안에서 이름이 하나임을 지킨다.
-- 외래 키의 `ON DELETE CASCADE`는 글이나 태그 행이 **실제로 지워질 때** 연결 행도 같이 지운다. 이 프로젝트에서 글 삭제는 소프트 삭제(`deleted_at`, [27](./27-soft-delete-bulk-update.md))라 평소에는 일어나지 않는다. 지운 글은 목록 조건(`listedIn`)이 거른다.
+- 외래 키의 `ON DELETE CASCADE`는 글이나 태그 행이 **실제로 지워질 때** 연결 행도 같이 지운다. 이 프로젝트에서 글 삭제는 소프트 삭제(`deleted_at`, [27](./27-soft-delete-bulk-update.md))라 글 쪽 CASCADE는 평소에는 일어나지 않는다. 지운 글은 목록 조건(`listedIn`)이 거른다. 태그 쪽 CASCADE는 스텝 17부터 쓴다. 주인이 태그를 지우거나, 글이 하나도 남지 않은 태그를 서버가 지울 때 그 태그의 연결 행(지운 글의 연결 포함)을 DB가 같이 지운다(5.12, 5.13).
 - "글당 10개"는 표의 제약으로 나타내기 어렵다(행 개수 제한). 그래서 서비스 코드가 검사한다고 주석에 적었다.
 
 ### 3.2 JPA로 매핑하는 두 방법
@@ -175,7 +175,9 @@ PUT /api/posts/{id}  { "tagNames": ["jpa", "mysql"] }      원래 태그: spring
   커밋 때 변경 감지: post_tag에서 (id, spring) 연결이 빠지고 (id, mysql) 연결이 생긴다
 ```
 
-`tag` 표의 "spring" 행은 **지우지 않는다**. 다른 글이 쓰고 있을 수 있고, 나중에 다시 쓸 수도 있다. 테스트 `editingReplacesTagsButKeepsBlogTags`가 수정 뒤 블로그 태그가 `jpa, mysql, spring` 세 개임을 확인한다. 아무 글도 쓰지 않는 태그를 어떻게 할지는 사이드바 태그 목록을 만들 때(스텝 8) 그 목록 쿼리가 "글이 있는 태그만" 고르는 식으로 다룰 수 있다.
+스텝 7~16에서는 `tag` 표의 "spring" 행을 **지우지 않았다**. 다른 글이 쓰고 있을 수 있고, 나중에 다시 쓸 수도 있다고 보았다. 아무 글도 쓰지 않는 태그는 목록 쿼리가 "글이 있는 태그만" 골라 화면에서만 감췄다(5.10).
+
+스텝 17에서 이 방식의 구멍이 드러나 바꿨다(2026-10-11 지원 결정, 5.13). 지금은 수정이 끝날 때 **빠진 태그 가운데 어느 글에도 남지 않은 것을 지운다**. "spring"을 다른 글이 쓰고 있으면 남고, 아무도 안 쓰면 지워진다. 테스트 `editingReplacesTagsAndRemovesTagsNoPostUses`가 수정 뒤 블로그 태그가 `jpa, mysql` 두 개임을 확인한다. 다음에 누가 "spring"을 다시 달면 새로 만든다.
 
 컬렉션을 `clear()` 뒤 `addAll()` 하면 Hibernate가 `post_tag`에 DELETE·INSERT를 몇 번 보내는지는 컬렉션 종류와 Hibernate 버전에 따라 다르다. 궁금하면 SQL 로그를 켜고 직접 본다(7.4).
 
@@ -369,6 +371,7 @@ DB 칸의 정렬 규칙 `utf8mb4_0900_ai_ci`는 이름 그대로 악센트 무�
 - 그다음 읽기는 **잠금 읽기**여야 한다. 평범한 SELECT는 이 트랜잭션이 처음 읽은 때의 스냅샷을 보므로, 다른 트랜잭션이 막 커밋한 태그가 안 보일 수 있다(문서 33의 공감 수 버그와 같은 이유).
 - `PESSIMISTIC_READ`(MySQL에서 `FOR SHARE`)인 이유: 처음에는 `PESSIMISTIC_WRITE`(`FOR UPDATE`)로 했더니 동시 테스트에서 **데드락**이 났다. `INSERT IGNORE`가 중복을 만나면 InnoDB는 그 인덱스 행에 공유(S) 잠금을 걸어 둔다. 늦은 트랜잭션 여럿이 모두 S 잠금을 쥔 채 배타(X) 잠금으로 올리려 하면, 서로 상대의 S 잠금이 풀리기를 기다린다. 읽기만 하면 되므로 S 잠금으로 충분하고, S끼리는 서로 막지 않는다.
 - 이 테스트는 다섯 글을 동시에 저장해 모두 201, 태그 1개, 연결 행 5개인지 본다. 세 번 연달아 돌려 확인했다.
+- (스텝 17) 이미 있는 태그를 찾는 줄도 바뀌었다. 평범하게 찾은 뒤 **번호로 잠그며 다시 읽는다**(`findLockedByIdIn`). 태그가 지워질 수 있게 되어서다. 이유와, 이름으로 잠갔다가 데드락이 난 이야기는 5.13.
 
 ### 5.5 `post/application/PostService.java`: 발행·수정에서 부르기
 
@@ -420,7 +423,7 @@ DB 칸의 정렬 규칙 `utf8mb4_0900_ai_ci`는 이름 그대로 악센트 무�
 ```
 
 - 블로그 메인 목록과 **같은 메서드**에 조건 하나(`taggedWith`)를 더했다. 볼 수 있는 글 조건(`listedIn`), 최신순 정렬, 10개씩 페이지가 그대로 따라온다. 태그 목록을 위해 가시성 규칙을 다시 쓰지 않는다.
-- 태그를 먼저 이름으로 찾는다. 없으면 404. 이 블로그에 그런 태그가 없다는 뜻이다. 화면(`BlogMainPage`)은 404를 받으면 "찾을 수 없음" 화면을 보여 준다.
+- 태그를 먼저 이름으로 찾는다. 없으면 404. 이 블로그에 그런 태그가 없다는 뜻이다. (스텝 17부터는 태그가 있어도 보는 사람이 볼 수 있는 글이 하나도 없으면 404다, 5.13.) 화면(`BlogMainPage`)은 404를 받으면 "찾을 수 없음" 화면을 보여 준다.
 - `root.join("tags")`: `Post.tags` 필드 이름으로 조인한다. JPA가 `@JoinTable` 정보를 보고 `post → post_tag → tag` 두 번 조인하는 SQL을 만든다. 연결 테이블을 코드에서 직접 부르지 않는다.
 - `.get("id")`와 태그 id 비교: 이름이 아니라 **id**로 비교한다. 이름 비교는 위의 `findByBlogIdAndName`에서 한 번만 한다.
 - 태그는 블로그마다 따로라 `blogId`로 먼저 좁힌다. 다른 블로그의 태그 이름으로는 이 블로그의 글이 나오지 않는다.
@@ -616,7 +619,7 @@ export function sameName(a: string, b: string): boolean {
 블로그 태그와 각 태그의 글 수를 `GET /api/tags`와 사이드바 `TAG` 모듈(카테고리 다음)로 보여 준다. 응답 한 줄은 `{ id, name, postCount }`, 글 수 많은 순이고 같으면 이름순(이 문서의 `Collator` 비교)이다.
 
 - 글 수는 **보는 사람 기준**이다. 블로그 화면 목록과 같은 조건(`listedIn`)으로 `post JOIN post_tag`를 태그별로 센다(`PostCountRepository.countByTag`). 주인에게는 비공개·숨긴 글도 세고, 다른 사람에게는 볼 수 있는 글만 센다.
-- 볼 수 있는 글이 0개인 태그는 **목록에서 빠진다**. 비공개 글에만 단 태그 이름이 새지 않게 하려는 것이고, 4.2에서 미뤄 둔 "아무 글도 쓰지 않는 태그"도 이렇게 화면에서 사라진다(행은 남는다).
+- 볼 수 있는 글이 0개인 태그는 **목록에서 빠진다**. 비공개 글에만 단 태그 이름이 새지 않게 하려는 것이고, 4.2에서 미뤄 둔 "아무 글도 쓰지 않는 태그"도 이렇게 화면에서 사라진다. 스텝 16까지는 행이 남아서 관리 화면에서 문제가 됐고, 스텝 17부터는 행도 지운다(5.13).
 - 쿼리와 코드 설명은 집계를 다루는 [36](./36-ranking-aggregation.md) 5.2에 있다. 테스트는 `TagIntegrationTest.tagListCountsOnlyPostsTheViewerCanSeeMostUsedFirst`.
 - 사이드바에 모듈이 하나 늘어 최근 글·최근 댓글의 위치가 한 칸씩 밀렸다. 사이드바를 위치(`modules[2]`)로 확인하던 다른 테스트 세 개도 함께 고쳤다.
 
@@ -694,6 +697,143 @@ delete from post_tag where post_id=? and tag_id=?          ← spring 하나
 
 동작이 같은지는 원래 있던 테스트(`TagIntegrationTest`의 정리·수정·동시 생성·태그 목록, `SearchIntegrationTest`, `SidebarIntegrationTest`, 글 쓰기·상세 테스트)가 그대로 통과하는 것으로 확인했다. 전체 278개 통과.
 
+### 5.12 (스텝 17) 태그 이름 바꾸기·지우기 (T098, TAG-04)
+
+명세 US11 6번: "같은 블로그에 같은 이름은 둘 수 없고, 태그를 지워도 글은 남는다."
+
+**이름 바꾸기**: 글에 달 때와 **같은 이름 규칙**을 써야 한다. 그래서 `TagNames`에 한 이름용 `normalizeOne`을 더했다(앞뒤 공백·앞의 `#` 떼기, 1~30자, `/` 금지). 규칙을 두 번 쓰면 "글에는 못 다는 이름으로 바꿀 수 있는" 틈이 생긴다.
+
+```java
+// TagManageService.rename
+String name = TagNames.normalizeOne(rawName);
+boolean taken = tagRepository.findByBlogIdAndName(blog.getId(), name)
+        .filter(other -> !other.getId().equals(tag.getId()))
+        .isPresent();
+if (taken) {
+    throw new BusinessException(ErrorCode.NAME_TAKEN);
+}
+tag.rename(name);
+tagRepository.saveAndFlush(tag);   // 그 사이 같은 이름이 생기면 DataIntegrityViolation → 409
+```
+
+- `findByBlogIdAndName`은 DB 정렬 규칙(`utf8mb4_0900_ai_ci`)으로 비교해서 `JPA`와 `jpa`, `Café`와 `cafe`를 같은 이름으로 찾는다(5.3). **자기 자신은 빼고** 본다. 그래야 `spring` → `Spring`처럼 대소문자만 바꾸는 것이 된다(회원 닉네임과 같은 문제, [38](./38-member-profile-update.md) 3.4).
+- 두 태그를 합치기(같은 이름으로 바꾸면 두 태그의 글을 하나로)는 하지 않았다. 409로 막고, 주인이 한쪽을 지우게 한다. 합치기는 글마다 연결을 옮기고 중복 연결을 지워야 해서 따로 기능이 필요하다.
+
+**지우기**: 태그 행만 지우면 된다. 연결(`post_tag`)은 외래 키의 `ON DELETE CASCADE`(3.1)가 같이 지운다.
+
+```java
+// TagManageService.delete
+tagRepository.delete(find(blog, tagId));
+```
+
+- 연결만 지워지므로 **글은 남는다**. 글의 태그 목록에서 그 이름만 빠진다.
+- 처음에는 "외래 키가 있으니 연결을 먼저 지워야 한다"고 생각해 `DELETE FROM post_tag WHERE tag_id = ?`를 먼저 보냈다. 스키마를 다시 읽어 보니 `fk_post_tag_tag`에 `ON DELETE CASCADE`가 있었다. 외래 키는 **CASCADE가 없을 때만** 부모 행 삭제를 막는다. 쓸데없는 문장이라 지웠다. 외래 키를 볼 때는 "있다"만 보지 말고 `ON DELETE` 동작까지 본다.
+- 글 쪽에서 `post.postTags`를 하나씩 지우는 방법(5.11의 `orphanRemoval`)은 그 태그가 달린 글을 전부 읽어야 한다. DB가 한 번에 지우는 쪽이 낫다. 이 트랜잭션은 글을 읽지 않으므로 영속성 컨텍스트에 옛 연결이 남을 일도 없다.
+
+화면: 관리 "카테고리·태그"의 태그 표에 "이름 변경"(그 자리에서 고치기)과 "삭제"(글 수를 알려 주는 확인 창).
+
+### 5.13 (스텝 17) 글이 하나도 남지 않은 태그는 지운다 (TAG-03, TAG-04)
+
+**발견한 문제.** 스텝 17을 마친 뒤 지원이 "태그 달린 글이 삭제되면 관리창에서 그 태그가 사라지는지 등 여러 경우를 고려해 보라"고 했다. 따져 보니 관리 화면의 태그 표가 블로그 사이드바와 **같은 API**(`GET /api/tags`, 5.10)를 쓰고 있었다. 그 API는 주인에게도 "발행한 글에 달린 태그"만 센다. 그래서 이런 일이 생겼다.
+
+| 경우 | 화면 | DB | 문제 |
+| --- | --- | --- | --- |
+| 태그가 달린 글을 모두 삭제 | 표에서 사라짐 | 태그 행은 남음 | 다른 태그를 그 이름으로 바꾸면 "이미 있습니다"(409)인데 그런 태그는 표에 없다. `/tag/그이름`은 404가 아니라 빈 목록 |
+| 글을 고쳐 태그를 뺌 | 위와 같음 | 위와 같음 | 위와 같음 |
+| 임시저장·예약 글에만 단 태그 | 표에 없음 | 있음 | 이름을 바꾸거나 지울 방법이 없다 |
+| 비공개 글에만 단 태그 | 주인에게만 보임 | 있음 | 다른 사람이 `/tag/이름`을 열면 빈 목록이라 그 이름이 있다는 것은 알 수 있다 |
+
+뿌리는 하나다. **화면에서는 없는 태그가 DB에는 있다.** 사이드바용 목록은 "보이는 글이 있는 태그만" 거르는 것이 맞다(비공개 글의 태그 이름이 새지 않게). 하지만 그 거르기로 "글 없는 태그"까지 감춰 두니, 감춰진 행이 이름 검사·주소·관리에서 다시 튀어나왔다.
+
+**정한 규칙**(2026-10-11 지원 결정): 지우지 않은 글이 하나도 없는 태그는 **없는 태그다. 서버가 지운다.** 티스토리도 이렇게 동작한다. 다른 방법은 "남겨 두고 관리 표에 글 0개로 보여 주기"였다. 이 방법은 주인이 직접 정리해야 하고, 블로그 화면과 관리 화면에서 "태그가 있다"의 뜻이 달라진다.
+
+**언제 지우나.** 글의 태그가 줄어드는 곳은 두 곳뿐이다. 글을 지울 때(하나 삭제와 글 관리 일괄 삭제는 같은 메서드를 쓴다)와 글을 고칠 때다. 두 곳 모두 **바뀌기 전에 달려 있던 태그 번호**를 들고 있다가, 끝에서 정리를 부른다.
+
+```java
+// PostService.delete (요약)
+Post post = postRepository.findById(id).orElseThrow();
+Set<Long> tagIds = post.tagIds();          // 지우기 전에 달려 있던 태그
+post.delete(now);                          // deleted_at만 채운다(소프트 삭제)
+tagService.removeUnused(tagIds);           // 그 가운데 남은 글이 없는 태그를 지운다
+
+// PostService.edit (요약)
+Set<Long> oldTagIds = post.tagIds();
+post.replaceTags(tagService.resolve(blog, command.tagNames()));
+...
+tagService.removeUnused(oldTagIds);        // 빠진 태그 가운데 남은 글이 없는 것
+```
+
+```java
+// TagRepository
+@Modifying(flushAutomatically = true)
+@Query(value = """
+        DELETE FROM tag
+        WHERE id IN (:tagIds)
+          AND NOT EXISTS (SELECT 1 FROM post_tag pt JOIN post p ON p.id = pt.post_id
+                          WHERE pt.tag_id = tag.id AND p.deleted_at IS NULL)""", nativeQuery = true)
+int deleteUnused(@Param("tagIds") Collection<Long> tagIds);
+```
+
+줄별로:
+- `WHERE id IN (:tagIds)`: 블로그 태그 전부가 아니라 **방금 영향을 받은 태그만** 본다. 블로그 전체를 훑으면 다른 사람이 막 만든(아직 글에 연결하기 전인) 태그까지 지울 수 있다.
+- `NOT EXISTS (... p.deleted_at IS NULL)`: "지우지 않은 글에 연결된 적이 없는" 태그만. 지운 글의 연결은 세지 않는다. 지운 글은 되살리는 기능이 없으므로 그 연결은 의미가 없다.
+- 태그 행이 지워지면 `ON DELETE CASCADE`가 지운 글의 연결 행도 같이 지운다.
+- `NOT EXISTS`의 부분 쿼리가 바깥 `tag`를 가리킨다(`pt.tag_id = tag.id`). MySQL은 DELETE의 부분 쿼리가 **지우는 표 자신을 FROM에 두는 것**은 막지만(오류 1093), 이렇게 바깥 행을 참조만 하는 것은 된다.
+- `flushAutomatically = true`: 이 DELETE는 DB에 직접 가는 SQL이라, 같은 트랜잭션에서 JPA로 바꾼 것(글의 `deleted_at`, `replaceTags`가 지운 연결 행)이 **아직 DB에 안 갔으면** 남은 글을 잘못 센다. 이 옵션은 쿼리 전에 영속성 컨텍스트를 먼저 DB로 보낸다(flush).
+  - 실험해 보니 이 옵션을 빼도 테스트는 통과했다. Hibernate는 flush 모드가 기본값(AUTO)이면 네이티브 쿼리 앞에서 스스로 flush한다. 네이티브 SQL은 어느 표를 건드리는지 알 수 없어서다.
+  - 그래도 옵션을 남겼다. "이 쿼리는 앞의 변경이 DB에 있어야 맞다"는 의도가 코드에 보이고, Hibernate의 기본 동작에 기대지 않는다.
+- `clearAutomatically`는 **켜지 않았다**. 켜면 영속성 컨텍스트가 비워져 `edit`이 돌려주는 글 객체가 관리 밖(detached)이 된다. 그 뒤로 이 트랜잭션은 지워진 태그를 가리키는 연결을 더 바꾸지 않으므로 비울 필요도 없다.
+
+**관리 화면 전용 목록.** 블로그 화면용 `GET /api/tags`는 그대로 두고 `GET /api/manage/tags`(주인만)를 새로 만들었다.
+
+```java
+// TagListService.managed (요약)
+Map<Long, Long> all = postRepository.countByTag(inBlog(blog).and(ownerView()));        // 지우지 않은 글 전부
+Map<Long, Long> published = postRepository.countByTag(listedIn(blog, ownerId, now));   // 블로그 화면에 나오는 글
+return tags.map(tag -> new ManagedTag(id, name, all.getOrDefault(id, 0L), published.getOrDefault(id, 0L)))
+```
+
+- `postCount`는 임시저장·예약 글까지 센다. 그래서 초안에만 단 태그도 표에 나오고 이름을 바꾸거나 지울 수 있다.
+- `publishedCount`가 0이면 그 태그 주소에는 글이 없다(404). 화면은 그때 이름에 링크를 걸지 않고 "1 (발행 0)"처럼 보여 준다.
+- 같은 `countByTag`에 조건만 바꿔 두 번 부른다. 가시성 조건을 한 곳(`PostSpecifications`)에 둔 덕이다([16](./16-authorization-visibility.md)).
+- Thymeleaf로 치면 같은 표 조각을 블로그 화면과 관리 화면이 함께 쓰다가, 관리 화면에 필요한 칸이 달라져 **관리 화면용 컨트롤러 메서드를 따로** 둔 것이다.
+
+**태그 주소도 같은 규칙.** `/tag/이름`(API `GET /api/posts?tag=`)은 태그가 있어도 **보는 사람이 볼 수 있는 글이 하나도 없으면 404**다.
+
+```java
+if (tag != null) {
+    condition = condition.and(taggedWith(blog, tag));
+    if (!postRepository.exists(condition)) {
+        throw new BusinessException(ErrorCode.NOT_FOUND);
+    }
+}
+```
+
+비공개 글에만 단 태그를 다른 사람이 열면, "없는 태그"와 같은 404가 된다. 사이드바에서 빠지는 것과 같은 규칙이다(헌법 원칙 II: 볼 수 없는 것은 있는지도 모르게).
+
+**지워지는 태그에 글을 연결하는 경우.** 태그가 지워질 수 있게 되자 새 경쟁이 생겼다. 글 저장이 "jpa 태그가 있네"라고 읽은 뒤, 커밋 전에 다른 요청이 그 태그를 지운다. 그러면 글 저장은 없는 태그에 연결 행을 넣다가 외래 키 오류(500)를 낸다. 그래서 이미 있는 태그는 **잠그며 다시 읽는다**.
+
+```java
+// TagService.resolve (요약)
+List<Long> found = tagRepository.findByBlogIdAndNameIn(blog.getId(), names).stream().map(Tag::getId).toList();
+lockExisting(found).forEach(tag -> existing.putIfAbsent(tag.getName(), tag));   // select ... where id in (...) for share
+```
+
+- 잠금 읽기는 스냅샷이 아니라 **지금 커밋된 행**을 본다. 그사이 지워진 태그는 결과에 없다. 그 이름은 "없는 태그"로 넘어가 새로 만들어진다(5.4의 `INSERT IGNORE`).
+- 공유 잠금(`FOR SHARE`)을 쥐고 있는 동안 태그를 지우려는 쪽(배타 잠금이 필요하다)은 이 글 저장이 끝날 때까지 기다린다.
+
+**처음에는 이름으로 잠갔다가 데드락이 났다.** 처음 코드는 `where t.blog.id = :blogId and t.name in :names`에 바로 `FOR SHARE`를 붙였다. 그러자 기존 테스트 `sameNewTagFromConcurrentPostsIsCreatedOnce`(같은 새 태그 `동시`로 글 다섯 개를 동시에 저장)가 `Deadlock found when trying to get lock`으로 깨졌다.
+
+- 이름 `동시`는 아직 **없다**. 없는 값을 인덱스(`UNIQUE(blog_id, name)`)로 잠그며 찾으면, InnoDB는 행이 아니라 그 값이 들어갈 **빈 자리(gap)** 를 잠근다. 나중에 그 자리에 다른 트랜잭션이 끼워 넣지 못하게 하려는 것이다([33](./33-isolation-deadlock.md)).
+- 빈 자리 공유 잠금끼리는 서로 막지 않는다. 다섯 트랜잭션이 모두 같은 빈 자리를 잠근다.
+- 그다음 각자 `INSERT IGNORE`로 그 자리에 넣으려 한다. 넣으려면 "끼워 넣기 의도" 잠금이 필요한데, 이 잠금은 **남이 쥔 빈 자리 잠금과 부딪친다**. A는 B의 빈 자리 잠금을, B는 A의 빈 자리 잠금을 기다린다. 데드락이다.
+- 고친 방법: 잠금 없이 이름으로 찾은 뒤, **찾은 행만 기본 키로 잠근다**. 기본 키로 있는 행을 잠그면 그 행 하나만 잠기고 빈 자리는 잠기지 않는다. 아직 없는 이름은 잠그지 않고 5.4의 `INSERT IGNORE` 경로로 간다.
+- 같은 이름이 블로그에 이미 있을 때만 잠금이 생기므로, 새 태그를 동시에 만드는 경우는 스텝 9a와 똑같이 동작한다. 테스트가 다시 통과했다.
+
+**남은 경쟁.** 글 A를 지우는 요청과, 같은 태그로 글 B를 저장하는 요청이 거의 같은 순간에 오면, A의 정리가 B의 연결을 보지 못하고 태그를 지울 수 있다(그러면 B에서 그 태그만 빠진다). 정리 쪽도 잠그면 막을 수 있지만, 같은 주인이 두 탭에서 동시에 해야 생기는 일이라 받아들였다.
+
+확인은 테스트 두 개다. `tagWithNoPostLeftIsRemovedWhenPostsAreDeletedOrUntagged`는 글 삭제와 태그 빼기 뒤 태그가 사라지는지, 404·409를 본다. `manageTagListIncludesDraftOnlyTagsAndTagPageHidesInvisibleOnes`는 관리 목록, 권한, 태그 주소 404를 본다. 브라우저에서는 글 상세의 "삭제"를 누른 뒤 관리 표에서 그 글에만 있던 태그가 사라지는지 보았다. 그 이름으로 다른 태그를 바꿀 수 있는지, 초안 태그가 "1 (발행 0)"으로 링크 없이 나오는지, `/tag/초안태그`가 404 화면인지도 확인했다.
+
 ## 6. 자주 하는 실수와 함정
 
 - **태그를 글 표의 문자열 칸에 쉼표로 이어 저장한다.** 태그별 목록이 `LIKE '%spring%'`이 되어 `springboot`까지 걸리고, 이름 바꾸기와 개수 세기가 어려워진다. 다대다는 연결 테이블로.
@@ -711,6 +851,11 @@ delete from post_tag where post_id=? and tag_id=?          ← spring 하나
 - **조합 중 Enter를 처리한다.** 한글 태그의 마지막 글자가 빠지거나 두 번 들어간다. `isComposing`을 먼저 본다.
 - **키 이벤트로만 입력을 처리한다.** 붙여 넣기, 자동완성, 음성 입력은 keydown이 없다. 값은 `onChange`에서 본다(5.8의 버그).
 - **화면 규칙만 믿는다.** API를 직접 부르면 11개도, 31자도 들어온다. 서버의 `TagNames`가 진짜 검사다.
+- **목록에서 감추기만 하고 행은 남긴다.** 감춘 행이 이름 중복 검사, 주소, 관리 화면에서 다시 나타난다. "없는 것"이면 DB에서도 없애거나, 모든 곳에서 같은 기준으로 감춘다(5.13).
+- **블로그 화면용 API를 관리 화면에 그대로 쓴다.** 두 화면이 보여 줄 범위(발행 글만 / 초안까지)가 다르면 관리용을 따로 둔다.
+- **외래 키의 `ON DELETE`를 보지 않는다.** CASCADE면 자식 행을 먼저 지울 필요가 없다. 없으면 부모 삭제가 막힌다. 둘 다 스키마 한 줄로 갈린다.
+- **직접 SQL 전에 flush를 잊는다.** 같은 트랜잭션에서 JPA로 바꾼 것이 아직 DB에 없으면 네이티브 쿼리가 옛 상태를 본다. `@Modifying(flushAutomatically = true)`나 `flush()`.
+- **없을 수도 있는 값을 잠그며 찾는다.** InnoDB가 빈 자리를 잠가, 같은 값을 넣으려는 트랜잭션끼리 데드락이 난다. 있는 행만 기본 키로 잠근다.
 
 ## 7. 직접 해 보기
 
@@ -788,6 +933,10 @@ logging:
 cd frontend && npx vitest run src/components/editor/tagNames.test.ts
 ```
 
+(스텝 17) `./mvnw test -Dtest='PostSettingsIntegrationTest#renameAndDeleteTagsKeepPosts'`. 관리 → 카테고리·태그의 태그 표에서 `spring`을 `Spring`으로 바꾸면 되고, 다른 태그 이름(`JPA`가 있을 때 `jpa`)으로 바꾸면 "같은 이름의 태그가 이미 있습니다."가 뜬다. 태그를 지운 뒤 그 태그가 달렸던 글을 열면 글은 남고 태그만 빠져 있다. DB에서 `SELECT * FROM post_tag WHERE tag_id = {지운 번호};`가 빈다.
+
+(스텝 17, 5.13) 글 하나에만 단 태그를 만들고 그 글을 지운 뒤 관리 표와 DB(`SELECT * FROM tag WHERE name = '그이름';`)를 본다. 둘 다 없어야 한다. 연습 브랜치에서 `deleteUnused`의 `flushAutomatically = true`를 지우고 `tagWithNoPostLeftIsRemovedWhenPostsAreDeletedOrUntagged`를 돌려 보면 그래도 통과한다(Hibernate의 AUTO flush). SQL 로그(`spring.jpa.show-sql: true`)를 켜고, `DELETE FROM tag` 앞에 `update post set deleted_at=...`가 먼저 나가는지 순서를 본다. `findLockedByIdIn` 대신 이름으로 잠그는 쿼리(`where t.blog.id = :blogId and t.name in :names`에 `@Lock(PESSIMISTIC_READ)`)로 바꾸고 `sameNewTagFromConcurrentPostsIsCreatedOnce`를 돌려 데드락 로그를 찾아본다.
+
 `TagNames.normalize`의 `putIfAbsent`를 `put`으로 바꿔 보면(연습 브랜치) 어떤 테스트가 왜 깨지는지 본다.
 
 연습 브랜치에서 `findLockedByBlogIdAndName`의 `PESSIMISTIC_READ`를 `PESSIMISTIC_WRITE`로 바꾸고 `sameNewTagFromConcurrentPostsIsCreatedOnce`를 몇 번 돌려 본다. 로그에서 `Deadlock found when trying to get lock`을 찾는다. `@Lock`을 아예 지우면(평범한 SELECT) 어떻게 되는지도 보고, 이유를 [33](./33-isolation-deadlock.md)과 이어 생각해 본다.
@@ -835,6 +984,12 @@ cd frontend && npx vitest run src/components/editor/tagNames.test.ts
 
 14. (스텝 9a) `@ManyToMany` 대신 `PostTag` 엔티티로 바꾼 이유 세 가지와, `@MapsId`가 하는 일은?
 <details><summary>답</summary>연결 테이블에 칸이 생기면 매핑을 통째로 바꿔야 하고, 나가는 INSERT·DELETE가 코드에서 보이지 않으며, ERD의 표와 클래스가 1:1로 맞지 않는다. @MapsId는 복합 키의 칸(postId, tagId)을 연관(post, tag)의 id로 채워서, 같은 칸을 두 번 매핑하지 않게 한다.</details>
+
+15. (스텝 17) 글을 지운 뒤 태그를 정리하는 `DELETE ... NOT EXISTS` 쿼리 앞에서 flush가 필요한 이유는? 이 프로젝트에서 `flushAutomatically`를 빼도 테스트가 통과한 까닭은?
+<details><summary>답</summary>글의 <code>deleted_at</code>은 JPA 변경 감지로 바뀌어 flush 전에는 DB에 없다. 그 상태로 직접 SQL을 보내면 글이 아직 살아 있다고 보고 태그를 지우지 않는다. Hibernate는 flush 모드가 AUTO이면 네이티브 쿼리 앞에서 스스로 flush해서 옵션 없이도 통과했다. 옵션은 그 기본 동작에 기대지 않고 의도를 드러내려고 둔다.</details>
+
+16. (스텝 17) 이미 있는 태그를 이름으로 잠그며 찾으면 왜 데드락이 날 수 있나?
+<details><summary>답</summary>찾는 이름이 아직 없으면 InnoDB가 그 값이 들어갈 빈 자리(gap)를 잠근다. 빈 자리 공유 잠금끼리는 함께 걸리지만, 그 자리에 INSERT하려면 남의 빈 자리 잠금이 풀리기를 기다려야 한다. 여러 트랜잭션이 같은 새 이름을 넣으려 하면 서로 기다린다. 있는 행만 기본 키로 잠그면 빈 자리가 잠기지 않는다.</details>
 
 ## 9. 더 읽을거리
 
