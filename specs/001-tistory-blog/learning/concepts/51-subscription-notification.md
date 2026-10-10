@@ -1,6 +1,6 @@
 # 51. 구독과 알림: 멱등한 요청, 부수 효과, 읽을 때 거르기
 
-> 관련 스텝: [스텝 16](../step-16.md) (T089~T093, T113) · 관련 개념: [17 멱등성과 Redis](./17-idempotency-redis.md), [16 인가와 가시성](./16-authorization-visibility.md), [29 댓글 설계](./29-comments-design.md), [33 격리 수준과 데드락](./33-isolation-deadlock.md), [42 두 번째 DB와 비동기 이벤트](./42-second-db-async-events.md), [08 페이지 처리](./08-pagination.md), [19 React Router와 API 클라이언트](./19-react-router-api-client.md), [43 공유 미리보기](./43-open-graph-preview.md)
+> 관련 스텝: [스텝 16](../step-16.md) (T089~T093, T113), [스텝 18](../step-18.md) (제재·해제 알림 SANCTION, 5.9) · 관련 개념: [17 멱등성과 Redis](./17-idempotency-redis.md), [16 인가와 가시성](./16-authorization-visibility.md), [29 댓글 설계](./29-comments-design.md), [33 격리 수준과 데드락](./33-isolation-deadlock.md), [42 두 번째 DB와 비동기 이벤트](./42-second-db-async-events.md), [08 페이지 처리](./08-pagination.md), [19 React Router와 API 클라이언트](./19-react-router-api-client.md), [43 공유 미리보기](./43-open-graph-preview.md)
 
 ## 1. 이 문서로 배우는 것
 
@@ -341,6 +341,23 @@ export async function copyText(text: string): Promise<boolean> {
 | `notificationsOfGoneTargetsDropOutAndReadingWorks` | 글을 지우면 그 글의 알림이 목록에서 빠짐, 남의 알림 읽기 404, 읽음·모두 읽음, 안 읽은 수(지운 대상 포함), 비회원 401 |
 
 기존 테스트 세 곳(`PostWriteIntegrationTest` 2곳, `ManagePostIntegrationTest` 1곳)은 "구독자 공개는 400"을 기대하고 있었다. 규칙이 바뀌었으니 "된다"로 고치고, 목록에서 빠지는지까지 확인하게 했다.
+
+### 5.9 (스텝 18) 제재·해제 알림 `SANCTION`
+
+스텝 16에서 알림 종류에 `SANCTION`을 두고 "보낼 곳이 관리자 조치라 스텝 18"로 미뤘다. 스텝 18의 `ModerationService`가 조치마다 보낸다([53](./53-admin-moderation-audit.md) 5.4).
+
+```java
+public void sanctioned(Long receiverId, NotificationTargetType targetType, Long targetId, String message) {
+    String text = message.length() <= Notification.MESSAGE_LENGTH ? message
+            : message.substring(0, Notification.MESSAGE_LENGTH - 1) + "…";
+    notificationRepository.save(Notification.of(receiverId, NotificationType.SANCTION, targetType, targetId, text));
+}
+```
+
+- 댓글·공감 알림의 `send`와 달리 **"내가 한 일은 알리지 않는다" 검사가 없다**. 보내는 사람이 관리자이고 받는 사람이 당사자라 둘이 같을 일이 없다.
+- 문구가 글 제목을 담아 255자(`message` 칸)를 넘을 수 있어 자른다. 조치 쪽도 제목을 60자로 줄여 넣는다.
+- 누르면 갈 곳은 5.5의 "읽을 때 정하기" 그대로다. 대상이 회원(정지·해제)이면 마이페이지, 글(숨김)이면 그 글, 블로그(제한)면 그 블로그 홈이다. 숨긴 글은 작성자에게는 보이므로(사유와 함께) 알림 목록에서 빠지지 않는다.
+- 정지된 회원은 정지 중에 로그인할 수 없어서 정지 알림은 풀린 뒤에 읽는다. 정지 사유와 기한은 로그인 화면의 정지 안내가 먼저 보여 준다.
 
 ## 6. 자주 하는 실수와 함정
 
