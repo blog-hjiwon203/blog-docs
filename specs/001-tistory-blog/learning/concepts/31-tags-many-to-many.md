@@ -1,6 +1,6 @@
 # 31. 태그와 다대다 관계
 
-> 관련 스텝: [스텝 7](../step-07.md) (T038, T039), [스텝 8](../step-08.md) (T054), [스텝 9a](../step-09a.md) (T038a) · 관련 개념: [36-ranking-aggregation](./36-ranking-aggregation.md), [06-jpa-entity-mapping](./06-jpa-entity-mapping.md), [08-pagination](./08-pagination.md), [16-authorization-visibility](./16-authorization-visibility.md), [22-bean-validation](./22-bean-validation.md), [25-react-forms-data](./25-react-forms-data.md), [28-thymeleaf-to-react](./28-thymeleaf-to-react.md), [32-search-like](./32-search-like.md)
+> 관련 스텝: [스텝 7](../step-07.md) (T038, T039), [스텝 8](../step-08.md) (T054), [스텝 9a](../step-09a.md) (T038a), [스텝 17](../step-17.md) (T098 이름 바꾸기·지우기, 5.12) · 관련 개념: [36-ranking-aggregation](./36-ranking-aggregation.md), [06-jpa-entity-mapping](./06-jpa-entity-mapping.md), [08-pagination](./08-pagination.md), [16-authorization-visibility](./16-authorization-visibility.md), [22-bean-validation](./22-bean-validation.md), [25-react-forms-data](./25-react-forms-data.md), [28-thymeleaf-to-react](./28-thymeleaf-to-react.md), [32-search-like](./32-search-like.md)
 
 ## 1. 이 문서로 배우는 것
 
@@ -694,6 +694,41 @@ delete from post_tag where post_id=? and tag_id=?          ← spring 하나
 
 동작이 같은지는 원래 있던 테스트(`TagIntegrationTest`의 정리·수정·동시 생성·태그 목록, `SearchIntegrationTest`, `SidebarIntegrationTest`, 글 쓰기·상세 테스트)가 그대로 통과하는 것으로 확인했다. 전체 278개 통과.
 
+### 5.12 (스텝 17) 태그 이름 바꾸기·지우기 (T098, TAG-04)
+
+명세 US11 6번: "같은 블로그에 같은 이름은 둘 수 없고, 태그를 지워도 글은 남는다."
+
+**이름 바꾸기**: 글에 달 때와 **같은 이름 규칙**을 써야 한다. 그래서 `TagNames`에 한 이름용 `normalizeOne`을 더했다(앞뒤 공백·앞의 `#` 떼기, 1~30자, `/` 금지). 규칙을 두 번 쓰면 "글에는 못 다는 이름으로 바꿀 수 있는" 틈이 생긴다.
+
+```java
+// TagManageService.rename
+String name = TagNames.normalizeOne(rawName);
+boolean taken = tagRepository.findByBlogIdAndName(blog.getId(), name)
+        .filter(other -> !other.getId().equals(tag.getId()))
+        .isPresent();
+if (taken) {
+    throw new BusinessException(ErrorCode.NAME_TAKEN);
+}
+tag.rename(name);
+tagRepository.saveAndFlush(tag);   // 그 사이 같은 이름이 생기면 DataIntegrityViolation → 409
+```
+
+- `findByBlogIdAndName`은 DB 정렬 규칙(`utf8mb4_0900_ai_ci`)으로 비교해서 `JPA`와 `jpa`, `Café`와 `cafe`를 같은 이름으로 찾는다(5.3). **자기 자신은 빼고** 본다. 그래야 `spring` → `Spring`처럼 대소문자만 바꾸는 것이 된다(회원 닉네임과 같은 문제, [38](./38-member-profile-update.md) 3.4).
+- 두 태그를 합치기(같은 이름으로 바꾸면 두 태그의 글을 하나로)는 하지 않았다. 409로 막고, 주인이 한쪽을 지우게 한다. 합치기는 글마다 연결을 옮기고 중복 연결을 지워야 해서 따로 기능이 필요하다.
+
+**지우기**: 태그 행을 지우기 전에 글과의 연결(`post_tag`)을 먼저 지운다. 외래 키가 있어 연결이 남아 있으면 태그를 지울 수 없다.
+
+```java
+@Modifying(clearAutomatically = true)
+@Query(value = "DELETE FROM post_tag WHERE tag_id = :tagId", nativeQuery = true)
+int unlinkPosts(@Param("tagId") Long tagId);
+```
+
+- 연결만 지우므로 **글은 남는다**. 글의 태그 목록에서 그 이름만 빠진다.
+- 글 쪽에서 `post.postTags`를 하나씩 지우는 방법(5.11의 `orphanRemoval`)은 글을 전부 읽어야 해서, 한 문장 DELETE로 했다. 영속성 컨텍스트에 남은 옛 연결이 있을 수 있어 `clearAutomatically = true`로 비운다(글 삭제의 댓글 일괄 삭제와 같은 이유, [27](./27-soft-delete-bulk-update.md)).
+
+화면: 관리 "카테고리·태그"의 태그 표에 "이름 변경"(그 자리에서 고치기)과 "삭제"(글 수를 알려 주는 확인 창).
+
 ## 6. 자주 하는 실수와 함정
 
 - **태그를 글 표의 문자열 칸에 쉼표로 이어 저장한다.** 태그별 목록이 `LIKE '%spring%'`이 되어 `springboot`까지 걸리고, 이름 바꾸기와 개수 세기가 어려워진다. 다대다는 연결 테이블로.
@@ -787,6 +822,8 @@ logging:
 ./mvnw test -Dtest=TagIntegrationTest
 cd frontend && npx vitest run src/components/editor/tagNames.test.ts
 ```
+
+(스텝 17) `./mvnw test -Dtest='PostSettingsIntegrationTest#renameAndDeleteTagsKeepPosts'`. 관리 → 카테고리·태그의 태그 표에서 `spring`을 `Spring`으로 바꾸면 되고, 다른 태그 이름(`JPA`가 있을 때 `jpa`)으로 바꾸면 "같은 이름의 태그가 이미 있습니다."가 뜬다. 태그를 지운 뒤 그 태그가 달렸던 글을 열면 글은 남고 태그만 빠져 있다. DB에서 `SELECT * FROM post_tag WHERE tag_id = {지운 번호};`가 빈다.
 
 `TagNames.normalize`의 `putIfAbsent`를 `put`으로 바꿔 보면(연습 브랜치) 어떤 테스트가 왜 깨지는지 본다.
 

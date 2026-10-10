@@ -1,6 +1,6 @@
 # 39. 계층 데이터: 카테고리 2단계와 주제
 
-> 관련 스텝: [스텝 9](../step-09.md) (T060, T056, T064) · 관련 개념: [06-jpa-entity-mapping](./06-jpa-entity-mapping.md), [16-authorization-visibility](./16-authorization-visibility.md), [03-flyway-migration](./03-flyway-migration.md), [31-tags-many-to-many](./31-tags-many-to-many.md), [35-spring-cache-redis](./35-spring-cache-redis.md), [36-ranking-aggregation](./36-ranking-aggregation.md)
+> 관련 스텝: [스텝 9](../step-09.md) (T060, T056, T064), [스텝 17](../step-17.md) (T097 비공개 5.8, T060a 순서 바꾸기 5.9) · 관련 개념: [06-jpa-entity-mapping](./06-jpa-entity-mapping.md), [16-authorization-visibility](./16-authorization-visibility.md), [03-flyway-migration](./03-flyway-migration.md), [31-tags-many-to-many](./31-tags-many-to-many.md), [35-spring-cache-redis](./35-spring-cache-redis.md), [36-ranking-aggregation](./36-ranking-aggregation.md)
 
 ## 1. 이 문서로 배우는 것
 
@@ -301,6 +301,91 @@ public List<Post> topicPosts(Topic topic) {
 | `TopicIntegrationTest` | 주제 10개와 이름, 글 주제 고르기·바꾸기·지우기(null), 모르는 주제 400 |
 | `HomeTopicIntegrationTest` | 인기 순 3개 + 최신 3개 = 6, 다른 주제·주제 없음·비공개 글 제외, 모르는 주제·소문자 404 |
 
+### 5.8 (스텝 17) 비공개 카테고리: 가시성 판단에 조건 하나 더하기 (T097, CAT-05)
+
+명세 US11 5번: "비공개 카테고리를 다른 사람이 보면 그 카테고리와 글은 보이지 않는다." 스텝 9의 트리(`CategoryTreeService`)는 처음부터 비공개 카테고리를 주인이 아니면 빼고 있었다. 그런데 **그 카테고리의 글**은 목록·글 상세·검색에서 여전히 보였다. 트리만 숨기고 글을 숨기지 않으면, 주소를 아는 사람은 다 본다. 글을 볼 수 있는지는 가시성 판단 두 곳이 정하므로 거기에 조건을 더했다.
+
+글 하나를 볼 때(`PostVisibilityPolicy`):
+
+```java
+boolean openExceptAudience = post.getStatus() == PostStatus.PUBLISHED
+        && !post.isBlinded()
+        && (post.getCategory() == null || !post.getCategory().isHidden())   // 비공개 카테고리 (CAT-05)
+        && blogVisibilityPolicy.isOpenToOthers(blog);
+```
+
+```java
+// Category.isHidden: 이 카테고리나 그 상위가 비공개인가 (2단계라 상위 하나만 보면 된다)
+public boolean isHidden() {
+    return privateCategory || (parent != null && parent.isPrivateCategory());
+}
+```
+
+목록·개수·검색(`PostSpecifications.visibleTo`):
+
+```java
+Subquery<Long> hiddenCategory = query.subquery(Long.class);
+Root<Category> category = hiddenCategory.from(Category.class);
+Join<Category, Category> parent = category.join("parent", JoinType.LEFT);
+hiddenCategory.select(category.get("id")).where(
+        cb.equal(category.get("id"), post.get("category").get("id")),
+        cb.or(cb.isTrue(category.get("privateCategory")), cb.isTrue(parent.get("privateCategory"))));
+...
+cb.not(cb.exists(hiddenCategory)),
+```
+
+- "숨은 카테고리가 **없는**(NOT EXISTS) 글"이다. 미분류 글은 `post.category.id`가 NULL이라 `=`가 참이 되지 않아 부분 쿼리가 비고, NOT EXISTS가 참이 된다(미분류 글은 보인다).
+- 상위를 `LEFT` 조인한 이유: 최상위 카테고리는 상위가 없다. 안쪽 조인이면 최상위 카테고리 행이 사라져 판단이 틀린다.
+- **조인이 아니라 부분 쿼리**인 이유: 카테고리별 글 수(`countByCategory`)는 `post.category`로 묶는(GROUP BY) 쿼리에 이 조건을 붙인다. 같은 쿼리에 카테고리 조인을 하나 더 넣으면 어느 조인으로 묶는지 엉키기 쉽다. 부분 쿼리는 바깥 쿼리의 행 수와 묶음에 영향을 주지 않는다.
+- 한 곳(`visibleTo`)에 넣으니 블로그 목록·글 수·사이드바·홈·검색·피드·같은 카테고리 글이 모두 같이 바뀌었다. 판단을 한 곳에 둔 이점([16](./16-authorization-visibility.md), [50](./50-shared-rules-comment-guestbook.md)).
+- 주인은 `listedIn`의 주인 갈래(`ownerView`)를 타서 이 조건을 거치지 않는다. 자기 비공개 카테고리 글은 그대로 본다.
+
+화면: 관리 카테고리의 줄마다 "비공개로 / 공개로" 버튼, 비공개 카테고리에 "비공개", 상위가 비공개인 하위에 "상위 비공개" 표시.
+
+### 5.9 (스텝 17) 끌어서 놓아 순서·상하위 바꾸기 (T060a, CAT-04)
+
+**API: 전체를 한 번에.** `PUT /api/categories/order`에 `[{ id, parentId, sortOrder }]`를 블로그의 **모든 카테고리**만큼 보낸다. 한 줄씩 옮기는 API(`PATCH …/move`)를 여러 번 부르는 방법도 있지만, 끌어서 놓기를 여러 번 한 뒤 "저장"하는 화면에서는 최종 모양 하나를 보내는 쪽이 단순하고, 중간에 하나만 실패해 반쯤 바뀐 상태가 생기지 않는다.
+
+```java
+// CategoryService.reorder (요약)
+// 1) 보낸 번호 = 이 블로그의 카테고리 전부, 한 번씩     아니면 400 order
+// 2) 상위는 이 블로그의 "새 배치에서 최상위"인 카테고리   아니면 409 CATEGORY_DEPTH (자기 자신·하위의 하위 금지)
+// 3) 같은 자리(상위가 같은 것끼리)에 같은 이름 없음       있으면 409 NAME_TAKEN
+// 4) 자리마다 sortOrder 순으로 0, 1, 2…를 다시 매겨 moveTo(parent, i)
+// 5) flush — 그 사이 DB UNIQUE(blog_id, parent_key, name)에 걸리면 409 NAME_TAKEN
+```
+
+- 2)의 "새 배치에서 최상위": 상위가 될 카테고리의 `parentId`를 **보낸 목록에서** 찾는다(`parentOf.get(parentId) != null`이면 그것도 하위라 3단계). DB의 지금 모양이 아니라 바꾼 뒤의 모양으로 판단해야 한다.
+- 3)을 자바에서 먼저 보는 이유: DB UNIQUE도 막아 주지만, 바꾸는 **중간에** 잠깐 겹쳐도 걸린다(두 카테고리의 상위를 서로 맞바꾸면 한 줄을 먼저 UPDATE하는 순간 같은 자리에 같은 이름이 둘). 최종 모양이 맞는지는 자바에서 보고, 중간 겹침은 5)에서 409로 바꾼다.
+- 받은 `sortOrder`를 그대로 쓰지 않고 0부터 다시 매긴다. 화면이 1, 5, 9를 보내도 저장은 0, 1, 2라 다음 추가(`max + 1`)가 깔끔하다.
+
+**화면: 판단은 순수 함수로.** 끌어서 놓을 때 무엇이 어디로 가는지는 `pages/manage/categoryOrder.ts`의 함수들이 정한다.
+
+```ts
+export function moveBefore(rows: OrderRow[], dragId: number, targetId: number): OrderRow[] {
+  const target = rows.find((row) => row.id === targetId)
+  if (!target || dragId === targetId) {
+    return rows
+  }
+  if (target.parentId !== null && hasChildren(rows, dragId)) {
+    return rows                                    // 하위가 있는 것을 하위 자리로 = 3단계
+  }
+  const rest = rows.filter((row) => row.id !== dragId)
+  const index = rest.findIndex((row) => row.id === targetId)
+  return [...rest.slice(0, index), { id: dragId, parentId: target.parentId }, ...rest.slice(index)]
+}
+```
+
+- 카테고리를 한 줄씩 펼친 배열(`{ id, parentId }`)의 **순서가 곧 같은 자리 안의 순서**다. 다른 줄 위에 놓으면(`moveBefore`) 그 줄과 같은 자리의 바로 위, "하위로 넣기" 칸에 놓으면(`moveInto`) 그 카테고리의 하위 맨 아래, "최상위 맨 아래" 칸이면(`moveToRootEnd`).
+- 안 되는 이동이면 **같은 배열을 그대로** 돌려준다. 화면은 `next !== rows`로 바뀌었는지 보고, 안 바뀌었으면 "저장 전 순서"를 만들지 않는다.
+- React 상태(`useState`)도 DOM도 모르는 함수라 Vitest로 바로 시험할 수 있다(`categoryOrder.test.ts` 5개). 글쓰기 버튼의 `writeUrl`([46](./46-entry-routing-write-button.md))과 같은 방식이다.
+
+**HTML5 끌어서 놓기.** 줄에 `draggable`을 주고 `dragstart`(무엇을 끄나 기억) → 놓을 곳의 `dragover`(`preventDefault()`를 불러야 "놓을 수 있다"가 된다) → `drop`(이동 계산) → `dragend`(정리). Thymeleaf 화면이라면 같은 이벤트를 자바스크립트로 직접 달았을 것이다. React는 `onDragStart` 같은 속성으로 단다.
+
+- 끌어서 바꾼 순서는 **저장 전 상태**(`draft`)로만 둔다. "순서 저장"을 누르면 `toOrderItems(draft)`를 보내고, "되돌리기"면 버린다(목업 5번 "순서 저장"). 실수로 끌어도 바로 저장되지 않는다.
+- 저장 전 순서가 있는 동안 "하위 추가"를 막는다. 새 카테고리가 생기면 보낼 목록에서 빠져 서버가 400(order)을 준다.
+- 끌어서 놓기는 마우스용이다. 키보드만 쓰는 사람을 위한 "위로/아래로" 버튼은 아직 없다(남은 것).
+
 ## 6. 자주 하는 실수와 함정
 
 - **깊이 검사를 화면에만 둔다.** API를 직접 부르면 3단계가 생긴다. 서버가 검사한다.
@@ -355,9 +440,29 @@ docker exec blog-redis redis-cli keys 'blog:topicPosts*'
 
 ```bash
 ./mvnw test -Dtest='CategoryIntegrationTest,TopicIntegrationTest,HomeTopicIntegrationTest'
+./mvnw test -Dtest='PostSettingsIntegrationTest#postsInPrivateCategory*+reorder*'
+cd frontend && npx vitest run src/pages/manage/categoryOrder.test.ts
+```
+
+### 7.5 (스텝 17) 비공개 카테고리와 끌어서 놓기
+
+1. 관리 → 카테고리·태그에서 카테고리 하나에 하위를 만들고, 상위에 "비공개로"를 누른다. 하위 줄에 "상위 비공개"가 붙는다.
+2. 하위 카테고리에 든 글의 주소를 다른 브라우저(로그인 안 함)로 연다. 404 화면. 블로그 사이드바에도 두 카테고리가 없고, 전체 글 수도 줄었다.
+3. 줄을 끌어 다른 줄 위에 놓고, 다른 줄을 끌어 "하위로 넣기" 칸에 놓는다. "순서 저장"을 누르기 전에 새로고침하면 그대로다(저장 전 상태). 다시 해서 "순서 저장".
+4. 하위가 있는 카테고리를 다른 카테고리의 "하위로 넣기"에 놓아 본다. 아무 일도 없다(`moveInto`가 같은 배열을 돌려준다). 서버도 막는지 curl로 본다:
+
+```bash
+# 쿠키는 로그인한 브라우저나 curl -c로. 번호는 GET /api/blogs/{blogId}/categories로 확인
+curl -i -X PUT -b jar.txt -H 'Content-Type: application/json' http://{주소}.blog.test:8080/api/categories/order \
+  -d '[{"id":1,"parentId":2,"sortOrder":0},{"id":2,"parentId":null,"sortOrder":0},{"id":3,"parentId":1,"sortOrder":0}]'
+# 3의 상위 1이 하위가 되므로 409 CATEGORY_DEPTH
 ```
 
 ## 8. 확인 문제
+
+(스텝 17)
+- 비공개 카테고리를 트리에서만 숨기면 어떤 문제가 남나? → 그 카테고리의 글이 목록·상세·검색에서 그대로 보인다. 글의 가시성 판단에 조건을 넣어야 한다.
+- 순서 바꾸기에서 3단계 검사를 DB의 지금 모양이 아니라 보낸 목록으로 하는 이유는? → 저장할 것은 바꾼 뒤의 모양이다. 지금은 최상위인 카테고리도 같은 요청에서 하위로 옮겨질 수 있다.
 
 1. 인접 목록(parent_id) 방식으로 2단계 카테고리를 저장할 때, "A 아래 모든 글"을 구하는 조건은? 깊이에 제한이 없으면 무엇이 필요해지나?
 <details><summary>답</summary><code>category = A OR category.parent = A</code>. 깊이 제한이 없으면 자손을 끝까지 따라가야 해서 재귀 쿼리(WITH RECURSIVE)나 다른 저장 방식이 필요하다.</details>

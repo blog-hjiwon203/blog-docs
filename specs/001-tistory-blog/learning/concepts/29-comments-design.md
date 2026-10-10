@@ -1,6 +1,6 @@
 # 29. 댓글 설계: 글에 딸린 데이터
 
-> 관련 스텝: [스텝 6](../step-06.md) (T044, T045), [스텝 7](../step-07.md) (T069 답글), [스텝 14](../step-14.md) (T066 댓글 고치기, 5.12) · 관련 개념: [33-isolation-deadlock](./33-isolation-deadlock.md), [08-pagination](./08-pagination.md), [16-authorization-visibility](./16-authorization-visibility.md), [17-idempotency-redis](./17-idempotency-redis.md), [22-bean-validation](./22-bean-validation.md), [24-layered-architecture-dto](./24-layered-architecture-dto.md), [25-react-forms-data](./25-react-forms-data.md), [27-soft-delete-bulk-update](./27-soft-delete-bulk-update.md), [28-thymeleaf-to-react](./28-thymeleaf-to-react.md)
+> 관련 스텝: [스텝 6](../step-06.md) (T044, T045), [스텝 7](../step-07.md) (T069 답글), [스텝 14](../step-14.md) (T066 댓글 고치기, 5.12), [스텝 17](../step-17.md) (T101 비밀댓글, T102 댓글 허용, 5.13) · 관련 개념: [33-isolation-deadlock](./33-isolation-deadlock.md), [08-pagination](./08-pagination.md), [16-authorization-visibility](./16-authorization-visibility.md), [17-idempotency-redis](./17-idempotency-redis.md), [22-bean-validation](./22-bean-validation.md), [24-layered-architecture-dto](./24-layered-architecture-dto.md), [25-react-forms-data](./25-react-forms-data.md), [27-soft-delete-bulk-update](./27-soft-delete-bulk-update.md), [28-thymeleaf-to-react](./28-thymeleaf-to-react.md)
 
 ## 1. 이 문서로 배우는 것
 
@@ -773,6 +773,15 @@ private Comment visibleComment(Blog blog, Long commentId, LoginMember member) {
 | `authorEditsOwnCommentAndSeesEditedTime` | 작성자에게만 `canEdit`, 고치면 앞뒤 공백을 지운 내용과 `updatedAt`, 다시 읽어도 같음, 댓글 수 그대로 |
 | `onlyAuthorCanEditAndPermissionComesBeforeInputErrors` | 비회원 401(틀린 입력이어도), 블로그 주인 403, 작성자의 1,001자·공백 400, 실패한 요청 뒤 내용 그대로 |
 | `blindedDeletedOrHiddenCommentsCannotBeEdited` | 숨긴 댓글 403과 `canEdit: false`, 지운 댓글 404, 비공개 글의 댓글 404 |
+
+### 5.13 (스텝 17) 비밀댓글과 댓글 허용 (T101 CMT-06, T102 CMT-07)
+
+두 기능 모두 **판단은 이미 있었고 입력만 열었다.**
+
+- 비밀댓글: 보는 사람 기준 판단(비밀이면 글 주인과 작성자만 내용, 다른 사람에게는 `SECRET`)은 스텝 6부터 있었고, 스텝 14에서 방명록과 같이 쓰도록 `CommentViews`로 옮겼다([50](./50-shared-rules-comment-guestbook.md)). 이번에는 댓글 쓰기의 `secret`을 막던 `@AssertFalse`(5.3 "아직 없는 기능은 400")를 지우고 저장에 넘겼다. 화면은 댓글·답글 칸에 "비밀댓글" 체크(방명록과 같은 `CommentForm`, 글자만 다름).
+- 댓글 허용: 글을 쓸 수 있는지(`writablePost`)가 스텝 6부터 `post.isCommentAllowed()`를 보고 403 `COMMENTS_DISABLED`를 주고 있었다. 글 저장에서 `commentAllowed: false`를 막던 400을 지우고, 글쓰기 화면에 "댓글 허용" 체크를 더했다. **보내지 않으면 새 글은 허용, 수정은 그대로**다(PATCH처럼, [38](./38-member-profile-update.md) 3.1). 댓글을 막아도 이미 달린 댓글은 보인다. 글 상세는 쓰기 칸 대신 "이 글에는 댓글을 쓸 수 없습니다"를 그린다(스텝 6부터).
+
+5.3에서 "아직 없는 기능의 칸은 조용히 버리지 말고 400"으로 해 둔 덕에, 기능을 열 때 바꿀 곳이 400을 지우는 한 줄로 분명했다. 버렸다면 어디서 값이 사라지는지 찾아야 했을 것이다.
 
 ## 6. 자주 하는 실수와 함정
 
