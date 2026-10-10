@@ -642,12 +642,12 @@ description: "지원 서비스 구현 작업 (2주 일정 기준)"
 
 **스텝 16. 구독·공유·알림**
 
-- [ ] T089 [US6] 구독·해제 API `PUT`·`DELETE /api/blogs/{blogId}/subscription`(회원만, 멱등, 자기 블로그 400, 볼 수 없는 블로그 404), `Blog.subscriberCount`·`viewer.subscribed` in `subscription/` (SUB-01, SUB-03, 2026-10-11 추가)
-- [ ] T090 [US6] 구독 피드 API `GET /api/feed?cursor=`: 구독한 블로그의 볼 수 있는 새 글 최신순 커서 20 in `subscription/` (SUB-02, 2026-10-11 추가)
-- [ ] T091 [US6] 구독자 공개 열기: 글 저장·공개 범위 바꾸기·일괄 변경에서 `SUBSCRIBERS` 허용(지금 400), 목록·검색·홈·인기·피드·글 수는 구독자와 주인에게만, 링크로 열면 "구독자 공개 글입니다"와 구독 버튼(지금은 안내만) in `post/`, `global/visibility/` (POST-12, 2026-10-11 추가)
-- [ ] T092 [P] [US6] 공유: 글 상세 "주소 복사"(클립보드)와 SNS 공유 버튼(공유 주소 열기, API 없음), 미리보기는 T072 in `frontend/src/pages/post/` (SOC-02, 2026-10-11 추가)
-- [ ] T093 [P] [US6] 화면: 블로그 머리글·사이드바 구독 버튼과 구독자 수, 플랫폼 머리글 "구독 피드"와 `/feed`(빈 피드 안내) in `frontend/src/` (SUB-01~03, 2026-10-11 추가)
-- [ ] T113 [US12] 알림: `notification` 엔티티, 내 글 댓글·답글·공감, 새 구독자, 제재·해제 때 만들기, 목록(커서)·안 읽은 수·읽음 API, 머리글 알림 수와 알림 화면 in `notification/`, `frontend/src/` (SUB-04, 2026-10-11 추가)
+- [X] T089 [US6] 구독·해제 API `PUT`·`DELETE /api/blogs/{blogId}/subscription`(회원만, 멱등, 자기 블로그 400, 볼 수 없는 블로그 404), `Blog.subscriberCount`·`viewer.subscribed` in `subscription/` (SUB-01, SUB-03, 2026-10-11 추가)
+- [X] T090 [US6] 구독 피드 API `GET /api/feed?cursor=`: 구독한 블로그의 볼 수 있는 새 글 최신순 커서 20 in `subscription/` (SUB-02, 2026-10-11 추가)
+- [X] T091 [US6] 구독자 공개 열기: 글 저장·공개 범위 바꾸기·일괄 변경에서 `SUBSCRIBERS` 허용(지금 400), 목록·검색·홈·인기·피드·글 수는 구독자와 주인에게만, 링크로 열면 "구독자 공개 글입니다"와 구독 버튼(지금은 안내만) in `post/`, `global/visibility/` (POST-12, 2026-10-11 추가)
+- [X] T092 [P] [US6] 공유: 글 상세 "주소 복사"(클립보드)와 SNS 공유 버튼(공유 주소 열기, API 없음), 미리보기는 T072 in `frontend/src/pages/post/` (SOC-02, 2026-10-11 추가)
+- [X] T093 [P] [US6] 화면: 블로그 머리글·사이드바 구독 버튼과 구독자 수, 플랫폼 머리글 "구독 피드"와 `/feed`(빈 피드 안내) in `frontend/src/` (SUB-01~03, 2026-10-11 추가)
+- [X] T113 [US12] 알림: `notification` 엔티티, 내 글 댓글·답글·공감, 새 구독자, 제재·해제 때 만들기, 목록(커서)·안 읽은 수·읽음 API, 머리글 알림 수와 알림 화면 in `notification/`, `frontend/src/` (SUB-04, 2026-10-11 추가)
 
 **스텝 17. 글·댓글·카테고리·태그 설정**
 
@@ -661,7 +661,7 @@ description: "지원 서비스 구현 작업 (2주 일정 기준)"
 
 **스텝 18. 관리자·신고·공지**
 
-- [ ] T094 [US9] 관리자 회원 조회·상세 API(`/api/admin/members`, 검색·상태 필터·보유 블로그·받은 신고 수·제재 이력), 정지 7일/30일/영구·사유와 해제(`/suspension`), 기간이 끝나면 자동 해제, 관리 이력 기록 in `admin/` (ADMIN-02, 2026-10-11 추가)
+- [ ] T094 [US9] 관리자 회원 조회·상세 API(`/api/admin/members`, 검색·상태 필터·보유 블로그·받은 신고 수·제재 이력), 정지 7일/30일/영구·사유와 해제(`/suspension`), 기간이 끝나면 자동 해제, 관리 이력 기록, 제재·해제 알림(SANCTION, 알림은 T113에서 만들었고 보낼 곳이 이 작업이라 여기서 붙임) in `admin/` (ADMIN-02, SUB-04, 2026-10-11 추가)
 - [ ] T095 [US9] 글·댓글 블라인드·해제 API(`/api/admin/posts/{id}/blind`, `/api/admin/comments/{id}/blind`, 사유), 관리 이력 기록. 숨긴 글·댓글을 보여 주는 쪽은 이미 있음 in `admin/` (ADMIN-03, 2026-10-11 추가)
 - [ ] T096 [P] [US9] 화면: `/admin` 회원 목록·상세·정지·해제, 글 상세·댓글의 관리자 "숨기기"(관리자에게만) in `frontend/src/pages/admin/` (ADMIN-02, ADMIN-03, 2026-10-11 추가)
 - [ ] T109 [US14] 블로그 이용 제한·해제 API(`/api/admin/blogs/{id}/restriction`, 사유, 관리 이력)와 관리자 화면. 제한된 블로그를 숨기고 주인에게 사유를 보여 주는 쪽은 이미 있음 in `admin/` (ADMIN-05, 2026-10-11 추가)
