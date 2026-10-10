@@ -26,6 +26,7 @@
 | 13 | [임시저장·대표 이미지](./step-13.md) | 제목 없이 임시저장, 1분 자동 저장, 불러와 이어 쓰고 발행, 대표 이미지 고르기와 본문 첫 이미지 기본값, 보완: 마이페이지 내 블로그(두 번째 블로그 입구, 대표 바꾸기) |
 | 13b | [보완: 화면·명세 점검에서 나온 빈 곳](./step-13b.md) | 블로그 프로필 이미지, 닉네임 → 대표 블로그 링크, 관리 화면 태그 목록, 작성자 사진, 글 상세 공개 범위·삭제 오류, 카테고리 링크, 서비스 관리·내 블로그 입구, 로그인 중 정지 안내(동시 요청과 500), 명세 문장에서 입구까지 전부 대조하는 법 |
 | 14 | [댓글 수정·방명록·댓글 관리](./step-14.md) | 내 댓글 고치기, 블로그 방명록(비밀·답글·페이지), 관리 화면 받은 댓글·방명록(삭제, 답글 바로 쓰기), 댓글·방명록이 같은 규칙을 쓰는 구조 |
+| 15 | [전체 검색](./step-15.md) | 플랫폼 주소의 글·블로그 검색, 같은 경로를 Host로 나누기, 검색 범위만 바꾸는 Specification, 한 페이지의 구독자 수를 한 번에 세기 |
 
 ## 개념 문서
 
@@ -53,7 +54,7 @@
 | [29 댓글 설계](./concepts/29-comments-design.md) | 글에 딸린 데이터의 권한, 보는 사람마다 다른 댓글, 댓글 수, 연타 두 겹, 답글 한 단계, 댓글 고치기(상태 코드 순서, `updatedAt`) |
 | [50 같은 규칙의 두 기능을 한 코드로](./concepts/50-shared-rules-comment-guestbook.md) | 댓글과 방명록: 공통 인터페이스(`CommentEntry`)와 조립기(`CommentViews`), 상속·복사와 비교, 페이지 번호 목록의 기준(최상위 글), Spring Data `findBy`의 `project`·`page`, "받은" 댓글 목록, 화면 부품 나누기와 그 자리에서 고치기 |
 | [31 태그와 다대다 관계](./concepts/31-tags-many-to-many.md) | `@ManyToMany`와 조인 테이블, 이름 정리 규칙, 태그별 목록, 태그 입력 칸 |
-| [32 블로그 안 검색: LIKE와 비정규화 칸](./concepts/32-search-like.md) | 글자만 담은 칸과 마이그레이션, LIKE 이스케이프, EXISTS 서브쿼리, 인덱스 한계, 검색어를 주소에 |
+| [32 블로그 안 검색: LIKE와 비정규화 칸](./concepts/32-search-like.md) | 글자만 담은 칸과 마이그레이션, LIKE 이스케이프, EXISTS 서브쿼리, 인덱스 한계, 검색어를 주소에, 전체 검색(범위만 바꾸는 Specification, 블로그 검색, 구독자 수 한 번에) |
 | [47 임시저장과 자동 저장](./concepts/47-draft-autosave.md) | 글의 상태와 되돌릴 수 없는 이동, 상태별 검증, 처음 POST 그 뒤 PUT, `setInterval`과 낡은 값·`useRef`, 저장 줄 세우기, 스냅숏 |
 | [48 대표 이미지](./concepts/48-representative-image.md) | 고른 번호 검증(본문 안에 있나), `null` = 자동, `ON DELETE SET NULL`, 한 페이지 쿼리 두 번, 파생 값 |
 | [27 소프트 삭제와 일괄 수정](./concepts/27-soft-delete-bulk-update.md) | 소프트 삭제, 딸린 데이터 처리, 변경 감지, `@Modifying`, 수정 시각 지키기 |
@@ -88,7 +89,7 @@
 
 | 문서 | 다루는 것 |
 | --- | --- |
-| [15 서브도메인과 Host 라우팅](./concepts/15-subdomain-host-routing.md) | DNS, `/etc/hosts`, Host 헤더, 멀티테넌시, 인자 해석기 |
+| [15 서브도메인과 Host 라우팅](./concepts/15-subdomain-host-routing.md) | DNS, `/etc/hosts`, Host 헤더, 멀티테넌시, 인자 해석기, 같은 경로를 Host로 나누기 |
 | [16 인가와 가시성 판단](./concepts/16-authorization-visibility.md) | 인증과 인가, 존재를 숨기는 404, 정책 객체, sealed 타입과 switch |
 | [17 멱등성과 Redis](./concepts/17-idempotency-redis.md) | 멱등성, 중복 요청, Idempotency-Key, Redis 기초와 `SET NX` |
 | [35 캐시: Spring Cache와 Redis](./concepts/35-spring-cache-redis.md) | 캐시와 오래된 값, TTL, `@Cacheable`과 프록시, Redis 키·Java 직렬화, `sync`, 캐시에 번호만 두기 |

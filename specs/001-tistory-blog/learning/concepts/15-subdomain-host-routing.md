@@ -1,6 +1,6 @@
 # 15. 서브도메인과 Host 헤더로 블로그 찾기
 
-> 관련 스텝: [스텝 3](../step-03.md) (T009), 개발 환경 보강 2026-10-09(dnsmasq) · 관련 개념: [10-http-cookies](./10-http-cookies.md), [13-csrf-samesite-cors](./13-csrf-samesite-cors.md), [16-authorization-visibility](./16-authorization-visibility.md), [18-spa-server-routing](./18-spa-server-routing.md)
+> 관련 스텝: [스텝 15](../step-15.md) (5.7 같은 경로, 다른 호스트), [스텝 3](../step-03.md) (T009), 개발 환경 보강 2026-10-09(dnsmasq) · 관련 개념: [10-http-cookies](./10-http-cookies.md), [13-csrf-samesite-cors](./13-csrf-samesite-cors.md), [16-authorization-visibility](./16-authorization-visibility.md), [18-spa-server-routing](./18-spa-server-routing.md)
 
 ## 1. 이 문서로 배우는 것
 
@@ -549,6 +549,48 @@ server: {
 
 프론트에도 같은 판단이 있다. `frontend/src/app/host.ts`의 `parseHost`는 `window.location.hostname`으로 플랫폼/블로그를 나눠 다른 라우트를 그린다([19](./19-react-router-api-client.md)). 프론트는 주소 규칙(정규식, 예약어)을 검사하지 않는다. 없는 블로그는 서버가 화면을 주기 전에 404로 막기 때문이다.
 
+### 5.7 (스텝 15) 같은 경로, 다른 호스트: `GET /api/search`
+
+API 명세에서 `/api/search`는 두 번 나온다. 블로그 주소(**B**)에서는 그 블로그 안 검색(SRCH-01), 플랫폼 주소(**P**)에서는 전체 검색(SRCH-02)이다. 사용자가 보기에는 자연스럽다: 블로그 머리글의 검색창은 그 블로그를, 플랫폼 머리글의 검색창은 전체를 찾는다.
+
+문제는 Spring MVC가 **Host로 컨트롤러 메서드를 고르지 못한다**는 것이다. `@GetMapping`은 경로·메서드·파라미터·헤더 조건을 볼 수 있지만, 헤더 조건(`headers = "Host=…"`)은 값이 정확히 같은지를 볼 뿐 "어느 블로그 주소든"이나 "플랫폼 주소"를 나타낼 수 없다. 같은 경로에 메서드 두 개를 두면 시작할 때 "Ambiguous mapping" 오류다.
+
+그래서 메서드 하나에서 나눈다.
+
+```java
+// search/presentation/SearchController.java
+@GetMapping("/api/search")
+public PageResponse<?> search(HttpServletRequest request, @RequestParam(required = false) String q, ...) {
+    ...
+    if (!(blogHostResolver.resolve(request) instanceof RequestHost.Platform)) {
+        Blog blog = currentBlog.resolve(request);
+        return posts(searchService.search(blog, viewerId, q, pageQuery), blog);
+    }
+    // 플랫폼: type=post(기본) 또는 blog
+```
+
+- `blogHostResolver.resolve(request)`: 5.1의 Host 세 갈래(`Platform`, `BlogAddress`, `Unknown`) 그대로다. `instanceof`로 플랫폼인지 본다(sealed 인터페이스라 갈래가 셋뿐이다).
+- 플랫폼이 아니면 `@CurrentBlog`와 **똑같은 판단**이 필요하다(없거나 볼 수 없으면 404, 이사한 블로그는 주인만). 인자에 `@CurrentBlog Blog blog`를 쓰면 플랫폼 주소에서도 그 판단이 돌아 404가 나므로 쓸 수 없다. 대신 `CurrentBlogArgumentResolver`의 몸통을 `public Blog resolve(HttpServletRequest request)`로 꺼내, 인자 해석기와 이 컨트롤러가 같이 부른다.
+
+```java
+// global/host/CurrentBlogArgumentResolver.java
+@Override
+public Blog resolveArgument(MethodParameter parameter, ModelAndViewContainer mavContainer,
+                            NativeWebRequest webRequest, WebDataBinderFactory binderFactory) {
+    return resolve(webRequest.getNativeRequest(HttpServletRequest.class));
+}
+
+public Blog resolve(HttpServletRequest request) {
+    Long viewerId = LoginMembers.currentId();
+    Blog blog = blogHostResolver.findBlog(request)
+            .filter(found -> blogVisibilityPolicy.canView(found, viewerId))
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+    ...
+```
+
+- 고르지 않은 대안: (1) 경로를 나눈다(`/api/blogs/search`처럼). 명세의 API를 바꾸는 것이라 고르지 않았다. (2) 서블릿 필터에서 Host를 보고 경로를 바꿔 넘긴다(`/api/search` → `/api/platform/search`). 동작은 하지만 코드를 읽는 사람이 경로가 바뀌는 것을 알아채기 어렵다.
+- 반환 타입이 `PageResponse<?>`: 글이면 `PostSummary`, 블로그면 `{ blog, owner, subscriberCount }`라 내용 타입이 갈래마다 다르다. JSON으로 바꿀 때는 실제 값의 타입으로 쓰이므로 문제없다.
+
 ## 6. 자주 하는 실수와 함정
 
 1. **`endsWith(platform)`에서 점 빼먹기**: `host.endsWith("blog.test")`로 쓰면 `evilblog.test`가 통과한다. 반드시 `"." + platform`.
@@ -558,6 +600,7 @@ server: {
 5. **새 블로그를 만들고 hosts에 안 적기**: 스텝 4에서 `mytest`라는 블로그를 만들면, `mytest.blog.test`도 hosts에 추가해야 브라우저로 열린다.
 6. **"없음"과 "볼 수 없음"을 다른 응답으로 주기**: 403을 주면 "있긴 있다"는 정보가 샌다. 둘 다 404.
 7. **테넌트 조건 빠뜨리기**: 블로그 API에서 글을 찾을 때 `postRepository.findById(id)`만 쓰면 다른 블로그의 글이 나온다. `@CurrentBlog`로 받은 블로그와 글의 소속을 꼭 비교한다(가시성 판단 ②).
+8. (스텝 15) **같은 경로를 Host로 나누려고 메서드를 두 개 만들기**: 시작할 때 Ambiguous mapping. 한 메서드에서 `RequestHost`로 나누고, 블로그 쪽은 `@CurrentBlog`와 같은 `resolve`를 부른다.
 8. **Vite 프록시에 `changeOrigin: true`**: 위 5.6. 백엔드가 블로그를 못 찾는다.
 9. **운영에서 리버스 프록시 뒤에 둘 때 Host가 바뀜**: 프록시가 원래 Host를 넘기도록 설정해야 한다.
 10. **dnsmasq만 켜고 `/etc/resolver/blog.test`를 안 만듦**: macOS가 dnsmasq에 묻지 않아 여전히 NXDOMAIN이다.
@@ -693,6 +736,9 @@ sudo dscacheutil -flushcache; sudo killall -HUP mDNSResponder
 
 13. dnsmasq를 켜 둔 채 Spring 서버를 끄고 블로그 주소를 열면 어떤 오류가 나고, NXDOMAIN과 무엇이 다른가?
 <details><summary>답</summary><code>ERR_CONNECTION_REFUSED</code>다. 이름은 127.0.0.1로 찾았지만 8080번에서 받는 프로그램이 없다는 뜻이다. NXDOMAIN은 이름 찾기 자체가 실패한 것이다.</details>
+
+14. (스텝 15) `GET /api/search` 메서드에 `@CurrentBlog Blog blog` 인자를 쓰지 못한 이유는?
+<details><summary>답</summary>같은 경로가 플랫폼 주소에서는 전체 검색이다. @CurrentBlog는 인자를 만들 때 Host의 블로그를 찾고 없으면 404를 던지므로, 플랫폼 주소의 요청까지 404가 된다. 그래서 Host를 먼저 보고, 블로그 주소일 때만 같은 판단(resolve)을 직접 부른다.</details>
 
 ## 9. 더 읽을거리
 
