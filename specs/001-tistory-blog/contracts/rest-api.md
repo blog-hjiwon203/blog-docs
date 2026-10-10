@@ -292,7 +292,7 @@
 | GET | /api/blogs/address-availability?address= | P | 회원 | `{ available, reason }`. `reason`: `INVALID`·`RESERVED`·`TAKEN` | BLOG-01 |
 | POST | /api/blogs | P | 회원 | `{ address, name, description? }` → 201 `Blog`. 6번째 409 `BLOG_LIMIT_EXCEEDED`. 첫 블로그는 대표 | BLOG-01 |
 | GET | /api/blog | B | 누구나 | `Blog` | BLOG-03, SUB-03 |
-| PATCH | /api/blog | B | 주인 | `{ name?, description?, profileImageId?, skin?, listLayout?, accentColor? }` → `Blog`. `skin`: 미리 만든 2~3종, `listLayout`: `LIST`·`THUMBNAIL`, `accentColor`: `BLUE`·`GREEN`·`ORANGE`·`PINK`·`PURPLE`·`GRAY` | BLOG-02, BLOG-05 |
+| PATCH | /api/blog | B | 주인 | `{ name?, description?, profileImageId?, skin?, listLayout?, accentColor? }` → `Blog`. 보낸 항목만 바뀜. `profileImageId`는 주인이 올린 이미지만(아니면 400 `fieldErrors[].field = profileImageId`), `Blog.profileImageUrl`과 사이드바 PROFILE의 `profileImageUrl`은 그 이미지의 썸네일 주소. `skin`: 미리 만든 2~3종, `listLayout`: `LIST`·`THUMBNAIL`, `accentColor`: `BLUE`·`GREEN`·`ORANGE`·`PINK`·`PURPLE`·`GRAY` | BLOG-02, BLOG-05 |
 | GET | /api/blog/sidebar | B | 누구나 | 보이는 모듈만 주인이 정한 순서로 `{ modules: [{ type, data }] }`. 아래 [사이드바 응답](#사이드바-응답) | BLOG-04, BLOG-05 |
 | GET | /api/blog/sidebar/modules | B | 주인 | 모듈 8개 전부 `[{ moduleType, isVisible }]` 순서대로(숨긴 것 포함) | BLOG-05 |
 | PUT | /api/blog/sidebar/modules | B | 주인 | `[{ moduleType, isVisible }]` 8개를 원하는 순서로 전체 교체 → 204. 8종이 정확히 한 번씩이 아니거나 `PROFILE`을 숨기면 400 `VALIDATION_FAILED` | BLOG-05 |

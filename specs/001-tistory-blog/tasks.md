@@ -271,6 +271,20 @@ description: "지원 서비스 구현 작업 (2주 일정 기준)"
 
 **확인할 것**: 블로그가 있는 회원도 마이페이지에서 두 번째 블로그를 만들고 대표를 바꿀 수 있다(5개면 만들기 버튼 대신 안내). 글쓰기에서 1분 기다린 뒤 창을 닫았다 열어 임시저장 목록에서 불러오기, 임시저장 글은 주인에게만 보인다, 대표 이미지를 고르면 목록 썸네일이 그 사진.
 
+### 스텝 13b. 보완: 화면·명세 점검에서 나온 빈 곳 (2026-10-11 지원 결정)
+
+**무엇을 만드나**: 스텝 13 뒤 완료 작업과 화면·입구를 대조한 점검에서 나온 빈 곳 중 높음·중간 3개. 완료로 체크됐지만 명세 문장의 일부(프로필 이미지, 닉네임 링크, 관리 화면 태그 목록)가 API나 화면에서 빠져 있었다.
+
+**끝나면**: 블로그 설정에서 프로필 이미지를 바꾸면 사이드바에 보이고, 글·댓글 작성자 닉네임을 누르면 그 사람의 대표 블로그로 가고, 관리 화면에서 태그와 글 수를 본다.
+
+| 작업 | 내용 |
+| --- | --- |
+| T023a | 블로그 프로필 이미지: `PATCH /api/blog`의 `profileImageId`(주인이 올린 이미지만), `Blog`·사이드바의 `profileImageUrl`, 설정 화면 사진 칸, 사이드바 사진 (BLOG-02) |
+| T045a | 글·댓글 작성자 닉네임 → 대표 블로그 링크(대표 블로그가 없거나 볼 수 없으면 글자만) (BLOG-08) |
+| T054a | 관리 화면 카테고리·태그에 태그 목록과 글 수 (TAG-03) |
+
+**확인할 것**: 설정에서 사진을 고르고 저장 → 블로그 사이드바 맨 위에 그 사진, 남이 올린 이미지 번호로 저장하면 400. 대표 블로그가 있는 회원의 댓글 닉네임을 누르면 그 블로그로 간다(블로그 없는 회원은 링크 없음). 관리 → 카테고리·태그에 태그별 글 수(비공개 글 포함).
+
 ### 스텝 14. 댓글 수정·방명록·댓글 관리 (백로그 추천 순서 3)
 
 **무엇을 만드나**: 내 댓글 고치기, 블로그 방명록(댓글과 같은 비밀·답글 규칙), 주인의 댓글 관리 화면(받은 댓글·방명록 목록, 삭제, 답글 바로 쓰기).
@@ -368,6 +382,7 @@ description: "지원 서비스 구현 작업 (2주 일정 기준)"
 - [X] T021 [P] [US1] [W1] `blog` 엔티티(address UNIQUE, is_primary, moved_to_blog_id, deleted_at) in `blog/`
 - [X] T022 [US1] [W1] 주소 확인 API(정규식·예약어·중복, 삭제된 주소 포함) + 개설 API(활성 5개 한도, 첫 블로그 대표) in `blog/` (BLOG-01)
 - [X] T023 [US1] [W1] 블로그 정보 조회·수정 API (주소 수정 불가) in `blog/` (BLOG-02)
+- [X] T023a [US1] 보완: 블로그 프로필 이미지 — `PATCH /api/blog`의 `profileImageId`(주인이 올린 이미지만, 아니면 400 `fieldErrors[].field = profileImageId`), `Blog.profileImageUrl`·사이드바 PROFILE의 `profileImageUrl`(썸네일), 블로그 설정 "이미지 바꾸기", 사이드바 사진. T023은 이름·소개만 만들고 이미지는 "스텝 7에서" 미뤘는데 T번호가 없었다(2026-10-11 지원 결정, 스텝 13b) in `blog/`, `image/application/ProfileImages`, `frontend/src/pages/manage/BlogSettingsPage.tsx`, `frontend/src/components/Sidebar.tsx` (BLOG-02)
 - [X] T024 [US1] [W1] 블로그 메인 글 목록 API(published_at DESC, id DESC, 페이지 10, 가시성 조건) in `post/` (BLOG-03)
 - [X] T025 [US1] [W1] 사이드바 API: 이름·소개, 카테고리·글 수(CAT-03 전에는 한 단계, '미분류'는 글이 없으면 숨김), 최근 글 5, 최근 댓글 5 (볼 수 없는 글과 그 댓글 제외) in `blog/` (BLOG-04)
 - [X] T026 [P] [US1] [W1] 화면: 가입, 로그인, 블로그 개설(주소 변경 불가 안내), 블로그 메인, 사이드바, 블로그 설정 in `frontend/src/pages/`
@@ -413,6 +428,7 @@ description: "지원 서비스 구현 작업 (2주 일정 기준)"
 - [X] T043 [P] [US3] [W1] `comment` 엔티티 (parent_id, deleted_at, is_secret, is_blinded) in `comment/`
 - [X] T044 [US3] [W1] 댓글 작성(회원만, 1~1,000자(채움), Idempotency-Key)·조회(작성순 더보기 20)·본인 삭제·주인 삭제 API in `comment/` (CMT-01, CMT-02)
 - [X] T045 [P] [US3] [W1] 화면: 홈, 글 상세(DOMPurify 후 렌더), 댓글 in `frontend/src/pages/`
+- [X] T045a [US3] 보완: 글 상세·댓글 작성자 닉네임 → 대표 블로그 링크(`MemberSummary.primaryBlogAddress`, 없거나 볼 수 없으면 글자만). 서버는 스텝 6부터 주소를 내려 줬지만 화면이 쓰지 않았다(2026-10-11 지원 결정, 스텝 13b) in `frontend/src/components/AuthorName.tsx` (BLOG-08)
 - [X] T046 [US3] [W2a] 공감 API: PUT/DELETE 멱등, `post_like` UNIQUE, like_count 트랜잭션 갱신 in `reaction/` (SOC-01)
 - [X] T047 [US3] [W2a] 블로그 내 검색 API: 제목·본문·태그, 대소문자 무시, trim·공백만 거절, 최신순 페이지 10, 가시성 조건 in `search/` (SRCH-01)
 - [X] T048 [P] [US3] [W2a] 화면: 공감 버튼(즉시 반영), 블로그 검색(검색어 유지, 결과 주소 공유 가능) in `frontend/src/`
@@ -437,6 +453,7 @@ description: "지원 서비스 구현 작업 (2주 일정 기준)"
 
 - [X] T053 [US5] [W2a] `view_log` 기록 + 중복 조회 판정(같은 사용자 5분) + view_count in `post/` (POST-09)
 - [X] T054 [US5] [W2a] 사이드바 태그 목록·글 수 in `blog/` (TAG-03)
+- [X] T054a [US5] 보완: 관리 화면 "카테고리·태그"에 태그 목록과 글 수(`GET /api/tags`, 주인은 비공개 글도 셈). API는 T054에 있었지만 부르는 화면이 없었다(2026-10-11 지원 결정, 스텝 13b) in `frontend/src/pages/manage/CategoriesPage.tsx` (TAG-03)
 - [X] T055 [US5] [W2b] 회원정보 수정: 닉네임·프로필·비밀번호 in `member/` (AUTH-05)
 - [X] T055c [US5] [W2b] 보완: 마이페이지 내 블로그 — `GET /api/me/blogs`(활성 블로그·글 수·대표·이사), `PUT /api/me/primary-blog`(내 활성 블로그만, 회원 잠금, 끄고 flush 켜기), 화면 "블로그 만들기 (n/5)", 플랫폼·블로그·관리 머리글의 "마이페이지" 버튼. 5개 한도는 스텝 4에 있었지만 블로그가 있는 회원이 두 번째 블로그로 갈 입구가 없었다(2026-10-11 지원 결정, 스텝 13) in `blog/`, `frontend/src/pages/me/` (BLOG-08, BLOG-01)
 - [X] T055a [US5] [W2b] 비밀번호·인증 코드 시도 제한: 로그인(이메일별)·인증 코드(이메일별)·비밀번호 변경(회원별) 15분 안에 5번 틀리면 15분 동안 429, 같은 IP는 셋을 합쳐 15분 안에 20번, Redis in `global/auth/` (AUTH-01, OWN-01, AUTH-05, R-17)
