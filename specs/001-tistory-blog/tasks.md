@@ -486,13 +486,13 @@ description: "지원 서비스 구현 작업 (2주 일정 기준)"
 - [X] T063 [US7] [W2a] 인기 점수 계산(최근 1시간 조회×1 + 공감×3 + 댓글×5, 가중치는 설정값)과 인기 글 API: 공개 글 상위 10, @Cacheable(Redis) 5분 in `home/` (HOME-02, R-12)
 - [X] T064 [US7] [W2b] 주제별 글 API: 주제 탭별 인기 점수 순 6개, 모자라면 최신 글로 채움, 캐시 5분 in `home/` (HOME-03)
 - [ ] T065 [US7] 전체 검색 (SRCH-02)
-- [ ] T066 [US7] 댓글 수정 (CMT-03), 방명록 (CMT-04)
+- [X] T066 [US7] 댓글 수정 (CMT-03), 방명록 (CMT-04): `PATCH /api/comments/{id}`(본인만, 숨긴 댓글 403), `/api/guestbook` 목록(최신순 20 페이지)·쓰기(비밀·답글 한 단계, Idempotency-Key)·고치기·지우기, 댓글·방명록이 같은 판단을 쓰도록 `CommentEntry`·`CommentViews`, 화면: 댓글 "수정", 블로그 머리글 "방명록"과 `/guestbook` in `comment/`, `frontend/src/` (스텝 14)
 
 ## 9단계: US8 내 블로그 관리 (P2) — 2주 범위 일부
 
 - [X] T067 [US8] [W2b] 내 글 관리 API·화면: 상태·카테고리 필터, 검색, 페이지 20, 블라인드 사유 표시(최신 BLIND 관리 이력), 일괄 공개 범위 변경·삭제 in `manage/` (MNG-01)
 - [X] T067a [US8] 보완: 글 관리 상태 필터에서 백로그 기능인 "예약" 빼기(POST-13 전까지) (2026-10-11 지원 결정, 스텝 13b) in `frontend/src/pages/manage/ManagePostsPage.tsx` (MNG-01)
-- [ ] T068 [US8] 댓글 관리 (MNG-02)
+- [X] T068 [US8] 댓글 관리 (MNG-02): `GET /api/manage/comments?type=comment|guestbook&page=`(주인만, 남이 쓴 것 최신순 20, 답글도 한 줄씩, 댓글은 달린 글), 화면: 관리 메뉴 "댓글·방명록", 탭, 삭제, 답글 바로 쓰기 in `manage/`, `frontend/src/pages/manage/` (스텝 14)
 
 ## 10단계: US11 일부 앞당김 (P3)
 
@@ -558,7 +558,7 @@ description: "지원 서비스 구현 작업 (2주 일정 기준)"
 - [ ] 예약 발행 (POST-13)
 - [ ] 카테고리 비공개 (CAT-05)
 - [ ] 태그 관리: 이름 변경·삭제 (TAG-04)
-- [ ] 비밀댓글 (CMT-06)
+- [ ] 비밀댓글 (CMT-06). 방명록의 비밀글(CMT-04 "댓글과 같은 규칙")은 스텝 14에서 했고, 보는 사람 기준 판단(`CommentViews`)은 댓글도 같이 쓴다. 남은 것은 댓글 쓰기의 `secret`(지금 400)과 댓글 칸의 "비밀댓글" 칸
 - [ ] 댓글 허용 설정 (CMT-07)
 
 **US12~14 운영**

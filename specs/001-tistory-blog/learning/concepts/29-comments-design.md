@@ -1,6 +1,6 @@
 # 29. 댓글 설계: 글에 딸린 데이터
 
-> 관련 스텝: [스텝 6](../step-06.md) (T044, T045), [스텝 7](../step-07.md) (T069 답글) · 관련 개념: [33-isolation-deadlock](./33-isolation-deadlock.md), [08-pagination](./08-pagination.md), [16-authorization-visibility](./16-authorization-visibility.md), [17-idempotency-redis](./17-idempotency-redis.md), [22-bean-validation](./22-bean-validation.md), [24-layered-architecture-dto](./24-layered-architecture-dto.md), [25-react-forms-data](./25-react-forms-data.md), [27-soft-delete-bulk-update](./27-soft-delete-bulk-update.md), [28-thymeleaf-to-react](./28-thymeleaf-to-react.md)
+> 관련 스텝: [스텝 6](../step-06.md) (T044, T045), [스텝 7](../step-07.md) (T069 답글), [스텝 14](../step-14.md) (T066 댓글 고치기, 5.12) · 관련 개념: [33-isolation-deadlock](./33-isolation-deadlock.md), [08-pagination](./08-pagination.md), [16-authorization-visibility](./16-authorization-visibility.md), [17-idempotency-redis](./17-idempotency-redis.md), [22-bean-validation](./22-bean-validation.md), [24-layered-architecture-dto](./24-layered-architecture-dto.md), [25-react-forms-data](./25-react-forms-data.md), [27-soft-delete-bulk-update](./27-soft-delete-bulk-update.md), [28-thymeleaf-to-react](./28-thymeleaf-to-react.md)
 
 ## 1. 이 문서로 배우는 것
 
@@ -233,6 +233,8 @@ public record CommentRequest(
 - 비밀댓글을 쓰는 기능은 없지만 **보여 주는 규칙**(5.4)은 미리 만들었다. 컬럼(`is_secret`)이 있고, 나중에 쓰기만 열면 되게.
 
 ### 5.4 보는 사람마다 다른 댓글: `CommentView`
+
+> **(스텝 14에서 바뀜)** 아래 판단 코드는 스텝 14에서 방명록과 같이 쓰려고 `comment/application/CommentViews.java`로 옮겼고, `CommentView`는 `Comment` 대신 댓글·방명록 공통 모양 `CommentEntry`를 들고 `canEdit`·작성자 사진 칸이 늘었다. 판단 순서(지움 → 숨김 → 비밀 → 보통)는 그대로다. 옮긴 이유와 지금 코드는 [50 같은 규칙의 두 기능을 한 코드로](./50-shared-rules-comment-guestbook.md)에 있다. 이 절은 처음 만든 모양으로 읽는다.
 
 `src/main/java/com/nhnacademy/blog/comment/application/CommentView.java`
 
@@ -707,6 +709,71 @@ export function afterDelete(comments: Comment[], target: Comment): Comment[] {
 
 스텝 7에서 공감을 만들다가, 같은 글에 댓글 INSERT와 댓글 수 UPDATE가 동시에 몰리면 데드락이 날 수 있다는 것을 알았다. `write`와 `delete`도 공감처럼 `postRepository.lockById(...)`로 글 행을 먼저 잠근다. 왜 그런지는 [33 격리 수준, 스냅샷, 데드락](./33-isolation-deadlock.md)에서 자세히 다룬다.
 
+### 5.12 (스텝 14) 댓글 고치기: 본인만, 숨긴 댓글은 안 된다
+
+명세 CMT-03은 "본인만"이다. API 명세는 `PATCH /api/comments/{id}` `{ content }` → `Comment`, "숨긴 댓글은 403"이다. 수용 시나리오(spec US7 2번)는 "내 댓글과 남의 댓글을 수정하려 하면 내 댓글만 고쳐진다"다.
+
+**상태 코드 순서.** 지우기(5.5)와 같은 순서를 지킨다. 같은 댓글에 대해 고치기와 지우기가 다른 순서로 답하면, 어느 쪽 응답이 정보를 흘리는지 따로 따져야 한다.
+
+```
+없는 댓글·지운 댓글·다른 블로그 댓글·볼 수 없는 글의 댓글  → 404
+비회원                                                  → 401
+본인이 아님(블로그 주인도) 또는 관리자가 숨긴 댓글           → 403
+내용이 비었거나 1,000자 넘음                               → 400
+```
+
+```java
+// comment/application/CommentService.java
+@Transactional
+public CommentView edit(Blog blog, Long commentId, LoginMember member, String content) {
+    Comment comment = editable(blog, commentId, member);
+    comment.edit(content.trim());
+    // updatedAt(@LastModifiedDate)이 응답에 들어가도록 UPDATE를 먼저 보낸다
+    commentRepository.flush();
+    return commentViews.one(comment, blog, member.id());
+}
+
+private Comment editable(Blog blog, Long commentId, LoginMember member) {
+    Comment comment = visibleComment(blog, commentId, member);
+    if (!comment.isWrittenBy(member.id()) || comment.isBlinded()) {
+        throw new BusinessException(ErrorCode.FORBIDDEN);
+    }
+    return comment;
+}
+
+/** 이 블로그 글의, 지우지 않은, 글을 볼 수 있는 댓글. 그다음 로그인했는지 본다(404 → 401 순서). */
+private Comment visibleComment(Blog blog, Long commentId, LoginMember member) {
+    Comment comment = commentRepository.findWithPostById(commentId)
+            .filter(found -> !found.isDeleted())
+            .filter(found -> found.getPost().getBlog().getId().equals(blog.getId()))
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+    postReadService.readable(blog, comment.getPost().getId(), member == null ? null : member.id());
+    if (member == null) {
+        throw new BusinessException(ErrorCode.UNAUTHORIZED);
+    }
+    return comment;
+}
+```
+
+- `visibleComment`: 지우기에 있던 앞부분(404 판단과 401)을 꺼내 고치기와 같이 쓴다. 스텝 6의 `delete`가 하던 일과 한 줄도 다르지 않다.
+- **블로그 주인도 남의 댓글은 고칠 수 없다.** 주인은 지울 수만 있다(CMT-02). 남이 쓴 글을 주인이 고칠 수 있으면 작성자가 하지 않은 말을 작성자 이름으로 남길 수 있다. 그래서 `isWrittenBy`만 본다(`|| blog.isOwnedBy`가 없다).
+- **숨긴 댓글**: ADMIN-03 "작성자는 수정할 수 없고 삭제는 할 수 있다". 고칠 수 있으면 관리자가 숨긴 뒤 내용을 바꿔 숨긴 이유를 지울 수 있다. 숨긴 댓글은 작성자 본인에게 내용이 보이지만(5.4) `canEdit`은 `false`다.
+- 컨트롤러는 `checkEditable`(읽기 전용 트랜잭션으로 같은 판단만)을 먼저 부르고, 그다음 `requestValidator.validate`로 입력을 본다. 401·403이 400보다 먼저 나오게 하는 이 프로젝트의 방식이다(5.2, [22](./22-bean-validation.md)). 판단을 두 번 하는 대가로 순서를 지킨다.
+
+**`flush()`를 왜 부르나.** 응답의 `updatedAt`은 "고친 적이 없으면 `null`"이고, 고쳤는지는 `updatedAt != createdAt`으로 본다(`CommentResponse`). `updatedAt`은 `@LastModifiedDate`라 JPA가 **UPDATE를 보내기 직전**(`@PreUpdate`)에 채운다. 그런데 변경 감지의 UPDATE는 보통 트랜잭션이 끝날 때 나간다. 그 전에 응답을 만들면 `updatedAt`이 아직 옛값(= `createdAt`)이라 "수정됨"이 빠진다. `flush()`로 UPDATE를 먼저 보내면 그때 `updatedAt`이 채워지고, 같은 객체로 응답을 만든다.
+
+**글은 그대로다.** 댓글을 고쳐도 글의 `updated_at`이나 `comment_count`는 바뀌지 않는다. 댓글 수는 행 수라 고치기와 상관없고, 글의 "수정" 표시는 글 내용을 고쳤을 때만이다(5.6과 같은 생각). 테스트 `authorEditsOwnCommentAndSeesEditedTime`이 댓글 수가 그대로인지 본다.
+
+**화면.** `viewer.canEdit`이 `true`인 댓글에 "수정"이 보이고, 누르면 그 자리에 고치는 칸이 열린다. 저장하면 서버가 돌려준 댓글로 목록의 같은 id를 바꾼다(`afterEdit`, 답글을 고치면 그 부모 안에서만 바꾼다). 고친 댓글에는 "수정됨"이 붙는다. 댓글 한 줄과 쓰기 칸은 방명록·관리 화면과 같이 쓰려고 `CommentItem`·`CommentForm`으로 나눴다([50](./50-shared-rules-comment-guestbook.md) 5.6).
+
+테스트 `CommentEditIntegrationTest`:
+
+| 테스트 | 확인하는 것 |
+| --- | --- |
+| `authorEditsOwnCommentAndSeesEditedTime` | 작성자에게만 `canEdit`, 고치면 앞뒤 공백을 지운 내용과 `updatedAt`, 다시 읽어도 같음, 댓글 수 그대로 |
+| `onlyAuthorCanEditAndPermissionComesBeforeInputErrors` | 비회원 401(틀린 입력이어도), 블로그 주인 403, 작성자의 1,001자·공백 400, 실패한 요청 뒤 내용 그대로 |
+| `blindedDeletedOrHiddenCommentsCannotBeEdited` | 숨긴 댓글 403과 `canEdit: false`, 지운 댓글 404, 비공개 글의 댓글 404 |
+
 ## 6. 자주 하는 실수와 함정
 
 1. **댓글 API에서 글 가시성을 따로 짜기**: 글 상세와 규칙이 어긋나면 비공개 글의 댓글이 새거나, 볼 수 있는 글에 댓글을 못 쓴다. 같은 판단 코드를 부른다.
@@ -722,6 +789,8 @@ export function afterDelete(comments: Comment[], target: Comment): Comment[] {
 11. **같은 응답을 두 번 붙임**: 서버가 같은 키에 같은 응답을 주는 것은 정상이다. 화면이 id로 중복을 거른다.
 12. **(답글) 부모가 같은 글인지 안 봄**: 주소의 글과 다른 글(비공개 글 포함)의 댓글에 답글을 붙일 수 있다. `parentOf`가 같은 글인지 확인한다.
 13. **(답글) 답글을 지운 부모를 그냥 목록에서 뺌**: 답글이 고아가 되어 사라지거나, 누구에게 단 답글인지 모르게 된다. 살아 있는 답글이 있으면 DELETED 자리로 남긴다.
+14. **(스텝 14) 주인에게 남의 댓글 고치기를 열어 주기**: 지우기 권한(본인·주인)을 그대로 복사하면 생긴다. 고치기는 본인만이다.
+15. **(스텝 14) 고친 뒤 flush 없이 응답 만들기**: `@LastModifiedDate`가 아직 채워지지 않아 "수정됨"이 빠진다(5.12).
 14. **(답글) 답글까지 섞어 20개로 자르기**: 부모와 답글이 다른 쪽에 갈라진다. 묶음은 최상위 기준, 답글은 부모에 모두 붙인다.
 15. **(답글) 화면의 지운 뒤 규칙과 서버의 목록 규칙이 다름**: 새로고침하면 화면이 바뀐다. 같은 규칙을 순수 함수로 떼어 테스트했다.
 
@@ -824,6 +893,12 @@ curl -s $R $H -b jar -H "Idempotency-Key: $(uuidgen)" -X POST myblog.blog.test:8
 
 12. (스텝 7) 목록을 최상위 댓글 20개 + 그 답글 전부로 읽을 때 쿼리는 몇 번이고, 왜 그렇게 나눴나?
 <details><summary>답</summary>부모 21개(다음 묶음 확인용 1개 포함) 한 번, 그 부모들의 답글을 <code>parent_id IN (...)</code>으로 한 번(작성자 주소는 따로 한 번). 답글까지 섞어 자르면 부모와 답글이 쪽 사이로 갈라지고, 부모마다 답글을 읽으면 N+1이 된다.</details>
+
+13. (스텝 14) 블로그 주인은 남의 댓글을 지울 수는 있는데 고칠 수는 없다. 왜 다르게 했나?
+<details><summary>답</summary>지우기는 내 블로그에서 글을 치우는 일이라 주인 권한(CMT-02)이다. 고치기는 그 사람이 한 말을 바꾸는 일이라, 주인이 할 수 있으면 작성자가 하지 않은 말을 작성자 이름으로 남길 수 있다. 명세도 CMT-03 "본인만"이다.</details>
+
+14. (스텝 14) 댓글을 고친 뒤 응답을 만들기 전에 <code>commentRepository.flush()</code>를 부르는 이유는?
+<details><summary>답</summary><code>updatedAt</code>은 <code>@LastModifiedDate</code>라 UPDATE를 보내기 직전에 채워진다. 변경 감지는 보통 트랜잭션 끝에 UPDATE를 보내므로, 그 전에 응답을 만들면 <code>updatedAt</code>이 <code>createdAt</code>과 같아 응답의 <code>updatedAt</code>이 null(고친 적 없음)이 된다. flush로 UPDATE를 먼저 보내 값을 채운다.</details>
 
 ## 9. 더 읽을거리
 

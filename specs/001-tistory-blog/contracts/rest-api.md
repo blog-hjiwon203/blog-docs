@@ -404,11 +404,11 @@
 | --- | --- | --- | --- | --- | --- |
 | GET | /api/posts/{id}/comments?cursor= | B | 누구나 | `Comment` 20 작성순, 답글은 부모 안에. `+ totalCount` | CMT-01, CMT-05, CMT-06 |
 | POST | /api/posts/{id}/comments | B | 회원 | `{ content, parentId?, secret }` → 201 `Comment`. `Idempotency-Key` 필수. 차단 403 `BLOCKED_BY_BLOG`, 금칙어 400 `BANNED_WORD`, 댓글 막힘 403 `COMMENTS_DISABLED`, 답글의 답글 400 | CMT-01, CMT-05, CMT-06, CMT-07, MNG-04 |
-| PATCH | /api/comments/{id} | B | 본인 | `{ content }` → `Comment`. 숨긴 댓글은 403 | CMT-03 |
+| PATCH | /api/comments/{id} | B | 본인 | `{ content }` → `Comment`. 숨긴 댓글은 403. 상태 코드 순서: 없음·지움·글을 볼 수 없음 404 → 비회원 401 → 본인 아님(주인도)·숨김 403 → 입력 400. 고치면 `updatedAt`이 생긴다 | CMT-03 |
 | DELETE | /api/comments/{id} | B | 본인·주인 | 204. 답글이 있으면 자리만 남김 | CMT-01, CMT-02 |
-| GET | /api/guestbook?page= | B | 누구나 | `Comment` 페이지 20 최신순, 답글은 부모 안에 | CMT-04 |
+| GET | /api/guestbook?page= | B | 누구나 | `Comment` 페이지 20 최신순(`{ content, page, size, totalElements, totalPages }`, 최상위 글 기준), 답글은 부모 안에 작성순. 비밀글은 블로그 주인·작성자가 아니면 `SECRET` | CMT-04 |
 | POST | /api/guestbook | B | 회원 | `{ content, parentId?, secret }` → 201. `Idempotency-Key`, 차단·금칙어는 댓글과 같음 | CMT-04, MNG-04 |
-| PATCH | /api/guestbook/{id} | B | 본인 | `{ content }` → `Comment` | CMT-04 |
+| PATCH | /api/guestbook/{id} | B | 본인 | `{ content }` → `Comment`. 상태 코드 순서는 댓글 고치기와 같다(404 → 401 → 403 → 400) | CMT-04 |
 | DELETE | /api/guestbook/{id} | B | 본인·주인 | 204 | CMT-04 |
 
 ### SOC 반응
@@ -457,7 +457,7 @@
 | GET | /api/manage/posts?status=&visibility=&categoryId=&q=&page= | 내 글 20 최신순(임시저장은 수정 시각순). `categoryId`는 하위 포함, `0`은 미분류. `q`는 제목만 찾는다. 숨긴 글은 `blinded: true`와 `blind` 사유 | MNG-01, POST-08, ADMIN-03 |
 | PATCH | /api/manage/posts | `{ postIds, visibility }` → `{ updatedCount }` 일괄 공개 범위. `postIds` 1~100개. 이 블로그의 지우지 않은 글만 바꾸고 남의 글·지운 글·없는 번호는 건너뛴다(수에서 빠짐). 한 트랜잭션 | MNG-01 |
 | DELETE | /api/manage/posts | `{ postIds }` → `{ deletedCount }` 일괄 삭제(글 하나 삭제와 같은 처리). `postIds` 1~100개, 건너뛰는 규칙은 위와 같음 | MNG-01 |
-| GET | /api/manage/comments?type=comment\|guestbook&page= | 받은 댓글·방명록 20 최신순 `[{ ...Comment, post: { id, title } \| null }]` | MNG-02 |
+| GET | /api/manage/comments?type=comment\|guestbook&page= | 받은 댓글·방명록 20 최신순 `[{ ...Comment, post: { id, title } \| null }]` 페이지. "받은" 것이라 주인 자신이 쓴 것은 빼고, 지운 것·지운 글의 댓글도 뺀다. 답글도 한 줄씩(`parentId`로 구분, `replies`는 빈 배열). `type`을 빼면 `comment`, 그 밖의 값은 400. 비회원 401 → 주인 아님 403 → 400 | MNG-02 |
 | GET | /api/manage/stats | 관리 홈 `{ today, yesterday, total, recentComments[5], recentPosts[5] }` | MNG-03 |
 | GET | /api/manage/stats/visitors?unit=day\|week\|month&from=&to= | `[{ date, visitorCount, viewCount }]`. 주·월은 일별 합 | MNG-03 |
 | GET | /api/manage/stats/popular-posts?range=all\|7d | `[{ rank, post, viewCount }]` 10 | MNG-03 |
