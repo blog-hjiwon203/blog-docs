@@ -111,8 +111,8 @@ pom.xml
 mvnw, mvnw.cmd, .mvn/
 src/
     ├── main/java/com/nhnacademy/blog/   # BlogApplication.java
-    │   ├── global/          # config(Security, Cache, Web), error(공통 오류 응답), host(서브도메인 해석), visibility(가시성 판단)
-    │   ├── auth/            # 가입·로그인·JWT·소셜
+    │   ├── global/          # config(Security, Cache, Web), error(공통 오류 응답), host(서브도메인 해석), visibility(가시성 판단), auth(인증의 입구만: LoginMember·LoginMembers·BlogOwnerGuard·정지 안내)
+    │   ├── auth/            # 가입·로그인·JWT·소셜, 인증의 속(토큰·쿠키·필터·비밀번호·시도 제한). 바깥은 입구(CredentialService, LoginSessions)만 쓴다(스텝 19b)
     │   ├── member/
     │   ├── blog/            # 개설·정보·사이드바·이사·삭제
     │   ├── post/            # 글·조회 기록·주제
@@ -140,6 +140,8 @@ frontend/
     ├── components/          # editor(Tiptap), sidebar, pagination
     └── api/
 ```
+
+**인증 경계 (스텝 19b, 2026-10-11 지원 결정)**: 실행은 하나(모놀리스)로 두고, 인증만 경계를 분명히 한다. 인증 서버·게이트웨이로 서비스를 나누거나 Maven 멀티 모듈로 나누지 않는다. 팀·배포·확장의 이유가 없고, `member` 표를 인증과 블로그가 같이 써서 나누면 "분산 모놀리스"가 되기 때문이다. 대신 `auth/` 바깥은 인증의 입구(`global/auth/`의 `LoginMember`·`LoginMembers`·`BlogOwnerGuard`·정지 안내, `auth`의 `CredentialService`·`LoginSessions`)만 쓰고, 이것을 ArchUnit 테스트(`ArchitectureTest`)가 지킨다. 계층 방향(presentation → application → domain)도 같은 테스트가 검사한다.
 
 **구조 결정**: 웹 애플리케이션 구조. 빌드 시 `frontend/dist`를 `src/main/resources/static`으로 복사해 jar 하나로 배포한다. 백엔드는 기능(도메인) 단위 패키지. 기능 패키지 안은 `domain/`(엔티티·enum·Repository), `application/`(Service), `presentation/`(Controller, `dto/`)으로 나누고 의존은 presentation → application → domain 한 방향이다(2026-10-08 지원 결정).
 

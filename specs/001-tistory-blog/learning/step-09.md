@@ -14,7 +14,7 @@
 | 하위 카테고리 (CAT-03) | `POST /api/categories { name, parentId }` → 201 `{ id, name, parentId, sortOrder }`, 3단계 409 `CATEGORY_DEPTH` | `category/application/CategoryService`, `CategoriesPage`의 [하위 추가] |
 | 홈 주제별 글 (HOME-03) | `GET /api/home/topics/{topic}` → PostSummary 6개 | `HomeService.topicPosts`, `PopularRanking.topicSnapshot`, `PopularScoreRepository.topScoresInTopic`, `HomePage`의 주제 탭 |
 | 내 글 관리 (MNG-01) | `GET /api/manage/posts?status=&visibility=&categoryId=&q=&page=`, `PATCH`·`DELETE /api/manage/posts` | `manage/application/ManagePostService`, `manage/presentation/ManagePostController`, `pages/manage/ManagePostsPage.tsx` |
-| 시도 횟수 제한 (T055a, 지원이 스텝 중에 추가) | 로그인·인증 코드·비밀번호 변경을 15분 안에 5번 틀리면(같은 IP는 셋을 합쳐 20번) 15분 동안 429 `{ retryAfterSeconds }` | `global/auth/AttemptLimiter`, `AttemptLimitProperties`, `AuthService.login`, `EmailVerificationService.check`, `MeService.changePassword`, `frontend/src/api/errors.ts`, 테스트용 `TestWebConfiguration` |
+| 시도 횟수 제한 (T055a, 지원이 스텝 중에 추가) | 로그인·인증 코드·비밀번호 변경을 15분 안에 5번 틀리면(같은 IP는 셋을 합쳐 20번) 15분 동안 429 `{ retryAfterSeconds }` | `auth/application/AttemptLimiter`, `AttemptLimitProperties`, `AuthService.login`, `EmailVerificationService.check`, `MeService.changePassword`, `frontend/src/api/errors.ts`, 테스트용 `TestWebConfiguration` |
 | 공용 도구 | — | `global/web/LikePatterns`(검색에서 옮김) |
 | 테스트 | — | `AttemptLimitIntegrationTest`, `errors.test.ts`, `MeUpdateIntegrationTest`, `TopicIntegrationTest`, `CategoryIntegrationTest`, `HomeTopicIntegrationTest`, `ManagePostIntegrationTest` |
 

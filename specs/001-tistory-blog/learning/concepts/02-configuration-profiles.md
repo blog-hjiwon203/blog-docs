@@ -183,7 +183,7 @@ app:                               # 여기부터는 이 프로젝트가 만든 
 | 키 | 받는 클래스 | 쓰는 곳 | 자세히 |
 | --- | --- | --- | --- |
 | `app.domain.platform` | `global/host/DomainProperties` | 서브도메인 해석, 쿠키 도메인 | [15](./15-subdomain-host-routing.md) |
-| `app.auth.*` | `global/auth/AuthProperties` | JWT 발급, 쿠키, 무활동 로그아웃 | [11](./11-jwt.md), [10](./10-http-cookies.md) |
+| `app.auth.*` | `auth/application/AuthProperties` | JWT 발급, 쿠키, 무활동 로그아웃 | [11](./11-jwt.md), [10](./10-http-cookies.md) |
 | `app.idempotency.ttl` | `global/web/IdempotencyProperties` | 연타 방지 | [17](./17-idempotency-redis.md) |
 | `app.upload.dir` | (스텝 7에서 사용) | 이미지 저장 | — |
 
