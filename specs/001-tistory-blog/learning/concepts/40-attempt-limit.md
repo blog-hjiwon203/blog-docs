@@ -157,7 +157,7 @@ POST /api/auth/login { email: "a@b.com", password: "..." }
 
 ## 5. 이 프로젝트에서는
 
-### 5.1 `global/auth/AttemptLimiter.java`
+### 5.1 `auth/application/AttemptLimiter.java`
 
 대상별 카운터와 IP 카운터 두 개를 함께 다룬다(3.6).
 

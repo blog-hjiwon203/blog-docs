@@ -346,7 +346,7 @@ public record LoginRequest(
 
 처음에는 `boolean rememberMe`(기본형)였다. 서버를 띄워 curl로 `{"email":..,"password":..}`만 보내 보니 **400**이 왔다. Jackson 3은 기본형 칸이 본문에 없으면 오류로 보는 것이 기본값이기 때문이다(테스트는 항상 `rememberMe`를 넣어 보내 이 경우를 못 잡았다). 감싼 타입 `Boolean`으로 바꿔 없으면 null, null은 "유지 안 함"으로 처리했다. 자세한 원리는 [22](./22-bean-validation.md).
 
-**AuthCookieManager.logout** (스텝 3 코드, `global/auth/AuthCookieManager.java`)
+**AuthCookieManager.logout** (스텝 3 코드, `auth/presentation/AuthCookieManager.java`)
 
 ```java
 public void logout(HttpServletRequest request, HttpServletResponse response) {

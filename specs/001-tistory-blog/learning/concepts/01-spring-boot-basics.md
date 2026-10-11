@@ -278,7 +278,7 @@ public class BlogApplication {
 
 ### 5.2 설정값을 record로 받기
 
-`src/main/java/com/nhnacademy/blog/global/auth/AuthProperties.java`
+`src/main/java/com/nhnacademy/blog/auth/application/AuthProperties.java`
 
 ```java
 @ConfigurationProperties(prefix = "app.auth")          // app.auth.* 값을 이 record로
@@ -310,7 +310,7 @@ public record DomainProperties(String platform) {      // app.domain.platform (�
 
 ### 5.3 생성자 주입과 `@Bean`
 
-`src/main/java/com/nhnacademy/blog/global/auth/JwtTokenProvider.java`
+`src/main/java/com/nhnacademy/blog/auth/application/JwtTokenProvider.java`
 
 ```java
 @Component

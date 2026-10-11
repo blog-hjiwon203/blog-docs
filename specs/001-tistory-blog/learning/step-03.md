@@ -8,7 +8,7 @@
 
 | 장치 | 묻는 것 | 핵심 파일 |
 | --- | --- | --- |
-| 로그인 | 이 요청을 보낸 사람이 누구인가, 정지·탈퇴했나 | `global/auth/JwtAuthenticationFilter`, `JwtTokenProvider`, `AuthCookieManager`, `TokenStore` |
+| 로그인 | 이 요청을 보낸 사람이 누구인가, 정지·탈퇴했나 | `auth/presentation/JwtAuthenticationFilter`, `JwtTokenProvider`, `AuthCookieManager`, `TokenStore` |
 | 주소 해석 | `alpha.blog.test`는 어느 블로그인가 | `global/host/BlogHostResolver`, `@CurrentBlog` |
 | 가시성 | 이 사람이 이 글을 볼 수 있나 | `global/visibility/PostVisibilityPolicy`, `PostSpecifications` |
 | 연타 방지 | 같은 요청이 두 번 왔나 | `global/web/IdempotencyInterceptor` |

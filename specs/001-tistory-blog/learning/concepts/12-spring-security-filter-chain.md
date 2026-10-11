@@ -359,7 +359,7 @@ public class SecurityConfig {
 
 ### 5.2 `JwtAuthenticationFilter`
 
-경로: `src/main/java/com/nhnacademy/blog/global/auth/JwtAuthenticationFilter.java` (토큰 부분은 [11-jwt](./11-jwt.md) 5.2)
+경로: `src/main/java/com/nhnacademy/blog/auth/presentation/JwtAuthenticationFilter.java` (토큰 부분은 [11-jwt](./11-jwt.md) 5.2)
 
 ```java
 public class JwtAuthenticationFilter extends OncePerRequestFilter {   // @Component 아님
@@ -409,7 +409,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {   // @Compon
 
 ### 5.3 `CsrfHeaderFilter`
 
-경로: `src/main/java/com/nhnacademy/blog/global/auth/CsrfHeaderFilter.java` (CSRF 개념은 [13-csrf-samesite-cors](./13-csrf-samesite-cors.md))
+경로: `src/main/java/com/nhnacademy/blog/auth/presentation/CsrfHeaderFilter.java` (CSRF 개념은 [13-csrf-samesite-cors](./13-csrf-samesite-cors.md))
 
 ```java
 private static final Set<String> STATE_CHANGING_METHODS = Set.of("POST", "PUT", "PATCH", "DELETE");

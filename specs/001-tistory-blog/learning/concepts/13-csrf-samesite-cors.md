@@ -230,7 +230,7 @@ Spring Security는 기본으로 `CsrfFilter`(동기화 토큰 방식)를 켠다.
 
 ### 5.1 `CsrfHeaderFilter`
 
-경로: `src/main/java/com/nhnacademy/blog/global/auth/CsrfHeaderFilter.java`
+경로: `src/main/java/com/nhnacademy/blog/auth/presentation/CsrfHeaderFilter.java`
 
 ```java
 /**
@@ -271,7 +271,7 @@ public class CsrfHeaderFilter extends OncePerRequestFilter {
 .addFilterBefore(csrfFilter, AnonymousAuthenticationFilter.class)
 ```
 
-`src/main/java/com/nhnacademy/blog/global/auth/AuthCookieManager.java`:
+`src/main/java/com/nhnacademy/blog/auth/presentation/AuthCookieManager.java`:
 
 ```java
 ResponseCookie.from(name, value)
@@ -322,7 +322,7 @@ server: {
 
 ### 5.5 테스트
 
-`src/test/java/com/nhnacademy/blog/global/auth/AuthenticationIntegrationTest.java`:
+`src/test/java/com/nhnacademy/blog/auth/AuthenticationIntegrationTest.java`:
 
 ```java
 @Test

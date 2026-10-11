@@ -259,7 +259,7 @@ Set-Cookie: access_token=; Path=/; Domain=.blog.test; Max-Age=0; Expires=Thu, 01
 
 ### 5.1 쿠키를 만드는 곳: `AuthCookieManager.addCookie`
 
-경로: `src/main/java/com/nhnacademy/blog/global/auth/AuthCookieManager.java`
+경로: `src/main/java/com/nhnacademy/blog/auth/presentation/AuthCookieManager.java`
 
 ```java
 /** maxAge가 null이면 브라우저를 닫을 때 사라지는 쿠키다. */
@@ -397,7 +397,7 @@ curl -s -D - -o /dev/null -H "Host: blog.test" -b "access_token=broken" localhos
 ./mvnw test -Dtest=AuthenticationIntegrationTest#loginCookiesAreSharedAcrossBlogAddresses
 ```
 
-테스트 코드(`src/test/.../global/auth/AuthenticationIntegrationTest.java`)를 열어 어떤 속성을 검사하는지 읽는다. `cookieManager.login(response, member, true)`의 `true`를 `false`로 바꾸면 어느 단언이 깨지는지 예상해 보고 돌려 본다.
+테스트 코드(`src/test/.../auth/AuthenticationIntegrationTest.java`)를 열어 어떤 속성을 검사하는지 읽는다. `cookieManager.login(response, member, true)`의 `true`를 `false`로 바꾸면 어느 단언이 깨지는지 예상해 보고 돌려 본다.
 
 ### 실습 3: Domain을 빼 보기
 

@@ -230,7 +230,7 @@ void subdomainResolvesToBlog() throws Exception {
 
 `Host` 헤더를 바꾸는 것만으로 서브도메인 요청을 흉내 낸다. 브라우저도 `/etc/hosts`도 필요 없다.
 
-`src/test/java/com/nhnacademy/blog/global/auth/AuthenticationIntegrationTest.java`
+`src/test/java/com/nhnacademy/blog/auth/AuthenticationIntegrationTest.java`
 
 ```java
 @Test

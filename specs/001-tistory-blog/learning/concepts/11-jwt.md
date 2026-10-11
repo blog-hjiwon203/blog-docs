@@ -268,7 +268,7 @@ AuthCookieManager.logout(request, response)
 
 ### 5.1 `JwtTokenProvider`
 
-경로: `src/main/java/com/nhnacademy/blog/global/auth/JwtTokenProvider.java`
+경로: `src/main/java/com/nhnacademy/blog/auth/application/JwtTokenProvider.java`
 
 ```java
 private static final String CLAIM_TYPE = "typ";
@@ -345,7 +345,7 @@ public Optional<TokenClaims> parse(String token, TokenType expectedType) {
 
 ### 5.2 `JwtAuthenticationFilter` 중 토큰 부분
 
-경로: `src/main/java/com/nhnacademy/blog/global/auth/JwtAuthenticationFilter.java`
+경로: `src/main/java/com/nhnacademy/blog/auth/presentation/JwtAuthenticationFilter.java`
 
 ```java
 Optional<Long> accessMemberId = accessCookie
@@ -372,7 +372,7 @@ refresh.filter(claims -> !claims.rememberMe())
 
 ### 5.3 `TokenStore`
 
-경로: `src/main/java/com/nhnacademy/blog/global/auth/TokenStore.java`
+경로: `src/main/java/com/nhnacademy/blog/auth/domain/TokenStore.java`
 
 ```java
 private static final String REFRESH_PREFIX = "auth:refresh:";
