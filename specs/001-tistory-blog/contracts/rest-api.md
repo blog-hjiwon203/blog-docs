@@ -410,11 +410,11 @@
 | --- | --- | --- | --- | --- | --- |
 | GET | /api/posts/{id}/comments?cursor= | B | 누구나 | `Comment` 20 작성순, 답글은 부모 안에. `+ totalCount` | CMT-01, CMT-05, CMT-06 |
 | POST | /api/posts/{id}/comments | B | 회원 | `{ content, parentId?, secret }` → 201 `Comment`. `Idempotency-Key` 필수. 차단 403 `BLOCKED_BY_BLOG`, 금칙어 400 `BANNED_WORD`, 댓글 막힘 403 `COMMENTS_DISABLED`, 답글의 답글 400 | CMT-01, CMT-05, CMT-06, CMT-07, MNG-04 |
-| PATCH | /api/comments/{id} | B | 본인 | `{ content }` → `Comment`. 숨긴 댓글은 403. 상태 코드 순서: 없음·지움·글을 볼 수 없음 404 → 비회원 401 → 본인 아님(주인도)·숨김 403 → 입력 400. 고치면 `updatedAt`이 생긴다 | CMT-03 |
+| PATCH | /api/comments/{id} | B | 본인 | `{ content }` → `Comment`. 숨긴 댓글은 403. 상태 코드 순서: 없음·지움·글을 볼 수 없음 404 → 비회원 401 → 본인 아님(주인도)·숨김 403 → 차단된 회원 403 `BLOCKED_BY_BLOG` → 입력 400 → 금칙어 400 `BANNED_WORD`(새로 쓸 때와 같게, 2026-10-11 지원 결정). 고치면 `updatedAt`이 생긴다 | CMT-03, MNG-04 |
 | DELETE | /api/comments/{id} | B | 본인·주인 | 204. 답글이 있으면 자리만 남김 | CMT-01, CMT-02 |
 | GET | /api/guestbook?page= | B | 누구나 | `Comment` 페이지 20 최신순(`{ content, page, size, totalElements, totalPages }`, 최상위 글 기준), 답글은 부모 안에 작성순. 비밀글은 블로그 주인·작성자가 아니면 `SECRET` | CMT-04 |
 | POST | /api/guestbook | B | 회원 | `{ content, parentId?, secret }` → 201. `Idempotency-Key`, 차단·금칙어는 댓글과 같음 | CMT-04, MNG-04 |
-| PATCH | /api/guestbook/{id} | B | 본인 | `{ content }` → `Comment`. 상태 코드 순서는 댓글 고치기와 같다(404 → 401 → 403 → 400) | CMT-04 |
+| PATCH | /api/guestbook/{id} | B | 본인 | `{ content }` → `Comment`. 상태 코드 순서는 댓글 고치기와 같다(404 → 401 → 403 → 차단 403 → 400 → 금칙어 400) | CMT-04, MNG-04 |
 | DELETE | /api/guestbook/{id} | B | 본인·주인 | 204 | CMT-04 |
 
 ### SOC 반응

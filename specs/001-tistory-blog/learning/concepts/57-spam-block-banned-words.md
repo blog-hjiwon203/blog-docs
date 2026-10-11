@@ -13,7 +13,7 @@
 
 ## 2. 왜 필요한가
 
-명세 MNG-04: "블로그 주인이 회원을 차단하고 금칙어를 정한다. 차단된 회원은 그 블로그에 댓글·방명록을 쓸 수 없고 구독할 수 없으며, 차단하면 기존 구독도 지워진다. 차단 사실은 따로 알리지 않는다. 금칙어는 블로그당 100개까지, 댓글·방명록을 새로 쓸 때 대소문자를 무시하고 검사한다. 이미 있던 댓글은 그대로 두고 주인이 MNG-02에서 지운다."
+명세 MNG-04: "블로그 주인이 회원을 차단하고 금칙어를 정한다. 차단된 회원은 그 블로그에 댓글·방명록을 쓸 수 없고 구독할 수 없으며, 차단하면 기존 구독도 지워진다. 차단 사실은 따로 알리지 않는다. 금칙어는 블로그당 100개까지, 댓글·방명록을 새로 쓸 때 대소문자를 무시하고 검사한다. 이미 있던 댓글은 그대로 두고 주인이 MNG-02에서 지운다." 2026-10-11 지원 결정으로 "고칠 때도 검사하고, 차단된 회원은 전에 쓴 글도 고칠 수 없다"가 더해졌다(spec.md에 반영).
 
 댓글 관리(스텝 14)로 주인은 광고 댓글을 **지울** 수 있었다. 하지만 같은 사람이 또 쓰면 또 지워야 한다. 차단과 금칙어는 **쓰기 전에** 막는 장치다.
 
@@ -145,6 +145,20 @@ spamGuard.requireNoBannedWord(post.getBlog(), content);                         
 - 차단 검사는 **볼 수 있는 글인지(404), 로그인(401), 댓글 허용(403 `COMMENTS_DISABLED`) 뒤**다. 댓글을 막은 글이면 누구에게나 같은 403이니 차단 여부를 볼 필요가 없다. 차단 검사를 먼저 하면 차단된 사람이 비공개 글 번호에 댓글을 보내 "403(있음)"과 "404(없음)"로 글의 존재를 알아낼 수 있다.
 - 블로그는 `post.getBlog()`로 정한다. 주소의 블로그가 아니라 **글이 속한 블로그**다. 이사한 글처럼 주소와 소속이 다를 수 있는 경우에도 맞는 블로그의 차단 목록을 본다.
 - 방명록은 `GuestbookService.requireWritable(blog, member)`를 새로 두어 컨트롤러가 쓰기 전에 부른다. 구독은 `SubscriptionService.subscribe`가 "볼 수 있는 블로그 → 자기 블로그 아님" 다음에 부른다.
+- **고치기도 같다.** 고칠 수 있는지 보는 `editable`이 "본인인가(403)" 다음에 차단을 보고, `edit`가 고친 내용의 금칙어를 본다. 지우기는 막지 않는다. 차단된 사람이 자기 글을 지우는 것은 주인에게 해가 없다.
+
+```java
+// CommentService.editable (발췌)
+if (!comment.isWrittenBy(member.id()) || comment.isBlinded()) {
+    throw new BusinessException(ErrorCode.FORBIDDEN);
+}
+// 차단된 회원은 전에 쓴 댓글도 고칠 수 없다(MNG-04, 2026-10-11 지원 결정). 지우기는 그대로 된다
+spamGuard.requireNotBlocked(comment.getPost().getBlog(), member.id());
+
+// CommentService.edit (발췌)
+Comment comment = editable(blog, commentId, member);
+spamGuard.requireNoBannedWord(comment.getPost().getBlog(), content);
+```
 
 ### 5.3 차단: `BlogSpamService.block`
 
@@ -208,6 +222,7 @@ public BlogBannedWord addBannedWord(Blog blog, String rawWord) {
 
 - `blockedMemberCannotCommentWriteGuestbookOrSubscribe`: 구독한 사람을 차단 → 주인이 아니면 403, 자기 자신 400, 메모와 함께 201, 다시 409 → 구독이 지워졌는지 DB로 → 댓글·방명록·구독 모두 403 `BLOCKED_BY_BLOG` → 목록에 메모 → 해제 뒤 댓글 201.
 - `bannedWordsRejectNewCommentsIgnoringCase`: "Casino" 추가 → "casino"는 409 `NAME_TAKEN`(DB 콜레이션) → 공백만은 400 → "CASINO"가 든 댓글과 "casino" 방명록 400 → 금칙어를 지우면 같은 댓글 201.
+- `editsAreCheckedLikeNewWrites`: 깨끗한 댓글·방명록을 쓴 뒤 금칙어를 넣어 고치면 400 `BANNED_WORD`, 깨끗하게 고치면 200 → 차단 뒤 고치기는 댓글·방명록 모두 403 `BLOCKED_BY_BLOG`, 지우기는 204.
 - `atMostOneHundredBannedWords`: SQL로 100개를 넣고 101번째 409 `BANNED_WORD_LIMIT`. 100번 API를 부르지 않고 SQL로 채워 테스트를 빠르게 한다.
 
 ## 6. 자주 하는 실수와 함정
@@ -220,7 +235,7 @@ public BlogBannedWord addBannedWord(Blog blog, String rawWord) {
 - **자바에선 대소문자 무시, DB에선 구분(또는 반대)**: "Casino"와 "casino"가 둘 다 들어가거나, 넣을 땐 되는데 검사에선 같은 낱말로 보는 어긋남. 콜레이션을 확인한다.
 - **공백 금칙어를 받음**: 모든 댓글이 막힌다. `strip` 후 비면 400.
 - **이미 있는 댓글까지 지움**: 명세와 다르고 되돌릴 수 없다.
-- **고치기(PATCH)를 잊음**: 깨끗한 댓글을 쓰고 고쳐서 금칙어를 넣을 수 있다. 명세는 "새로 쓸 때"만 정했으므로, 고치기에도 검사할지는 정해야 할 일이다(스텝 20 보고에서 지원에게 물음).
+- **고치기(PATCH)를 잊음**: 깨끗한 댓글을 쓰고 고쳐서 금칙어를 넣을 수 있고, 차단된 사람이 전에 쓴 댓글을 광고로 바꿀 수 있다. 처음 만들 때 명세가 "새로 쓸 때"만 정해 고치기를 빠뜨렸다가, 지원 결정(2026-10-11)으로 고치기에도 같은 검사를 넣었다(5.2). "쓰기"를 막을 때는 **내용이 들어오는 모든 입구**(새로 쓰기, 고치기, 답글)를 센다.
 
 ## 7. 직접 해 보기
 
