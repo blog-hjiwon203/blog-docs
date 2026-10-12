@@ -2,6 +2,8 @@
 
 > 관련 스텝: [스텝 3](../step-03.md) · 관련 결정: research.md R-03(쿠키 인증 + CSRF 대책), rest-api.md "인증과 보안"(`X-Requested-With`, 403 `CSRF_REJECTED`)
 
+> **스텝 21에서 바뀜**: 블로그 주소가 경로(`blog.com/@alpha`)가 되어 모든 블로그가 플랫폼과 **같은 출처**다. 아래 3.1·3.8의 `alpha.blog.test` 예(다른 출처, 같은 사이트)는 스텝 3~20 기준이다. CSRF 대책(`X-Requested-With`, `SameSite=Lax`)은 그대로이고, 블로그 API는 새 사용자 지정 헤더 `X-Blog-Address`를 붙이지만 같은 출처라 사전 요청이 없다. 한 출처가 되어 달라진 XSS 영향은 [63](./63-path-based-blog-address.md) 3.4.
+
 ## 1. 이 문서로 배우는 것
 
 - **출처(origin)**와 **사이트(site)**가 어떻게 다른지. 이 차이를 모르면 SameSite와 CORS가 헷갈린다

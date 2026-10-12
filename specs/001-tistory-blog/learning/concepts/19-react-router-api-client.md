@@ -2,6 +2,8 @@
 
 > 관련 스텝: [스텝 3](../step-03.md) (T015), [스텝 1](../step-01.md) (T002), [스텝 4](../step-04.md) (화면 라우트 추가, 본문 없는 2xx 처리), [스텝 5](../step-05.md) (연타 방지 키 대체 구현, 글쓰기·카테고리 라우트), [스텝 13b](../step-13b.md) (5.8 동시에 나간 요청과 정지 응답) · 관련 개념: [25-react-forms-data](./25-react-forms-data.md), [21-signup-login](./21-signup-login.md), [15-subdomain-host-routing](./15-subdomain-host-routing.md), [18-spa-server-routing](./18-spa-server-routing.md), [13-csrf-samesite-cors](./13-csrf-samesite-cors.md), [17-idempotency-redis](./17-idempotency-redis.md), [07-spring-mvc-exception-handling](./07-spring-mvc-exception-handling.md)
 
+> **스텝 21에서 바뀜**: 블로그 주소가 경로(`blog.test/@alpha`)가 되었다. `host.ts`의 `parseHost(hostname)`와 `PLATFORM_DOMAIN`(`VITE_PLATFORM_DOMAIN`)은 없어지고 `parseLocation(pathname)`이 경로로 판단한다. 블로그 화면은 `<BrowserRouter basename="/@alpha">`로 그려 안의 링크는 그대로이고, `api()`가 `X-Blog-Address` 헤더를 붙인다. `platformUrl`·`blogUrl`·`safeRedirect`는 지금 출처(`location.origin`) 기준이다. 아래 5.1·5.2·4장의 `alpha.blog.test` 예는 스텝 3~20 기준이며, 지금 코드는 [63](./63-path-based-blog-address.md) 3.7, 5.6.
+
 ## 1. 이 문서로 배우는 것
 
 - React 컴포넌트, JSX, props의 아주 기초(이 프로젝트 화면을 읽을 수 있을 만큼)

@@ -2,6 +2,8 @@
 
 > 관련 스텝: [스텝 15](../step-15.md) (5.7 같은 경로, 다른 호스트), [스텝 3](../step-03.md) (T009), 개발 환경 보강 2026-10-09(dnsmasq) · 관련 개념: [10-http-cookies](./10-http-cookies.md), [13-csrf-samesite-cors](./13-csrf-samesite-cors.md), [16-authorization-visibility](./16-authorization-visibility.md), [18-spa-server-routing](./18-spa-server-routing.md)
 
+> **스텝 21에서 바뀜 (2026-10-12 지원 결정)**: 배포 서버(학교 nginx, `now-log.java21.net`)에 와일드카드 DNS가 없어 블로그 주소를 서브도메인(`alpha.blog.com`)에서 경로(`blog.com/@alpha`)로 바꿨다. API는 Host 대신 `X-Blog-Address` 헤더로 블로그를 정하고, `BlogHostResolver`·`RequestHost`는 `BlogAddressResolver`·`RequestBlog`가 되었으며, `DomainProperties.cookieDomain()`·`blogHost()`는 없어졌다. 이 문서는 스텝 3~20의 구조로 남겨 둔다. DNS·Host 헤더·가상 호스트·멀티테넌시·인자 해석기 설명은 그대로 유효하고, 지금 코드는 [63 블로그 주소를 경로로](./63-path-based-blog-address.md)를 본다. 개발에도 dnsmasq나 블로그마다의 hosts 줄은 더 필요 없다(`127.0.0.1 blog.test` 한 줄).
+
 ## 1. 이 문서로 배우는 것
 
 - 도메인 이름이 어떤 부분으로 이루어지는지(최상위 도메인, 서브도메인)

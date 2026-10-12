@@ -1,19 +1,20 @@
 # 61. 소셜 로그인: OAuth 2.0 인가 코드 흐름
 
-> 관련 스텝: [스텝 20b](../step-20b.md) (T099, T100) · 관련 개념: [10 HTTP 쿠키](./10-http-cookies.md)(꼭 먼저), [13 CSRF, SameSite, CORS](./13-csrf-samesite-cors.md)(꼭 먼저), [15 서브도메인과 Host 라우팅](./15-subdomain-host-routing.md), [17 멱등성과 Redis](./17-idempotency-redis.md), [21 가입과 로그인](./21-signup-login.md)(열린 리다이렉트), [23 트랜잭션과 동시성](./23-transactions-locking.md), [33 격리 수준](./33-isolation-deadlock.md), [55 모듈 경계](./55-module-boundary-archunit.md)
+> 관련 스텝: [스텝 20b](../step-20b.md) (T099, T100) · **이 프로젝트의 소셜 로그인은 카카오 하나다.** 구글도 만들었다가 뺐다(2026-10-12 지원 결정, 3.10). 이 문서의 구글 이야기는 OAuth·OpenID Connect를 이해하기 위한 일반 지식과 "왜 뺐나"로 읽는다. · 관련 개념: [10 HTTP 쿠키](./10-http-cookies.md)(꼭 먼저), [13 CSRF, SameSite, CORS](./13-csrf-samesite-cors.md)(꼭 먼저), [15 서브도메인과 Host 라우팅](./15-subdomain-host-routing.md), [17 멱등성과 Redis](./17-idempotency-redis.md), [21 가입과 로그인](./21-signup-login.md)(열린 리다이렉트), [23 트랜잭션과 동시성](./23-transactions-locking.md), [33 격리 수준](./33-isolation-deadlock.md), [55 모듈 경계](./55-module-boundary-archunit.md)
 
 ## 1. 이 문서로 배우는 것
 
 - **OAuth 2.0**이 푸는 문제와 등장인물: 자원 소유자, 클라이언트, 인가 서버, 자원 서버
 - **인가 코드 흐름(authorization code flow)** 한 바퀴: authorize 주소 → 제공사 로그인 → 리다이렉트 URI로 code → 서버가 code를 토큰으로 바꾸기 → 회원 번호 읽기
 - 리다이렉트 URI를 제공사 콘솔에 **미리 등록**하는 이유, 클라이언트 시크릿을 서버에만 두는 이유
-- OAuth(권한 위임)와 **OpenID Connect**(로그인)의 차이: 구글 `scope=openid`와 `sub`, 카카오 `/v2/user/me`의 `id`
+- OAuth(권한 위임)와 **OpenID Connect**(로그인)의 차이: 카카오 `/v2/user/me`의 `id`, (일반 지식) 구글 `scope=openid`와 `sub`
 - **`state` 파라미터와 로그인 CSRF**, 이 프로젝트가 state를 **Redis와 브라우저 쿠키 두 곳**에 두는 이유
 - 콜백 뒤에 **한 번 더 건너뛰는 이유**(callback → 플랫폼 주소의 `complete?ticket=`)
 - Redis로 **한 번만 쓰는 표** 만들기: "읽고 지우기"에서 지우기에 성공한 한 번만 이긴다
 - 처음 보는 소셜 계정의 **가입 토큰과 닉네임 확인**, 회원과 연동을 한 트랜잭션으로
 - **계정 연동 규칙**(R-07): 이메일로 합치지 않기, 제공사당 하나, 소셜 계정은 회원 하나에만, 마지막 로그인 수단은 해제 불가(회원 행 잠금)
-- 소셜로 가입한 회원의 **탈퇴 본인 확인(재인증)**: 카카오 `prompt=login`, 구글 `max_age=0`, 10분짜리 표시를 한 번만
+- 소셜로 가입한 회원의 **탈퇴 본인 확인(재인증)**: 카카오 `prompt=login`(일반 지식: OIDC `max_age=0`), 10분짜리 표시를 한 번만
+- **구글 로그인을 뺀 이유**: 구글은 리다이렉트 URI가 https여야 하는데 배포 주소가 http다. 다시 넣으려면 무엇이 필요한가
 - **열린 리다이렉트** 막기(`safeRedirect`)와, 제공사 이메일을 **받지도 저장하지도 않는** 이유
 
 ## 2. 왜 필요한가
@@ -40,10 +41,10 @@ OAuth 2.0(RFC 6749)은 원래 **권한 위임**을 위한 규약이다. "사진 
 
 | 역할 | 뜻 | 이 프로젝트에서 |
 | --- | --- | --- |
-| 자원 소유자(resource owner) | 데이터의 주인, 허락하는 사람 | 카카오·구글 계정을 가진 사용자 |
+| 자원 소유자(resource owner) | 데이터의 주인, 허락하는 사람 | 카카오 계정을 가진 사용자 |
 | 클라이언트(client) | 권한을 받으려는 앱 | 우리 블로그 서버 |
-| 인가 서버(authorization server) | 로그인시키고 허락을 받아 토큰을 주는 곳 | `kauth.kakao.com`, `accounts.google.com`·`oauth2.googleapis.com` |
-| 자원 서버(resource server) | 토큰을 받고 데이터를 주는 API | `kapi.kakao.com`, `openidconnect.googleapis.com` |
+| 인가 서버(authorization server) | 로그인시키고 허락을 받아 토큰을 주는 곳 | `kauth.kakao.com` (구글이라면 `accounts.google.com`·`oauth2.googleapis.com`) |
+| 자원 서버(resource server) | 토큰을 받고 데이터를 주는 API | `kapi.kakao.com` (구글이라면 `openidconnect.googleapis.com`) |
 
 클라이언트는 미리 제공사 콘솔에 **앱을 등록**해 두 가지를 받는다.
 
@@ -81,30 +82,32 @@ OAuth에는 여러 흐름이 있고, 서버가 있는 웹 앱의 표준은 **인
 
 ### 3.3 리다이렉트 URI를 미리 등록하는 이유
 
-제공사 콘솔에 "이 앱은 끝나면 **이 주소로만** 돌려보낸다"를 등록하고, authorize 주소의 `redirect_uri`가 등록한 것과 **글자 하나까지 같아야** 받아 준다(구글·카카오 모두). 등록이 없다면 공격자가 `redirect_uri=https://evil.example/steal`로 바꾼 authorize 주소를 피해자에게 보내, 피해자의 code를 자기 서버로 받아 갈 수 있다.
+제공사 콘솔에 "이 앱은 끝나면 **이 주소로만** 돌려보낸다"를 등록하고, authorize 주소의 `redirect_uri`가 등록한 것과 **글자 하나까지 같아야** 받아 준다(카카오·구글 모두). 등록이 없다면 공격자가 `redirect_uri=https://evil.example/steal`로 바꾼 authorize 주소를 피해자에게 보내, 피해자의 code를 자기 서버로 받아 갈 수 있다.
 
 토큰 교환(④)에도 같은 `redirect_uri`를 다시 보낸다. 제공사가 "code를 줄 때 쓴 주소와 같은가"를 확인한다.
 
-구글은 등록하는 주소에 규칙이 더 있다.
+제공사마다 등록할 수 있는 주소에 규칙이 따로 있다. **구글**(일반 지식)은 이렇다.
 
 - `https`여야 한다. 예외는 `http://localhost`뿐이다.
 - 도메인은 공개 최상위 도메인(`.com`, `.net` 등)으로 끝나야 한다. 개발용 `blog.test`는 `.test`가 공개 도메인이 아니라 등록할 수 없다.
 
-그래서 이 프로젝트는 개발에서 콜백을 `http://localhost:8080/api/auth/oauth/google/callback`으로 등록한다. 이것이 3.6의 "한 번 더 건너뛰기"를 낳는다.
+이 규칙이 이 프로젝트에 두 가지 영향을 줬다. 개발에서는 콜백을 `localhost`로 등록해야 했고, 이것이 3.6의 "한 번 더 건너뛰기"를 낳았다. 운영에서는 배포 주소가 http라 **등록할 주소가 아예 없어서** 구글을 뺐다(3.10).
+
+이 프로젝트의 카카오는 개발에서 `http://localhost:8080/api/auth/oauth/kakao/callback`, 운영에서 `http://now-log.java21.net/api/auth/oauth/kakao/callback`(`application-prod.yml`)을 쓴다.
 
 ### 3.4 OAuth는 로그인이 아니다: OpenID Connect
 
 OAuth 2.0 자체는 "이 토큰으로 사진을 읽어도 된다"는 **권한**만 다루고, "이 사람이 누구다"를 표준으로 말하지 않는다. 그래서 로그인에 쓰려면 "토큰의 주인이 누구냐"를 알아내는 방법이 따로 필요하다.
 
 - **카카오**: 액세스 토큰으로 `GET https://kapi.kakao.com/v2/user/me`를 부르면 응답의 `id`(숫자)가 카카오 회원 번호다. 이메일·닉네임 같은 다른 정보는 콘솔에서 **동의 항목**을 켜야 들어오고, 이 프로젝트는 켜지 않는다.
-- **구글**: **OpenID Connect(OIDC)**를 쓴다. OIDC는 OAuth 2.0 위에 "로그인"을 얹은 표준이다. `scope=openid`를 요청하면 로그인 흐름이 되고, userinfo 주소(`https://openidconnect.googleapis.com/v1/userinfo`)가 돌려주는 **`sub`**(subject)가 그 구글 계정의 고유 번호다. `sub`는 구글 계정마다 다르고 다시 쓰이지 않는다. 구글도 이메일이 아니라 `sub`를 계정 식별자로 쓰라고 안내한다.
+- **구글**(일반 지식, 이 프로젝트에서는 뺐다): **OpenID Connect(OIDC)**를 쓴다. OIDC는 OAuth 2.0 위에 "로그인"을 얹은 표준이다. `scope=openid`를 요청하면 로그인 흐름이 되고, userinfo 주소(`https://openidconnect.googleapis.com/v1/userinfo`)가 돌려주는 **`sub`**(subject)가 그 구글 계정의 고유 번호다. `sub`는 구글 계정마다 다르고 다시 쓰이지 않는다. 구글도 이메일이 아니라 `sub`를 계정 식별자로 쓰라고 안내한다.
 
-OIDC는 토큰 교환 응답에 **ID 토큰**(서명된 JWT, 그 안에 `sub`)도 준다. ID 토큰의 서명을 확인하면 userinfo를 한 번 더 부르지 않아도 된다. 이 프로젝트는 서명 확인 코드를 더 두지 않으려고, 받은 액세스 토큰으로 userinfo를 불러 `sub`를 읽는 쉬운 길을 골랐다.
+OIDC는 토큰 교환 응답에 **ID 토큰**(서명된 JWT, 그 안에 `sub`)도 준다. ID 토큰의 서명을 확인하면 userinfo를 한 번 더 부르지 않아도 된다. 구글을 넣었을 때는 서명 확인 코드를 더 두지 않으려고, 받은 액세스 토큰으로 userinfo를 불러 `sub`를 읽는 쉬운 길을 골랐었다.
 
 | 제공사 | 받는 것 | 이 프로젝트가 쓰는 값 |
 | --- | --- | --- |
 | 카카오 | `/v2/user/me` 응답 | `id` (예: `4012345678`) |
-| 구글 | `scope=openid`, userinfo 응답 | `sub` (예: `1098…`) |
+| (구글, 뺌) | `scope=openid`, userinfo 응답 | `sub` (예: `1098…`) |
 
 DB에는 `social_account(provider, provider_user_id)`로 `KAKAO, 4012345678`처럼 저장한다.
 
@@ -130,7 +133,9 @@ DB에는 `social_account(provider, provider_user_id)`로 `KAKAO, 4012345678`처�
 
 이 프로젝트의 로그인 쿠키는 `Domain=.blog.test`(운영은 `.{플랫폼 도메인}`)다. 그래서 플랫폼 주소와 모든 블로그 주소(`alpha.blog.test`)가 같은 로그인 쿠키를 쓴다([10](./10-http-cookies.md), [15](./15-subdomain-host-routing.md)).
 
-브라우저는 응답한 호스트와 **상관없는 도메인의 쿠키를 받아 주지 않는다**. `http://localhost:8080/api/auth/oauth/google/callback`의 응답에 `Set-Cookie: access_token=…; Domain=.blog.test`를 넣어도 브라우저는 버린다. 즉 **구글이 돌려보내는 콜백(localhost)에서는 로그인 쿠키를 줄 수 없다**.
+그런데 제공사 콘솔에 등록한 콜백 주소가 **플랫폼 호스트가 아닐 수 있다**. 개발에서는 `http://localhost:8080/api/auth/oauth/kakao/callback`으로 등록한다(처음에는 구글이 https가 아니면 localhost만 받아서 이렇게 했고, 구글을 뺀 뒤에도 카카오를 같은 방식으로 둔다. 개발 설정 틀 `config/application-dev.yml.example`의 값이 이것이다).
+
+브라우저는 응답한 호스트와 **상관없는 도메인의 쿠키를 받아 주지 않는다**. `http://localhost:8080/.../callback`의 응답에 `Set-Cookie: access_token=…; Domain=.blog.test`를 넣어도 브라우저는 버린다. 즉 **플랫폼이 아닌 콜백 주소(localhost)에서는 로그인 쿠키를 줄 수 없다**.
 
 그래서 흐름을 둘로 나눴다.
 
@@ -144,7 +149,7 @@ complete (blog.test, 로그인을 시작한 곳)
 
 `complete`는 **로그인을 시작한 그 플랫폼 주소**(`origin`, 예: `http://blog.test:8080`)에서 열리므로 `.blog.test` 쿠키를 줄 수 있다. 또 시작할 때 이 주소에 심은 **state 쿠키를 읽을 수 있다**. 콜백(localhost)에서는 blog.test의 쿠키가 오지 않으니, state를 브라우저와 맞춰 보는 일도 `complete`에서 한다.
 
-운영처럼 콜백을 `https://blog.com/...`으로 등록할 수 있으면 건너뛰기가 없어도 되지만, 개발과 운영의 흐름을 같게 두려고 늘 건너뛴다.
+운영은 콜백을 플랫폼 주소(`http://now-log.java21.net/...`)로 등록하므로 건너뛰기가 없어도 되지만, 개발과 운영의 흐름을 같게 두려고 늘 건너뛴다. 구글을 뺀 뒤에도 이 구조는 그대로 두었다(콜백 주소가 플랫폼이 아닐 수 있다는 이유가 여전히 맞아서).
 
 ### 3.7 이메일로 합치지 않는 이유와 제공사 이메일을 저장하지 않는 이유
 
@@ -156,7 +161,7 @@ complete (blog.test, 로그인을 시작한 곳)
 
 그래서 R-07은 **수단을 더하는 길을 "로그인한 상태에서 마이페이지 연동" 하나**로 정했다. 로그인한 상태라는 것이 "이 계정의 주인"이라는 증명이고, 그 상태에서 소셜 로그인까지 마치면 "이 소셜 계정의 주인"도 증명된다. 두 증명이 같은 브라우저에서 이어질 때만 묶는다.
 
-이메일로 합치지 않으니 제공사 이메일은 쓸 데가 없다. **쓰지 않는 개인 정보는 받지도 저장하지도 않는다**(최소 수집). 카카오는 동의 항목을 켜지 않고, 구글은 `scope=openid`만(`email`·`profile` 없이) 요청한다. 털려도 내줄 것이 적다.
+이메일로 합치지 않으니 제공사 이메일은 쓸 데가 없다. **쓰지 않는 개인 정보는 받지도 저장하지도 않는다**(최소 수집). 카카오는 동의 항목을 켜지 않는다(구글을 넣었을 때도 `scope=openid`만, `email`·`profile` 없이 요청했다). 털려도 내줄 것이 적다.
 
 ### 3.8 한 번만 쓰는 값: Redis "읽고 지우기"
 
@@ -175,16 +180,40 @@ Redis에서 "읽고 → 지우기"를 두 명령으로 하면 사이에 틈이 �
 
 ### 3.9 다시 로그인하게 하기: `prompt=login`과 `max_age=0`
 
-탈퇴처럼 되돌릴 수 없는 일 앞에서는 "지금 이 브라우저 앞에 있는 사람이 정말 주인인가"를 다시 확인한다. 비밀번호 회원은 비밀번호를 다시 넣게 하면 된다. 소셜 회원은 **소셜로 다시 로그인**하게 하는데, 문제가 있다. 사용자가 이미 카카오·구글에 로그인해 있으면 제공사는 **묻지 않고 바로** code를 돌려준다. 그러면 자리를 비운 PC에서 남이 버튼만 눌러도 확인이 끝난다.
+탈퇴처럼 되돌릴 수 없는 일 앞에서는 "지금 이 브라우저 앞에 있는 사람이 정말 주인인가"를 다시 확인한다. 비밀번호 회원은 비밀번호를 다시 넣게 하면 된다. 소셜 회원은 **소셜로 다시 로그인**하게 하는데, 문제가 있다. 사용자가 이미 카카오에 로그인해 있으면 제공사는 **묻지 않고 바로** code를 돌려준다. 그러면 자리를 비운 PC에서 남이 버튼만 눌러도 확인이 끝난다.
 
-그래서 authorize 주소에 "이미 로그인해 있어도 다시 로그인시켜 달라"를 붙인다. 붙이는 방법이 제공사마다 다르다.
+그래서 authorize 주소에 "이미 로그인해 있어도 다시 로그인시켜 달라"를 붙인다. 이 프로젝트는 카카오의 `prompt=login`을 쓴다. 붙이는 방법은 제공사마다 다르다(구글은 일반 지식, 처음에 만들 때 겪은 것).
 
 | 제공사 | 방법 | 비고 |
 | --- | --- | --- |
 | 카카오 | `prompt=login` | 기존 로그인과 상관없이 다시 로그인 화면 |
-| 구글 | `max_age=0` (OIDC) | 구글의 `prompt`는 `none`·`consent`·`select_account`만 받고 `login`이 없다 |
+| (구글, 뺌) | `max_age=0` (OIDC) | 구글의 `prompt`는 `none`·`consent`·`select_account`만 받고 `login`이 없다 |
 
-OIDC의 `max_age`는 "로그인한 지 이 초보다 오래됐으면 다시 로그인시켜라"는 뜻이라 `0`이면 늘 다시 로그인이다. OIDC 표준은 `max_age`를 쓴 클라이언트가 ID 토큰의 `auth_time`(실제 로그인한 시각)을 확인하라고 권한다. 이 프로젝트는 ID 토큰을 읽지 않아 그 확인은 하지 않는다(6장 "남은 것").
+OIDC의 `max_age`는 "로그인한 지 이 초보다 오래됐으면 다시 로그인시켜라"는 뜻이라 `0`이면 늘 다시 로그인이다. OIDC 표준은 `max_age`를 쓴 클라이언트가 ID 토큰의 `auth_time`(실제 로그인한 시각)을 확인하라고 권한다. 구글을 넣었을 때 이 프로젝트는 ID 토큰을 읽지 않아 그 확인을 하지 않았다. 다시 넣는다면 함께 할 일이다(3.10).
+
+### 3.10 구글 로그인을 뺀 이유와 다시 넣으려면 (2026-10-12 지원 결정)
+
+처음에는 카카오와 구글을 둘 다 만들었다(`GoogleOAuthClient`, `scope=openid`, userinfo `sub`, 재인증 `max_age=0`, 테스트까지). 그리고 배포를 준비하다 뺐다.
+
+- **배포 주소가 http다.** 이 서비스는 학교 nginx 뒤에서 `http://now-log.java21.net`으로 돈다. https가 없다.
+- **구글은 리다이렉트 URI로 https만 받는다**(예외는 `http://localhost`, 3.3). 그러니 운영 콜백 `http://now-log.java21.net/api/auth/oauth/google/callback`을 구글 콘솔에 등록할 수 없다. 개발 PC에서만 되고 운영에서는 버튼을 눌러도 구글이 오류 화면을 보이는 기능이 된다.
+- **카카오는 http 주소도 등록할 수 있어** 운영에서 쓸 수 있다. 그래서 소셜 로그인은 카카오 하나로 정했다.
+
+코드에서 바뀐 것:
+
+- `GoogleOAuthClient`를 지웠다. `SocialProvider`는 `KAKAO` 하나다. 주소의 `google`은 모르는 제공사라 404다(`/api/auth/oauth/google/...`, `DELETE /api/me/social/google`).
+- `OAuthProperties`는 `kakao` 칸 하나다. 운영 설정·배포 스크립트의 `GOOGLE_*` 값도 지웠다.
+- DB의 `social_account.provider` CHECK에는 `GOOGLE`이 그대로 남아 있다. 이미 적용된 마이그레이션은 고치지 않는다는 규칙 때문이고, 다시 넣을 때 테이블은 손대지 않아도 된다.
+- 흐름(`SocialAuthService`), state·표·가입·연동 규칙은 그대로다(주석만 고침). 제공사별 차이를 `OAuthClient` 뒤로 숨겨 두었기 때문이다(5.1).
+
+다시 넣으려면:
+
+1. 배포 주소에 **https**를 붙인다(인증서, nginx 설정). 그러면 쿠키의 `Secure`도 켤 수 있다(`app.auth.cookie-secure`).
+2. 구글 콘솔에 `https://{운영 주소}/api/auth/oauth/google/callback`(그리고 개발용 `http://localhost:8080/...`)을 등록한다.
+3. `SocialProvider`에 `GOOGLE`, `OAuthProperties`에 `google` 칸, `OAuthClient` 구현 하나(이 커밋 이력의 `GoogleOAuthClient`)를 다시 넣고, 프론트 `SOCIAL_PROVIDERS`에 구글을 더한다.
+4. 재인증은 `max_age=0`에 더해 ID 토큰의 `auth_time`까지 확인하는 것이 좋다(3.9).
+
+배운 것: **제공사의 등록 규칙(https, 도메인)은 기능을 만들기 전에 배포 환경과 대조해 본다.** 개발 PC(localhost)에서는 다 되는 것처럼 보여서 늦게 알았다.
 
 ## 4. 동작 원리
 
@@ -265,7 +294,7 @@ OIDC의 `max_age`는 "로그인한 지 이 초보다 오래됐으면 다시 로�
 
 ## 5. 이 프로젝트에서는
 
-### 5.1 제공사 하나: `auth/application/OAuthClient`, `KakaoOAuthClient`, `GoogleOAuthClient`
+### 5.1 제공사 하나: `auth/application/OAuthClient`, `KakaoOAuthClient`
 
 제공사마다 다른 것(주소, 파라미터, 응답 모양)을 인터페이스 하나 뒤에 숨겼다.
 
@@ -286,7 +315,7 @@ public interface OAuthClient {
 }
 ```
 
-- 흐름(state, 표, 가입·연동 판단)은 `SocialAuthService` 하나가 하고, 제공사별 차이는 이 두 메서드에만 있다. 네이버를 더한다면 구현 하나만 더한다.
+- 흐름(state, 표, 가입·연동 판단)은 `SocialAuthService` 하나가 하고, 제공사별 차이는 이 두 메서드에만 있다. 구글을 뺄 때 흐름 코드는 그대로 두고 구현 하나(`GoogleOAuthClient`)와 enum·설정 칸만 지우면 됐던 것도, 네이버를 더한다면 구현 하나만 더하면 되는 것도 이 덕분이다(3.10).
 - 테스트는 이 인터페이스의 가짜(5.8)로 진짜 카카오 없이 흐름 전체를 돈다.
 
 카카오의 authorize 주소:
@@ -360,45 +389,11 @@ code를 회원 번호로 바꾸기:
 - 응답 record에는 **필요한 칸만** 둔다. 진짜 응답에는 `refresh_token`, `expires_in` 같은 칸이 더 온다. record에 없는 칸이 와도 괜찮은지는 Jackson의 "모르는 칸이면 실패" 설정에 달렸고, 테스트는 가짜 제공사라 **진짜 응답으로는 아직 확인하지 않았다**(6장 "남은 것"). 액세스 토큰은 회원 번호를 읽은 뒤 **버린다**. 우리는 카카오 API를 더 부를 일이 없어 저장하지 않는다.
 - 실패하면 예외. 부르는 쪽(`callback`)이 잡아서 `OAUTH_FAILED`로 돌려보낸다(5.3).
 
-구글은 다른 곳만 보면 된다.
-
-```java
-        UriComponentsBuilder uri = UriComponentsBuilder.fromUriString("https://accounts.google.com/o/oauth2/v2/auth")
-                .queryParam("response_type", "code")
-                .queryParam("client_id", properties.clientId())
-                .queryParam("redirect_uri", properties.redirectUri())
-                .queryParam("scope", "openid")
-                .queryParam("state", state)
-                .queryParam("prompt", "select_account");
-        if (reauth) {
-            // 탈퇴 본인 확인: 이미 로그인해 있어도 다시 확인하게 한다(OpenID Connect max_age=0)
-            uri.queryParam("max_age", "0");
-        }
-```
-
-```java
-        UserInfo user = restClient.get()
-                .uri("https://openidconnect.googleapis.com/v1/userinfo")
-                .header("Authorization", "Bearer " + token.access_token())
-                .retrieve()
-                .body(UserInfo.class);
-        …
-        return user.sub();
-    …
-    record UserInfo(String sub) {
-    }
-```
-
-- `scope=openid`만: 로그인(OIDC)이지만 이메일·프로필은 받지 않는다(3.7).
-- `prompt=select_account`: 늘 계정 고르는 화면을 보인다. 구글 계정이 여럿인 사람이 엉뚱한 계정으로 바로 들어가는 것을 막는다.
-- `max_age=0`: 재인증(3.9).
-- 구글은 토큰 교환에 `client_secret`이 늘 필요해 조건 없이 보낸다.
-
 앱 키는 설정값이다.
 
 ```java
 @ConfigurationProperties(prefix = "app.oauth")
-public record OAuthProperties(Provider kakao, Provider google) {
+public record OAuthProperties(Provider kakao) {
 
     public record Provider(String clientId, String clientSecret, String redirectUri) {
 
@@ -411,7 +406,7 @@ public record OAuthProperties(Provider kakao, Provider google) {
 }
 ```
 
-- `application.yml`에는 빈 값만 두고, 진짜 값은 git에 올리지 않는 `config/application-dev.yml`(틀은 `.example`)이나 운영 환경 변수로 준다([02](./02-configuration-profiles.md)).
+- 칸은 `kakao` 하나다(구글을 뺀 뒤, 3.10). 공통 `application.yml`에는 값을 두지 않는다. 개발은 git에 올리지 않는 `config/application-dev.yml`(틀은 `.example`), 운영은 `application-prod.yml`의 `${KAKAO_CLIENT_ID}`·`${KAKAO_CLIENT_SECRET}`(GitHub secrets → 배포 스크립트가 넘김)로 준다([02](./02-configuration-profiles.md)).
 - 키가 비어 있으면 `configured()`가 false → `OAuthClients.configured(provider)`가 빈 값 → 버튼을 눌러도 `/login?error=OAUTH_UNAVAILABLE`("지금은 이 소셜 로그인을 쓸 수 없습니다")로 돌아온다. 키가 없는 개발 PC에서도 서버가 뜨고 나머지 기능은 그대로 쓴다.
 
 ### 5.2 흐름: `auth/application/SocialAuthService`
@@ -475,7 +470,7 @@ public record OAuthProperties(Provider kakao, Provider google) {
 ```
 
 - `take`: state를 **읽고 지운다**. 한 번 쓴 state로 다시 오면(새로고침, 재전송) 없음 → 로그인 화면(3.8).
-- `.filter(provider 같은가)`: 구글 흐름의 state를 카카오 콜백에 들고 와도 거절.
+- `.filter(provider 같은가)`: 다른 제공사 흐름의 state를 이 제공사 콜백에 들고 와도 거절. 제공사가 카카오 하나인 지금은 걸릴 일이 없지만, 제공사를 더하면 필요한 검사라 남겨 두었다.
 - `error`: 사용자가 제공사 화면에서 "취소"를 누르면 제공사가 `error=access_denied`를 붙여 돌려보낸다. 시작한 화면(로그인·마이페이지·탈퇴)에 "취소했습니다"를 보이게 돌려보낸다(`failure`).
 - 토큰 교환 실패(네트워크, 잘못된 키, 만료된 code)는 서버 로그에 남기고 사용자에게는 `OAUTH_FAILED`만. 제공사의 오류 내용을 화면에 그대로 보이지 않는다.
 - 표에는 state 데이터 전부 + **state 자신** + 회원 번호를 담는다. state 자신을 담는 이유는 complete에서 쿠키와 비교하려고(4.2).
@@ -643,8 +638,8 @@ R-07의 두 거절이 DB의 두 UNIQUE와 하나씩 짝이다.
     }
 ```
 
-- "해제해도 다른 수단이 남나" = 비밀번호가 있거나, 소셜이 2개 이상.
-- **`findByIdForUpdate`(회원 행 `SELECT … FOR UPDATE`)가 왜 필요한가**: 카카오·구글이 둘 다 연결된 소셜 회원이 두 탭에서 동시에 둘을 해제한다고 하자. 잠금이 없으면 두 요청이 모두 "지금 2개 → 1개는 남는다"를 보고 둘 다 지운다. 로그인 수단이 0개인 회원, 영영 못 들어오는 계정이 생긴다. 회원 행을 먼저 잠그면 두 번째 요청은 첫 번째가 커밋할 때까지 기다린다.
+- "해제해도 다른 수단이 남나" = 비밀번호가 있거나, 소셜이 2개 이상. 제공사가 카카오 하나인 지금은 결과가 단순하다: **이메일 회원은 해제할 수 있고, 카카오로만 가입한 회원은 늘 409**다(테스트 `lastLoginMethodCannotBeUnlinked`).
+- **`findByIdForUpdate`(회원 행 `SELECT … FOR UPDATE`)가 왜 필요한가**: 제공사가 둘 이상일 때를 위한 잠금이다(구글이 있을 때 만들었고, 제공사를 다시 더해도 맞게 남겨 두었다). 카카오·구글이 둘 다 연결된 소셜 회원이 두 탭에서 동시에 둘을 해제한다고 하자. 잠금이 없으면 두 요청이 모두 "지금 2개 → 1개는 남는다"를 보고 둘 다 지운다. 로그인 수단이 0개인 회원, 영영 못 들어오는 계정이 생긴다. 회원 행을 먼저 잠그면 두 번째 요청은 첫 번째가 커밋할 때까지 기다린다.
 - 기다린 뒤 두 번째 요청이 세면 1개로 보인다. InnoDB의 REPEATABLE READ에서 일반 SELECT가 보는 스냅숏은 그 트랜잭션의 **첫 일반 읽기** 때 만들어진다. 이 메서드의 첫 문장이 잠금 읽기(`FOR UPDATE`)라, 일반 읽기(`findByMemberIdAndProvider`, `countByMemberId`)는 잠금을 얻은 **뒤**에 스냅숏을 만들고 먼저 끝난 해제를 본다. "잠금을 첫 문장으로"([33](./33-isolation-deadlock.md), [34](./34-view-count.md))가 여기서도 쓰였다.
 - 연결되지 않은 제공사를 해제하면 할 일이 없어 그대로 204다(멱등한 DELETE).
 
@@ -811,7 +806,7 @@ R-07의 두 거절이 DB의 두 UNIQUE와 하나씩 짝이다.
 
 ### 5.6 탈퇴와 소셜 연동: `MemberTraceCleaner`, `MeResponse`
 
-탈퇴하면 `MemberTraceCleaner`가 `DELETE FROM social_account WHERE member_id = ?`로 연동 행을 지운다. 그래서 같은 카카오 계정으로 다시 오면 **처음 보는 계정**이 되어 새로 가입할 수 있다(테스트 `socialOnlyMemberWithdrawsAfterReauthAndTheAccountCanSignUpAgain`). 카카오 쪽의 "앱 연결 끊기"(카카오 unlink, 구글 토큰 철회)는 하지 않았다. 제공사 토큰을 저장하지 않고, 카카오는 어드민 키가 따로 필요해서다(research R-07 구현 메모).
+탈퇴하면 `MemberTraceCleaner`가 `DELETE FROM social_account WHERE member_id = ?`로 연동 행을 지운다. 그래서 같은 카카오 계정으로 다시 오면 **처음 보는 계정**이 되어 새로 가입할 수 있다(테스트 `socialOnlyMemberWithdrawsAfterReauthAndTheAccountCanSignUpAgain`). 카카오 쪽의 "앱 연결 끊기"(카카오 unlink, 구글 토큰 철회)는 하지 않는다(2026-10-12 지원 결정, research R-07 구현 메모). 그 사람의 카카오 계정 설정 "연결된 서비스"에는 남아 있어 본인이 거기서 끊는다. 카카오 unlink는 모든 사용자를 다룰 수 있는 어드민 키가 필요해 공용 서버에 두기 위험하고, 구글은 토큰을 저장하지 않아서다.
 
 마이페이지는 `GET /api/me`의 `socialAccounts`로 연결 상태를 그린다.
 
@@ -837,7 +832,7 @@ export function socialAuthorizeUrl(provider: SocialPath, mode: SocialMode, redir
 
 - 버튼은 이 주소의 `<a href>`다. Thymeleaf로 치면 `th:href`로 서버 주소에 링크를 건 것과 같다. 누르면 **페이지가 통째로** 서버로 이동하고, 서버의 302를 따라 카카오 화면으로 간다.
 - 끝나면 서버가 `?error=…`, `?linked=…`, `?reauth=ok`를 붙여 화면으로 돌려보낸다. 화면은 이것을 읽어 문장을 보인다(`socialErrorMessage`). 서버가 오류를 JSON이 아니라 **주소로** 전하는 이유는 이 응답이 `fetch`가 아니라 페이지 이동이기 때문이다.
-- `LoginPage`: "카카오로 계속하기"·"구글로 계속하기". 로그인 화면의 `redirect`를 그대로 넘겨, 소셜 로그인 뒤에도 보던 곳으로 돌아간다. 정지로 돌아왔으면 주소의 값으로 이메일 로그인과 같은 정지 안내를 처음부터 그린다.
+- `LoginPage`: "카카오로 계속하기" 버튼 하나(`SOCIAL_PROVIDERS`가 카카오만). 로그인 화면의 `redirect`를 그대로 넘겨, 소셜 로그인 뒤에도 보던 곳으로 돌아간다. 정지로 돌아왔으면 주소의 값으로 이메일 로그인과 같은 정지 안내를 처음부터 그린다.
 
 ```tsx
   // 소셜 로그인한 계정이 정지 중이면 서버가 사유·기한을 붙여 돌려보낸다(이메일 로그인과 같은 안내)
@@ -848,7 +843,7 @@ export function socialAuthorizeUrl(provider: SocialPath, mode: SocialMode, redir
 
   `useState`의 처음 값을 주소에서 만든다. 이메일 로그인이 403을 받았을 때 `setSuspension(caught.detail)`로 넣는 것과 **같은 모양**(`SuspensionDetail`)이라, 같은 `SuspensionNotice` 부품이 그대로 그린다. 이때 `error` 상태는 비워 둬 "로그인에 실패했습니다" 같은 문장이 겹치지 않게 한다.
 - `SignupSocialPage`(`/signup/social?token=…&provider=…`): 닉네임 확인. `SOCIAL_SIGNUP_EXPIRED`면 "가입 시간이 지났습니다"와 "카카오로 다시 시작" 버튼.
-- `MyPage`의 소셜 계정 연동: 제공사마다 "연결됨 날짜 / 해제" 또는 "연결 안 됨 / 연결". `LAST_LOGIN_METHOD`면 "로그인 수단이 하나도 남지 않아 해제할 수 없습니다."
+- `MyPage`의 소셜 계정 연동: 카카오 "연결됨 날짜 / 해제" 또는 "연결 안 됨 / 연결". 안내 문장은 "카카오 계정을 연결해 두면 비밀번호를 잊었을 때도 카카오로 로그인할 수 있어요." `LAST_LOGIN_METHOD`면 "로그인 수단이 하나도 남지 않아 해제할 수 없습니다."
 - `WithdrawPage`: 비밀번호가 없는 회원에게 연결된 제공사의 "카카오로 본인 확인" 버튼. `?reauth=ok`로 돌아오면 "10분 안에 탈퇴해 주세요"와 함께 탈퇴 버튼이 열리고 `{}`를 보낸다. 10분이 지나 401이면 다시 확인하라고 안내한다.
 
 ### 5.8 테스트: `FakeOAuthClients`, `SocialLoginIntegrationTest`
@@ -886,11 +881,11 @@ public class FakeOAuthClients extends OAuthClients {
 | 테스트 | 확인하는 것 |
 | --- | --- |
 | `firstSocialLoginAsksNicknameThenSignsUpAndNextTimeLogsIn` | 처음 → 닉네임 화면, 가입(이메일 없음, `hasPassword=false`), 같은 토큰 두 번째는 `SOCIAL_SIGNUP_EXPIRED`, 다음부터는 바로 로그인하고 블로그 주소로 돌아감 |
-| `stateMustComeFromThisBrowserAndBeUsedOnce` | **state 쿠키 없이 complete → 로그인 안 됨**(로그인 CSRF), 같은 state 두 번, 모르는 state, 다른 제공사의 state 모두 실패 |
+| `stateMustComeFromThisBrowserAndBeUsedOnce` | **state 쿠키 없이 complete → 로그인 안 됨**(로그인 CSRF), 같은 state 두 번, 모르는 state 모두 실패 |
 | `onlyOurAddressesAreAllowedAsRedirect` | `https://evil.example/steal`, `//evil.example` → `/`, `/feed`는 그대로 |
 | `suspendedMemberIsSentToLoginWithNotice` | 정지 회원은 로그인 쿠키 없이 `/login?error=MEMBER_SUSPENDED&until=…`(사유 기록이 없는 테스트 데이터라 `reasonMessage`는 없음) |
-| `linkAddsAnotherProviderAndRejectsTakenOrDuplicateProvider` | 연동, 같은 제공사 하나 더 → `PROVIDER_ALREADY_LINKED`, 남의 것 → `SOCIAL_ALREADY_LINKED`, 연동한 구글로 로그인하면 그 회원 |
-| `lastLoginMethodCannotBeUnlinked` | 이메일 회원은 소셜을 다 해제 가능, 소셜 회원의 마지막 하나는 409, 없는 연결 해제는 204, `naver`는 404 |
+| `emailMemberLinksKakaoAndTakenOrDuplicateIsRejected` | 이메일 회원이 카카오 연동, 카카오 계정 하나 더 → `PROVIDER_ALREADY_LINKED`, 남의 것 → `SOCIAL_ALREADY_LINKED`, 연동한 카카오로 로그인하면 그 회원(이메일이 같아서가 아니라 연동해서) |
+| `lastLoginMethodCannotBeUnlinked` | 이메일 회원은 카카오 해제 가능(다시 해제해도 204), 카카오로만 가입한 회원은 409 `LAST_LOGIN_METHOD`, `google`(뺀 제공사)·`naver`는 404 |
 | `socialOnlyMemberWithdrawsAfterReauthAndTheAccountCanSignUpAgain` | 재인증 전 `{}` 탈퇴 401, 남의 카카오로 재인증 → `REAUTH_FAILED`, 재인증 주소에 reauth 표시, 탈퇴 뒤 같은 카카오는 새 가입 |
 | `reauthMarkIsUsedOnce` | 이메일 회원도 소셜 재인증으로 탈퇴, 틀린 비밀번호를 보내면 비밀번호로 판단(401) |
 
@@ -907,17 +902,18 @@ public class FakeOAuthClients extends OAuthClients {
 - **처음 보는 계정을 바로 회원으로 만들고 닉네임은 나중에**: 닉네임 없는 회원, 중복 닉네임 처리 등이 흩어진다. 이 프로젝트는 닉네임을 받은 뒤 회원과 연동을 한 트랜잭션으로.
 - **해제할 때 세고 지우기를 잠금 없이**: 동시에 두 개를 해제하면 로그인 수단이 0개인 회원이 생긴다. 회원 행을 먼저 잠근다.
 - **재인증을 "아무 소셜 로그인"으로 인정**: 남의 카카오로 다시 로그인해도 통과하면 의미가 없다. 그 회원에 연결된 계정인지 본다. 또 이미 제공사에 로그인해 있으면 묻지 않고 넘어가므로 `prompt=login`·`max_age=0`.
-- **구글에 `prompt=login`**: 구글은 `login`을 받지 않는다. `max_age=0`.
+- **구글에 `prompt=login`**(일반 지식): 구글은 `login`을 받지 않는다. `max_age=0`.
+- **제공사의 주소 규칙을 배포 환경과 대조하지 않음**: 개발(localhost)에서는 되다가 운영(http)에서 등록할 주소가 없어 구글을 뺐다(3.10).
 - **`redirect`를 검사 없이 302**: 열린 리다이렉트. 우리 경로(단, `//`·`/\` 제외)와 우리 호스트만.
 - **제공사 오류를 화면에 그대로**: 토큰 교환 실패 내용에는 설정·키 이야기가 섞일 수 있다. 로그에만 남기고 화면에는 `OAUTH_FAILED`.
 
 이 프로젝트에 남은 것:
 
 - **PKCE를 쓰지 않는다.** PKCE는 시작할 때 만든 비밀(code_verifier)의 해시를 authorize에 보내고, 토큰 교환 때 원래 값을 보내 "code를 요청한 쪽과 바꾸는 쪽이 같은가"를 제공사가 확인하는 장치다. 원래 공개 클라이언트용이지만, OAuth 보안 모범 사례(RFC 9700)는 기밀 클라이언트에도 권한다. 이 프로젝트는 클라이언트 시크릿과 state(브라우저에 묶음)로 막고 있고, 더하려면 state 데이터에 code_verifier를 함께 두면 된다.
-- **구글 재인증의 `auth_time`을 확인하지 않는다.** `max_age=0`은 "다시 로그인시켜 달라"는 요청이고, 실제로 다시 로그인했는지는 ID 토큰의 `auth_time`으로 확인하라고 OIDC가 권한다. 이 프로젝트는 ID 토큰을 읽지 않는다.
+- **구글 로그인이 없다**(3.10). https가 생기면 다시 넣을 수 있다. 그때는 `max_age=0`에 더해 ID 토큰의 `auth_time`도 확인한다.
 - **Redis `put`이 두 명령이다**(`HSET` 뒤 `EXPIRE`). 사이에서 서버가 죽으면 수명 없는 키가 남을 수 있다. 값은 무작위 키라 다시 쓰일 일은 없지만 메모리에 남는다.
 - **제공사 쪽 연결 끊기를 하지 않는다**(5.6).
-- **진짜 카카오·구글로는 아직 시험하지 않았다.** 키를 받기 전이라 가짜 제공사 테스트와 "authorize가 카카오 주소로 302하는가"까지만 확인했다(스텝 노트 "막혔던 점"). 진짜 응답의 모양(예: Jackson이 모르는 칸을 무시하는지)은 진짜 키로 처음 돌릴 때 확인한다.
+- **진짜 카카오로는 아직 시험하지 않았다.** 키를 받기 전이라 가짜 제공사 테스트와 "authorize가 카카오 주소로 302하는가"까지만 확인했다(스텝 노트 "막혔던 점"). 진짜 응답의 모양(예: Jackson이 모르는 칸을 무시하는지)은 진짜 키로 처음 돌릴 때 확인한다.
 
 ## 7. 직접 해 보기
 
@@ -956,16 +952,17 @@ curl -si 'http://localhost:8080/api/auth/oauth/kakao/callback?state={state}&erro
 curl -si 'http://localhost:8080/api/auth/oauth/kakao/callback?state={state}&error=access_denied' | grep -i '^location'  # 이미 씀
 ```
 
-### 7.3 진짜 카카오·구글로 (키를 받은 뒤)
+### 7.3 진짜 카카오로 (키를 받은 뒤)
 
 1. **카카오 developers** → 내 애플리케이션 → 앱 만들기 → 앱 키의 **REST API 키**(= `client-id`). 보안에서 클라이언트 시크릿을 켜면 그 값(= `client-secret`). 카카오 로그인 활성화, **Redirect URI**에 `http://localhost:8080/api/auth/oauth/kakao/callback` 등록. 동의 항목은 켜지 않는다.
-2. **Google Cloud 콘솔** → API 및 서비스 → OAuth 동의 화면(테스트 사용자에 내 구글 계정) → 사용자 인증 정보 → OAuth 2.0 클라이언트 ID(웹 애플리케이션) → **승인된 리디렉션 URI**에 `http://localhost:8080/api/auth/oauth/google/callback`. 클라이언트 ID·보안 비밀을 받는다.
-3. `cp config/application-dev.yml.example config/application-dev.yml`(없으면) → `app.oauth.kakao`·`google`의 `client-id`, `client-secret`을 채운다. `redirect-uri`는 1·2에 등록한 것과 글자까지 같게. 이 파일은 git에 올라가지 않는다. 키를 대화창·PR에 붙이지 않는다.
+2. 운영에서도 쓰려면 카카오 콘솔에 `http://now-log.java21.net/api/auth/oauth/kakao/callback`도 등록한다(`application-prod.yml`의 `redirect-uri`와 같게).
+3. `cp config/application-dev.yml.example config/application-dev.yml`(없으면) → `app.oauth.kakao`의 `client-id`, `client-secret`을 채운다. `redirect-uri`는 1에 등록한 것과 글자까지 같게. 이 파일은 git에 올라가지 않는다. 키를 대화창·PR에 붙이지 않는다.
 4. 서버를 다시 띄우고 `http://blog.test:8080/login` → "카카오로 계속하기" → 카카오 로그인 → 처음이면 닉네임 화면 → 가입 → 블로그 개설 안내.
 5. 개발자 도구 Network 탭에서 `authorize`(302) → 카카오 → `callback`(localhost, 302) → `complete`(blog.test, 302, `Set-Cookie: access_token…`) 순서를 본다. `callback` 응답에는 로그인 쿠키가 없고 `complete`에만 있다(3.6).
 6. 로그아웃 → 다시 "카카오로 계속하기" → 이번엔 바로 로그인.
-7. 이메일 회원으로 로그인 → 마이페이지 → 소셜 계정 연동 → 구글 "연결" → "구글 계정을 연결했습니다." → 해제.
-8. 소셜 회원으로 → 마이페이지 → 회원 탈퇴 → "카카오로 본인 확인" → 카카오가 이미 로그인 상태여도 **다시 로그인 화면**이 나오는지(`prompt=login`), 구글은 다시 로그인하라는지(`max_age=0`) 본다.
+7. 이메일 회원으로 로그인 → 마이페이지 → 소셜 계정 연동 → 카카오 "연결" → "카카오 계정을 연결했습니다." → 해제. (카카오로만 가입한 회원이면 해제가 "로그인 수단이 하나도 남지 않아…"로 거절된다.)
+8. 소셜 회원으로 → 마이페이지 → 회원 탈퇴 → "카카오로 본인 확인" → 카카오가 이미 로그인 상태여도 **다시 로그인 화면**이 나오는지(`prompt=login`) 본다.
+9. 뺀 구글 주소가 404인지 본다: `curl -si 'http://blog.test:8080/api/auth/oauth/google/authorize' | head -1`.
 
 ### 7.4 공격 흉내: 로그인 CSRF
 
@@ -995,7 +992,7 @@ cd frontend && npx vitest run src/app/social.test.ts
 <details><summary>답</summary>콜백 주소가 localhost라 blog.test에 둔 쿠키가 콜백에 오지 않는다. 콜백에서 state가 진짜인지·안 썼는지 보고, 어디로 돌려보낼지(origin), 무엇을 하려던 것인지(mode), 누가 시작했는지(memberId)를 알려면 서버 쪽 저장소가 필요하다.</details>
 
 5. 콜백에서 바로 로그인 쿠키를 주지 않고 complete로 한 번 더 보내는 이유는?
-<details><summary>답</summary>로그인 쿠키는 Domain=.blog.test라 localhost 응답으로는 브라우저가 받지 않는다. 구글은 https가 아니면 localhost만 콜백으로 등록할 수 있다. 그래서 콜백은 표만 만들고, 로그인을 시작한 플랫폼 주소의 complete에서 state 쿠키를 확인하고 로그인 쿠키를 준다.</details>
+<details><summary>답</summary>제공사 콘솔에 등록한 콜백 주소가 플랫폼 호스트가 아닐 수 있다(개발에서 localhost로 등록). 로그인 쿠키는 Domain=.blog.test라 localhost 응답으로는 브라우저가 받지 않는다. 그래서 콜백은 표만 만들고, 로그인을 시작한 플랫폼 주소의 complete에서 state 쿠키를 확인하고 로그인 쿠키를 준다.</details>
 
 6. state 쿠키를 SameSite=Strict로 하면 어떻게 되나?
 <details><summary>답</summary>complete로 오는 이동은 다른 사이트(제공사, localhost)에서 시작된 이동이라 Strict 쿠키가 실리지 않는다. 늘 쿠키가 없어 모든 소셜 로그인이 OAUTH_FAILED가 된다. 다른 사이트에서 온 최상위 GET 이동에도 쿠키를 보내는 Lax여야 한다.</details>
@@ -1009,14 +1006,17 @@ cd frontend && npx vitest run src/app/social.test.ts
 9. 카카오 이메일이 우리 회원 이메일과 같을 때 자동으로 합치면 생기는 위험은?
 <details><summary>답</summary>제공사 이메일이 확인된 것이라는 보장이 없으면, 공격자가 남의 이메일로 소셜 계정을 만들어 그 사람의 우리 계정에 들어올 수 있다. 그래서 묶는 길은 로그인한 상태의 마이페이지 연동 하나뿐이고, 제공사 이메일은 받지도 저장하지도 않는다.</details>
 
-10. 해제할 때 회원 행을 먼저 잠그지 않으면 생기는 일은?
+10. 제공사가 둘 이상일 때, 해제할 때 회원 행을 먼저 잠그지 않으면 생기는 일은?
 <details><summary>답</summary>카카오·구글이 연결된 소셜 회원이 둘을 동시에 해제하면 두 요청 모두 "지금 2개라 하나는 남는다"를 보고 둘 다 지워, 로그인 수단이 0개인 계정이 생긴다. 잠그면 두 번째가 기다렸다가 1개를 보고 409를 낸다.</details>
 
-11. 탈퇴 재인증에서 카카오는 prompt=login, 구글은 max_age=0을 쓰는 이유는? 붙이지 않으면?
-<details><summary>답</summary>둘 다 "이미 로그인해 있어도 다시 로그인시켜라"는 뜻인데, 구글의 prompt는 login을 받지 않아 OIDC의 max_age=0을 쓴다. 붙이지 않으면 제공사에 로그인된 채 자리를 비운 PC에서 남이 버튼만 눌러도 본인 확인이 끝난다.</details>
+11. 탈퇴 재인증에 카카오 prompt=login을 붙이는 이유는? 구글(OIDC)이라면 무엇을 쓰나?
+<details><summary>답</summary>"이미 로그인해 있어도 다시 로그인시켜라"는 뜻이다. 붙이지 않으면 카카오에 로그인된 채 자리를 비운 PC에서 남이 버튼만 눌러도 본인 확인이 끝난다. 구글의 prompt는 login을 받지 않아 OIDC의 max_age=0을 쓰고, ID 토큰의 auth_time으로 실제로 다시 로그인했는지 확인한다.</details>
 
 12. `redirect=//evil.example`이 왜 위험하고, 서버는 어떻게 거르나?
 <details><summary>답</summary>브라우저는 `//evil.example`을 "같은 프로토콜의 evil.example"로 읽어 다른 사이트로 간다. safeRedirect는 `/`로 시작해도 `//`·`/\`로 시작하면 빼고, 절대 주소는 http·https이면서 호스트가 우리 플랫폼·블로그 주소일 때만 받는다. 나머지는 홈(`/`)이다.</details>
+
+13. 이 프로젝트가 구글 로그인을 뺀 이유와, 다시 넣으려면 먼저 해야 할 일은?
+<details><summary>답</summary>구글은 리다이렉트 URI로 https(예외 localhost)만 받는데, 배포 주소가 http라 운영 콜백을 등록할 수 없다. 다시 넣으려면 배포 주소에 https를 붙이고, 구글 콘솔에 https 콜백을 등록한 뒤, SocialProvider·OAuthProperties·OAuthClient 구현과 프론트 버튼을 되살린다.</details>
 
 ## 9. 더 읽을거리
 
@@ -1024,6 +1024,6 @@ cd frontend && npx vitest run src/app/social.test.ts
 - RFC 9700 "Best Current Practice for OAuth 2.0 Security"(PKCE, state, 열린 리다이렉트)
 - RFC 7636 "Proof Key for Code Exchange (PKCE)"
 - OpenID Connect Core 1.0: `scope=openid`, `sub`, `max_age`·`auth_time`, `prompt`
-- Google Identity "OpenID Connect" 문서(`sub`를 식별자로, `prompt` 값, 리디렉션 URI 규칙)
+- Google Identity "OpenID Connect" 문서(`sub`를 식별자로, `prompt` 값, 리디렉션 URI 규칙. 일반 지식, 3.10)
 - Kakao Developers "카카오 로그인 REST API"(인가 코드 받기의 `prompt`, 토큰 받기, 사용자 정보 가져오기)
 - OWASP Cheat Sheet "Unvalidated Redirects and Forwards"

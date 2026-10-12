@@ -24,16 +24,8 @@ cd frontend && npm install && npm run dev
 ./scripts/build-frontend.sh && ./mvnw clean package   # target/*.jar
 ```
 
-- 블로그 주소(`{주소}.blog.test:8080`)를 브라우저로 열려면 `*.blog.test`가 내 컴퓨터(127.0.0.1)를 가리켜야 한다. **dnsmasq를 권한다**(한 번 설정하면 새 블로그도 바로 열린다, 명령은 [학습 자료 15의 실습 6](./learning/concepts/15-subdomain-host-routing.md)):
-  ```bash
-  brew install dnsmasq
-  echo 'address=/blog.test/127.0.0.1' >> "$(brew --prefix)/etc/dnsmasq.conf"
-  printf 'listen-address=127.0.0.1\nbind-interfaces\n' >> "$(brew --prefix)/etc/dnsmasq.conf"
-  sudo brew services start dnsmasq
-  sudo mkdir -p /etc/resolver && echo 'nameserver 127.0.0.1' | sudo tee /etc/resolver/blog.test
-  ```
-  dnsmasq는 Spring 서버와 별개로 계속 돈다. 서버를 끈 채 블로그 주소를 열면 `ERR_CONNECTION_REFUSED`, dnsmasq가 꺼져 있으면 `DNS_PROBE_FINISHED_NXDOMAIN`이다.
-  dnsmasq 없이 하려면 `/etc/hosts`에 `127.0.0.1 blog.test alpha.blog.test beta.blog.test gamma.blog.test`처럼 쓸 주소를 하나씩 넣는다(새 블로그마다 한 줄 더). `*.localhost`는 하위 도메인 쿠키 공유가 브라우저마다 달라 쓰지 않는다.
+- `/etc/hosts`에 `127.0.0.1 blog.test` 한 줄을 넣고 `http://blog.test:8080`(프론트 개발 서버면 `http://blog.test:5173`)으로 연다. 블로그는 플랫폼 주소 아래 경로라(`http://blog.test:8080/@{주소}`, 2026-10-12 지원 결정) 블로그마다 hosts를 더하거나 dnsmasq를 둘 필요가 없다. 쿠키에 Domain이 없어 `localhost:8080`에서도 로그인은 되지만, 인증·재설정 메일과 소셜 로그인 링크는 플랫폼 주소(`blog.test`)로 만들어지므로 `blog.test`를 권한다.
+- 블로그 API를 curl로 부를 때는 `X-Blog-Address: {주소}` 헤더를 붙인다(예: `curl -s -H 'X-Blog-Address: alpha' blog.test:8080/api/posts`). 헤더가 없으면 플랫폼 요청이다.
 - 서비스 관리자 초기 계정은 Flyway 데이터 마이그레이션으로 들어간다(`admin@blog.test`, 개발용 비밀번호는 `V2__admin_account.sql` 주석).
 - 개발용 DB 접속 정보와 운영 환경 변수는 코드 저장소 `README.md`에 있다.
 - 아래 "P0 한 바퀴"와 "권한·가시성" 표는 코드 저장소의 `QuickstartScenarioIntegrationTest`가 같은 순서로 자동 확인한다(T070, `./mvnw test`).
@@ -41,8 +33,8 @@ cd frontend && npm install && npm run dev
 ## P0 한 바퀴 (spec SC-001, US1~US3)
 
 1. `blog.test:8080/signup`에서 A 가입 → 로그인 → 블로그 `alpha` 개설 (주소 변경 불가 안내 확인)
-2. `alpha.blog.test:8080` 블로그 메인: 빈 상태와 사이드바 (블로그로 넘어와도 로그인 상태 유지 확인)
-3. 관리 화면에서 카테고리 'Java' 추가 → 글 작성(굵게·목록·코드 블록·이미지, 태그 2개) → 발행 → `alpha.blog.test:8080/{id}`로 이동, 공감·댓글·조회수 0
+2. `blog.test:8080/@alpha` 블로그 메인: 빈 상태와 사이드바 (블로그로 넘어와도 로그인 상태 유지 확인)
+3. 관리 화면에서 카테고리 'Java' 추가 → 글 작성(굵게·목록·코드 블록·이미지, 태그 2개) → 발행 → `blog.test:8080/@alpha/{id}`로 이동, 공감·댓글·조회수 0
 4. 로그아웃 → `blog.test:8080` 홈 최신 글에 그 글이 보임
 5. B 가입·로그인 → 글 열람 → 댓글 작성, 공감 누르고 새로고침 → 1 유지
 6. A로 로그인 → B 댓글 삭제 가능, 수정 버튼 없음
@@ -51,10 +43,10 @@ cd frontend && npm install && npm run dev
 
 | 시도 | 기대 |
 | --- | --- |
-| 비회원 `alpha.blog.test:8080/manage/write` | 로그인 안내 → 로그인 후 원래 화면 |
-| B로 로그인한 상태로 `PUT alpha.blog.test:8080/api/posts/{A글}` | 403 |
+| 비회원 `blog.test:8080/@alpha/manage/write` | 로그인 안내 → 로그인 후 원래 화면 |
+| B로 로그인한 상태로 `PUT blog.test:8080/api/posts/{A글}` + `X-Blog-Address: alpha` | 403 |
 | A 글을 비공개로 바꾼 뒤 B·비회원이 주소로 열기 | 404, 홈·목록·글 수에서 빠짐 |
-| `beta.blog.test:8080/{A글 id}` (B 블로그 주소에 A 글 번호) | A 글이 볼 수 있으면 `alpha...`로 301, 아니면 404 |
+| `blog.test:8080/@beta/{A글 id}` (B 블로그 주소에 A 글 번호) | A 글이 볼 수 있으면 `blog.test:8080/@alpha/{A글 id}`로 301, 아니면 404 |
 | B로 로그인한 상태로 `GET /api/admin/dashboard` | 403 |
 | 본문에 `<img src=x onerror=alert(1)>`, `<script>` 넣고 발행 | 저장 시 제거, 실행 안 됨 (SC-006) |
 | 발행 버튼 빠르게 두 번 / 같은 Idempotency-Key 두 번 | 글 1개 (SC-004) |
@@ -65,12 +57,12 @@ cd frontend && npm install && npm run dev
 | 확인 | 기대 |
 | --- | --- |
 | 브라우저 개발자 도구에서 기기 폭 360px로 홈·블로그 메인·글 상세·로그인·가입·마이페이지·관리 화면 열기 | 가로 스크롤 없음. 내 글 관리는 글마다 카드로 보이고, "모두" 체크박스가 위에 있음 (T071) |
-| `curl -s alpha.blog.test:8080/{공개 글 id} \| grep og:` | `og:title`·`og:description`·`og:image`(대표 이미지, 절대 주소)·`og:url`이 나옴. 비공개·구독자 공개 글은 나오지 않음 (T072) |
+| `curl -s blog.test:8080/@alpha/{공개 글 id} \| grep og:` | `og:title`·`og:description`·`og:image`(대표 이미지, 절대 주소)·`og:url`이 나옴. 비공개·구독자 공개 글은 나오지 않음 (T072) |
 
 ## 주소 영속성 (SC-005, P2 이후)
 
 글 옮기기·블로그 이사·삭제(BLOG-06·07)는 백로그라 아직 화면·API가 없다. 서버의 301·404 처리는 이사 상태를 DB로 만들어 `SpaForwardIntegrationTest`가, 삭제된 주소 재사용 거절은 `BlogCreateIntegrationTest`가 확인한다.
 
-1. `alpha` 글 15를 `gamma`로 이동 → `alpha.blog.test:8080/15` 요청이 `gamma.blog.test:8080/15`로 301
-2. `alpha` 이사 대상을 `gamma`로 → `alpha.blog.test:8080/` 301
+1. `alpha` 글 15를 `gamma`로 이동 → `blog.test:8080/@alpha/15` 요청이 `blog.test:8080/@gamma/15`로 301
+2. `alpha` 이사 대상을 `gamma`로 → `blog.test:8080/@alpha` 요청이 `blog.test:8080/@gamma`로 301
 3. `alpha` 삭제 후 같은 주소로 개설 → 거절
