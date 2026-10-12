@@ -42,7 +42,7 @@ PLATFORM_COMMON = [
 ]
 BLOG_COMMON = [
     ("A", "화면 열 때", "GET", "/api/me", "로그인 상태. 401이면 비회원"),
-    ("B", "화면 열 때", "GET", "/api/blog", "블로그 이름·주인·구독 여부. 404면 404 화면"),
+    ("B", "화면 열 때", "GET", "/api/blog", "블로그 이름·주인·구독 여부. 404면 404 화면. 블로그 화면의 블로그 API는 모두 X-Blog-Address 헤더(주소)를 붙인다"),
     ("C", "화면 열 때", "GET", "/api/blog/sidebar", "보이는 사이드바 모듈을 주인이 정한 순서로(기본: 홈 바로가기, 카테고리, 태그, 최근 글·댓글 5)"),
 ]
 MANAGE_COMMON = [
@@ -334,7 +334,7 @@ page(
 # ---- 플랫폼: 회원
 
 page(
-    slug="login", group="회원", title="로그인", url="blog.com/login?redirect=https://jiwon.blog.com/1532",
+    slug="login", group="회원", title="로그인", url="blog.com/login?redirect=https://blog.com/@jiwon/1532",
     codes=["AUTH-01", "AUTH-03", "ADMIN-02"], chrome="platform-guest",
     lead="로그인이 필요한 화면에서 넘어오면 redirect에 원래 주소가 붙고, 로그인 후 그 주소로 돌아간다(우리 서비스 주소만).",
     body=f"""
@@ -442,8 +442,8 @@ page(
   </div>
   <aside class="sidebar"><section class="section"><h2>내 블로그 {P(7)}</h2>
     <div class="stack">
-      <div class="box"><div class="row between"><b>지원의 기록</b><span class="chip brand">대표</span></div><span class="small muted">jiwon.blog.com · 글 42</span></div>
-      <div class="box"><div class="row between"><b>지원 여행기</b><button class="btn" type="button">대표로 {P(8)}</button></div><span class="small muted">jiwon-travel.blog.com · 글 9</span></div>
+      <div class="box"><div class="row between"><b>지원의 기록</b><span class="chip brand">대표</span></div><span class="small muted">blog.com/@jiwon · 글 42</span></div>
+      <div class="box"><div class="row between"><b>지원 여행기</b><button class="btn" type="button">대표로 {P(8)}</button></div><span class="small muted">blog.com/@jiwon-travel · 글 9</span></div>
       <a class="btn" href="blog-create.html">블로그 만들기 (2/5)</a>
     </div></section>
     <button class="btn" type="button">로그아웃 {P(9)}</button>
@@ -529,7 +529,7 @@ page(
     body=f"""
 <div class="page narrow" style="padding:0">
   <h2 style="font-size:22px">블로그 만들기</h2>
-  <label class="field"><span>블로그 주소</span><div class="row" style="flex-wrap:nowrap"><input type="text" id="baddr" value="jiwon"><span class="muted">.blog.com</span></div>
+  <label class="field"><span>블로그 주소</span><div class="row" style="flex-wrap:nowrap"><span class="muted">blog.com/@</span><input type="text" id="baddr" value="jiwon"></div>
     <span class="ok">쓸 수 있는 주소입니다. {P(1)}</span><span class="hint">영문 소문자·숫자·하이픈 4~32자. <b>개설한 뒤에는 주소를 바꿀 수 없습니다.</b></span></label>
   <label class="field"><span>블로그 이름</span><input type="text" id="bname" value="지원의 기록"><span class="hint">1~50자, 나중에 바꿀 수 있습니다</span></label>
   <label class="field"><span>소개 (선택)</span><textarea id="bdesc">백엔드 공부와 여행 메모</textarea></label>
@@ -539,14 +539,14 @@ page(
             ("6번째 (409 BLOG_LIMIT_EXCEEDED)", '<p class="err">블로그는 5개까지 만들 수 있습니다.</p>')],
     apis=[
         (1, "주소 입력 후", "GET", "/api/blogs/address-availability?address=", "{ available, reason }"),
-        (2, "만들기", "POST", "/api/blogs", "201 후 새 블로그 관리 홈(jiwon.blog.com/manage)으로"),
+        (2, "만들기", "POST", "/api/blogs", "201 후 새 블로그 관리 홈(blog.com/@jiwon/manage)으로"),
     ],
 )
 
 # ---- 블로그 화면
 
 page(
-    slug="blog-main", group="블로그", title="블로그 메인", url="jiwon.blog.com/",
+    slug="blog-main", group="블로그", title="블로그 메인", url="blog.com/@jiwon",
     codes=["BLOG-03", "BLOG-04", "CAT-02", "TAG-02", "SUB-01", "SUB-03", "BLOG-05"], chrome="blog",
     lead="카테고리별(/category/{id})·태그별(/tag/{name}) 목록도 같은 화면에 조건만 붙인다. 목록 형태(리스트/썸네일)와 포인트 색은 블로그 꾸미기 값을 따른다.",
     body=f"""
@@ -578,7 +578,7 @@ page(
 )
 
 page(
-    slug="blog-search", group="블로그", title="블로그 내 검색", url="jiwon.blog.com/search?q=jpa",
+    slug="blog-search", group="블로그", title="블로그 내 검색", url="blog.com/@jiwon/search?q=jpa",
     codes=["SRCH-01"], chrome="blog",
     lead="제목·본문·태그에서 찾는다. 10개씩 페이지.",
     body=f"""
@@ -593,11 +593,11 @@ page(
   </div>
   {blog_sidebar()}
 </div>""",
-    apis=[(1, "검색·페이지", "GET", "/api/search?q=&page=", "블로그 Host에서 부르면 이 블로그만")],
+    apis=[(1, "검색·페이지", "GET", "/api/search?q=&page=", "블로그 화면이 X-Blog-Address를 붙여 부르면 이 블로그만")],
 )
 
 page(
-    slug="post-detail", group="블로그", title="글 상세", url="jiwon.blog.com/1532",
+    slug="post-detail", group="블로그", title="글 상세", url="blog.com/@jiwon/1532",
     codes=["POST-04", "POST-09", "POST-10", "SOC-01", "SOC-02", "SOC-03", "CMT-01", "CMT-02", "CMT-03", "CMT-05", "CMT-06", "OWN-05", "OWN-06", "ADMIN-04"], chrome="blog",
     lead="글, 사이드바, 댓글을 동시에 부른다. 글 API가 404면 404 화면, 403 SUBSCRIBERS_ONLY면 구독 안내.",
     body=f"""
@@ -660,7 +660,7 @@ page(
 )
 
 page(
-    slug="guestbook", group="블로그", title="방명록", url="jiwon.blog.com/guestbook",
+    slug="guestbook", group="블로그", title="방명록", url="blog.com/@jiwon/guestbook",
     codes=["CMT-04", "MNG-04"], chrome="blog",
     lead="댓글과 같은 규칙(비밀·답글 한 단계·차단·금칙어). 20개씩 페이지 번호.",
     body=f"""
@@ -685,7 +685,7 @@ page(
 # ---- 블로그 관리
 
 page(
-    slug="manage-home", group="블로그 관리", title="관리 홈", url="jiwon.blog.com/manage",
+    slug="manage-home", group="블로그 관리", title="관리 홈", url="blog.com/@jiwon/manage",
     codes=["MNG-03", "ADMIN-05"], chrome="manage", active="manage-home",
     lead="방문자 요약과 최근 댓글·글. 주인이 아니면 403 화면.",
     body=f"""
@@ -703,7 +703,7 @@ page(
 )
 
 page(
-    slug="manage-write", group="블로그 관리", title="글쓰기", url="jiwon.blog.com/manage/write",
+    slug="manage-write", group="블로그 관리", title="글쓰기", url="blog.com/@jiwon/manage/write",
     codes=["POST-01", "POST-02", "POST-05", "POST-06", "POST-07", "POST-08", "POST-11", "POST-13", "TAG-01", "CMT-07"], chrome="manage", active="manage-write",
     lead="새 글은 /manage/write, 수정은 /manage/write/{id}. 1분마다 자동 임시저장.",
     body=f"""
@@ -734,7 +734,7 @@ page(
 )
 
 page(
-    slug="manage-posts", group="블로그 관리", title="글 관리", url="jiwon.blog.com/manage/posts",
+    slug="manage-posts", group="블로그 관리", title="글 관리", url="blog.com/@jiwon/manage/posts",
     codes=["MNG-01", "POST-03", "POST-06", "POST-08", "ADMIN-03", "BLOG-06"], chrome="manage", active="manage-posts",
     lead="상태·공개 범위·카테고리 필터와 검색, 일괄 공개 범위 변경·삭제. 20개씩.",
     body=f"""
@@ -760,7 +760,7 @@ page(
 )
 
 page(
-    slug="manage-comments", group="블로그 관리", title="댓글·방명록 관리", url="jiwon.blog.com/manage/comments",
+    slug="manage-comments", group="블로그 관리", title="댓글·방명록 관리", url="blog.com/@jiwon/manage/comments",
     codes=["MNG-02", "CMT-02", "MNG-04"], chrome="manage", active="manage-comments",
     lead="받은 댓글과 방명록. 삭제, 답글 바로 쓰기, 작성자 차단.",
     body=f"""
@@ -780,7 +780,7 @@ page(
 )
 
 page(
-    slug="manage-categories", group="블로그 관리", title="카테고리·태그", url="jiwon.blog.com/manage/categories",
+    slug="manage-categories", group="블로그 관리", title="카테고리·태그", url="blog.com/@jiwon/manage/categories",
     codes=["CAT-01", "CAT-03", "CAT-04", "CAT-05", "TAG-03", "TAG-04"], chrome="manage", active="manage-categories",
     lead="카테고리는 2단계까지, 드래그로 순서와 상하위를 바꾼 뒤 한 번에 저장한다.",
     body=f"""
@@ -842,7 +842,7 @@ def visitor_chart() -> str:
 
 
 page(
-    slug="manage-stats", group="블로그 관리", title="방문 통계", url="jiwon.blog.com/manage/stats",
+    slug="manage-stats", group="블로그 관리", title="방문 통계", url="blog.com/@jiwon/manage/stats",
     codes=["MNG-03"], chrome="manage", active="manage-stats",
     lead="어제까지의 통계는 매일 새벽에 모은 값. 일·주·월 단위 그래프, 인기 글, 유입 경로.",
     body=f"""
@@ -865,13 +865,13 @@ page(
 )
 
 page(
-    slug="manage-settings", group="블로그 관리", title="블로그 설정", url="jiwon.blog.com/manage/settings",
+    slug="manage-settings", group="블로그 관리", title="블로그 설정", url="blog.com/@jiwon/manage/settings",
     codes=["BLOG-02", "BLOG-04", "BLOG-05", "BLOG-06", "BLOG-07", "BLOG-08"], chrome="manage", active="manage-settings",
     lead="블로그 정보, 꾸미기(스킨·포인트 색·목록 형태·사이드바), 이사, 삭제. 주소는 바꿀 수 없어 보여 주기만 한다.",
     body=f"""
 <section class="section"><h2>블로그 정보</h2>
   <div class="row"><span class="avatar lg"></span><button class="btn" type="button">이미지 바꾸기 {P(1)}</button></div>
-  <label class="field"><span>주소</span><input type="text" id="saddr" value="jiwon.blog.com" disabled><span class="hint">주소는 바꿀 수 없습니다.</span></label>
+  <label class="field"><span>주소</span><input type="text" id="saddr" value="blog.com/@jiwon" disabled><span class="hint">주소는 바꿀 수 없습니다.</span></label>
   <label class="field"><span>이름</span><input type="text" id="sname" value="지원의 기록"></label>
   <label class="field"><span>소개</span><textarea id="sdesc">백엔드 공부와 여행 메모</textarea></label>
   <button class="btn primary" type="button" style="justify-self:start">저장 {P(2)}</button></section>
@@ -920,7 +920,7 @@ page(
 )
 
 page(
-    slug="manage-spam", group="블로그 관리", title="스팸·차단", url="jiwon.blog.com/manage/spam",
+    slug="manage-spam", group="블로그 관리", title="스팸·차단", url="blog.com/@jiwon/manage/spam",
     codes=["MNG-04"], chrome="manage", active="manage-spam",
     lead="차단 회원과 금칙어. 차단 사실은 상대에게 따로 알리지 않는다.",
     body=f"""
@@ -1183,7 +1183,7 @@ def render_readme() -> str:
         "",
         "## 화면 주소",
         "",
-        "기능 명세와 원본 6장에 있는 주소(`/`, `/login`, `/signup`, `/admin/...`, `/{글 번호}`, `/category/{id}`, `/tag/{이름}`, `/manage/...`) 말고는 목업을 만들며 정했다. 아래 표의 나머지 주소(`/feed`, `/ranking/...`, `/me/...`, `/blogs/new`, `/guestbook`, `/search`, `/manage/` 아래 세부 경로 등)는 바꿔도 된다.",
+        "블로그 화면은 플랫폼 주소 아래 경로 `blog.com/@{주소}/...`다(2026-10-12 지원 결정, 원본의 서브도메인 `{주소}.blog.com`에서 바꿈). 블로그 화면이 부르는 블로그 API에는 `X-Blog-Address: {주소}` 헤더가 붙는다. 기능 명세와 원본 6장에 있는 주소(`/`, `/login`, `/signup`, `/admin/...`, 블로그의 `/@{주소}/{글 번호}`, `/@{주소}/category/{id}`, `/@{주소}/tag/{이름}`, `/@{주소}/manage/...`) 말고는 목업을 만들며 정했다. 아래 표의 나머지 주소(`/feed`, `/ranking/...`, `/me/...`, `/blogs/new`, `/guestbook`, `/search`, `/manage/` 아래 세부 경로 등)는 바꿔도 된다.",
         "",
         "## 화면별 API",
         "",

@@ -8,7 +8,7 @@
 
 ## 요약
 
-누구나 가입해 자기 블로그(서브도메인)를 열고, WYSIWYG 에디터로 글을 발행하고, 다른 블로그 글을 읽고 댓글·공감하는 멀티 유저 블로그를 만든다. Spring Boot REST API + React SPA를 jar 하나로 함께 배포하고, Host 헤더로 블로그를 찾는다. **2주 안에 P0 24개(US1~US4) 전부**와 가입에 필요한 이메일 인증(OWN-01)을 만들고, 원본 7장 일정에 든 P1·P2(태그 목록, 조회수·인기 글, 답글, 회원정보 수정, 내 글 관리, 주제, 하위 카테고리)를 붙인다. 비슷한 글 추천(OWN-06)은 도전 과제다.
+누구나 가입해 자기 블로그(`blog.com/@{주소}`)를 열고, WYSIWYG 에디터로 글을 발행하고, 다른 블로그 글을 읽고 댓글·공감하는 멀티 유저 블로그를 만든다. Spring Boot REST API + React SPA를 jar 하나로 함께 배포하고, 화면은 주소 경로(`/@{주소}`), API는 `X-Blog-Address` 헤더로 블로그를 찾는다. **2주 안에 P0 24개(US1~US4) 전부**와 가입에 필요한 이메일 인증(OWN-01)을 만들고, 원본 7장 일정에 든 P1·P2(태그 목록, 조회수·인기 글, 답글, 회원정보 수정, 내 글 관리, 주제, 하위 카테고리)를 붙인다. 비슷한 글 추천(OWN-06)은 도전 과제다.
 
 ## 기술 맥락 (Technical Context)
 
@@ -20,7 +20,7 @@
 
 **테스트**: JUnit 5 + Spring Boot Test + MockMvc(백엔드, DB는 Testcontainers MySQL), Vitest(프론트, 최소) — 원본에 없어 기본값으로 둠 (R-01). 실행은 `./mvnw test`
 
-**대상 플랫폼**: Linux 서버 1대, 와일드카드 도메인 `*.blog.com` → 같은 서버. 로컬은 hosts에 넣은 `myblog.blog.test:8080` (쿠키 공유 확인용, R-03)
+**대상 플랫폼**: Linux 서버 1대(학교 nginx 뒤, 도메인 `now-log.java21.net` 하나). 와일드카드 DNS가 없어 블로그 주소는 서브도메인이 아니라 경로 `{플랫폼}/@{주소}`다(2026-10-12 지원 결정, R-04). 로컬은 hosts에 `127.0.0.1 blog.test` 한 줄을 넣고 `blog.test:8080`, 블로그는 `blog.test:8080/@{주소}`
 
 **프로젝트 유형**: 웹 서비스 (백엔드 + 프론트엔드, 단일 jar 배포)
 
@@ -34,11 +34,11 @@
 
 | 원본 | 선택 | 구현 메모 |
 | --- | --- | --- |
-| 7.1 로그인 | 이메일(P0) + 소셜 카카오·구글(P1) | OAuth 2.0. 계정 연동 규칙은 R-07. 블로그 주소 사이 로그인 공유는 상위 도메인 쿠키(R-03). 이메일 인증 OWN-01, 비밀번호 재설정 OWN-02 |
+| 7.1 로그인 | 이메일(P0) + 소셜 카카오·구글(P1) | OAuth 2.0. 계정 연동 규칙은 R-07. 로그인은 HttpOnly 쿠키, 블로그도 플랫폼과 같은 호스트라 Domain 없이 공유(R-03). 이메일 인증 OWN-01, 비밀번호 재설정 OWN-02 |
 | 7.2 블로그 수 | 여러 개, 활성 블로그 최대 5개 | 처음 만든 블로그가 대표. BLOG-06~08 구현 대상 |
-| 7.3 블로그 주소 | 서브도메인 `{address}.blog.com` | Host 헤더 해석 (R-04). 글쓰기·관리 화면도 블로그 주소 아래 `/manage` |
+| 7.3 블로그 주소 | 경로 `blog.com/@{address}` (원본은 서브도메인, 2026-10-12 지원 결정으로 바꿈) | 화면은 `/@{address}/...` 경로, API는 `X-Blog-Address` 헤더로 블로그를 정함 (R-04). 글쓰기·관리 화면도 블로그 주소 아래 `/@{address}/manage` |
 | 7.4 에디터 | WYSIWYG, Tiptap | 본문 HTML 저장, 서버 정화 + 클라이언트 정화 (R-05) |
-| 7.5 글 주소 | 번호 `{address}.blog.com/{post-id}`, 전역 번호 | 다른 블로그 소속이면 볼 수 있을 때 301, 아니면 404 |
+| 7.5 글 주소 | 번호 `blog.com/@{address}/{post-id}`, 전역 번호 | 다른 블로그 소속이면 볼 수 있을 때 301, 아니면 404 |
 | 7.6 인기 글 | 최근 1시간 인기 점수(조회×1 + 공감×3 + 댓글×5), 공개 글 상위 10, 캐시 5분 | view_log·post_like·comment를 집계 (data-model 인기 점수) |
 | 7.7 주제 | 글마다, 고정 enum 10개 | IT·개발, 여행, 맛집·요리, 일상, 리뷰, 취미, 경제·재테크, 건강·운동, 문화·연예, 교육·학습 |
 | 7.8 공개 범위 | 구독자 공개(SUBSCRIBERS) | 구독자와 주인만 본문 열람. 구독(SUB-01)이 필요해 2주 범위 밖. 그동안 POST-06은 공개·비공개만 |
@@ -73,7 +73,7 @@
 | I. 명세는 동작, 계획은 기술 | ✅ | 스택·구조·구현 수치는 이 계획과 조사에만 둠 |
 | II. 비공개는 존재를 숨긴다 | ✅ | 기능 명세의 "볼 수 없는 글" 정의 하나를 `PostVisibilityPolicy`로 구현해 상세·목록·개수·검색·사이드바에 같이 씀. 볼 수 없는 글은 로그인 여부와 상관없이 404(401보다 먼저) |
 | III. 공유된 주소는 깨지지 않는다 | ✅ | 블로그 소프트 삭제로 주소 영구 예약, 글 전역 번호 불변, 이사·글 이동 시 서버에서 301 |
-| IV. 권한은 서버가 지킨다 | ✅ | Spring Security(URL·role) + 서비스 계층 주인 검사. XSS 이중 정화, CSP. 상위 도메인 쿠키(Q6)라 SameSite=Lax + CSRF 대책을 함께 둠(R-03) |
+| IV. 권한은 서버가 지킨다 | ✅ | Spring Security(URL·role) + 서비스 계층 주인 검사. XSS 이중 정화, CSP. 쿠키 인증(Q6)이라 SameSite=Lax + CSRF 대책을 함께 둠(R-03) |
 | V. 제재는 숨김이며 되돌릴 수 있다 | ✅ | 블라인드·정지·블로그 제한 모두 상태값, 해제 시 원복. 관리 이력은 조회만 |
 | VI. 입력과 숫자는 잃거나 틀리지 않는다 | ✅ | 공감·구독은 DB UNIQUE, 발행·댓글은 Idempotency-Key(Redis TTL) (R-09 확정) |
 | VII. 추적 가능한 ID | ✅ | 작업·API·커밋 모두 원본 기능 코드와 OWN 코드를 씀 |
@@ -111,7 +111,7 @@ pom.xml
 mvnw, mvnw.cmd, .mvn/
 src/
     ├── main/java/com/nhnacademy/blog/   # BlogApplication.java
-    │   ├── global/          # config(Security, Cache, Web), error(공통 오류 응답), host(서브도메인 해석), visibility(가시성 판단), auth(인증의 입구만: LoginMember·LoginMembers·BlogOwnerGuard·정지 안내)
+    │   ├── global/          # config(Security, Cache, Web), error(공통 오류 응답), host(블로그 주소 해석: `X-Blog-Address` 헤더·`/@주소` 경로, BlogAddressResolver), visibility(가시성 판단), auth(인증의 입구만: LoginMember·LoginMembers·BlogOwnerGuard·정지 안내)
     │   ├── auth/            # 가입·로그인·JWT·소셜, 인증의 속(토큰·쿠키·필터·비밀번호·시도 제한). 바깥은 입구(CredentialService, LoginSessions)만 쓴다(스텝 19b)
     │   ├── member/
     │   ├── blog/            # 개설·정보·사이드바·이사·삭제
@@ -135,7 +135,7 @@ src/
 frontend/
 ├── vite.config.ts           # /api → localhost:8080 프록시
 └── src/
-    ├── app/                 # 라우터: 플랫폼 도메인 / 블로그 서브도메인 분기
+    ├── app/                 # 라우터: 플랫폼 화면 / 블로그 화면(`/@주소`면 basename을 `/@주소`로) 분기
     ├── pages/               # home, auth, blog, post, manage, admin
     ├── components/          # editor(Tiptap), sidebar, pagination
     └── api/
@@ -157,6 +157,6 @@ frontend/
 
 | 항목 | 이유 | 더 단순한 대안을 안 쓴 이유 |
 | --- | --- | --- |
-| 서브도메인 주소 | 티스토리와 같은 경험 | 경로 방식이 더 단순하지만 학습 목표. 대신 블로그 주소 사이 로그인 공유를 상위 도메인 쿠키로 풀고 CSRF 대책을 떠안음(R-03) |
+| ~~서브도메인 주소~~ (2026-10-12 없앰) | 티스토리와 같은 경험을 위해 처음엔 서브도메인을 골랐다 | 배포 서버에 와일드카드 DNS가 없어 더 단순한 경로 방식(`blog.com/@{주소}`)으로 바꿨다. 상위 도메인 쿠키도 필요 없어졌다. 쿠키 인증이라 CSRF 대책은 그대로 둔다(R-03, R-04) |
 | 저장소 3종(MySQL, Redis, PostgreSQL) | Redis는 캐시·연타 방지, PostgreSQL은 벡터 검색 | 벡터 검색을 MySQL로 하기 어려움. PostgreSQL은 추천 기능에만 쓰고, 일정이 밀리면 통째로 뺄 수 있게 분리 |
 | XSS 이중 정화 | WYSIWYG HTML 저장 | 마크다운이면 단순하지만 티스토리와 같은 편집 경험을 위해 WYSIWYG를 고름. 서버 정화가 필수, 클라이언트는 보조. 같은 에디터에서 마크다운 문법도 쓰게 했지만(T035a) 저장은 HTML이라 정화 방식은 같다 |

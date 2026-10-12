@@ -14,24 +14,26 @@
 - **이메일 인증을 두 단계로 나눴다**: 코드 확인(`/verify`)으로 화면에서 바로 결과를 보여 주고, 가입 요청에서 서버가 한 번 더 확인한다.
 - **비밀번호 재설정을 요청·변경 두 경로로 나눴다**.
 - **요청·응답 본문, 오류 코드 목록, 주요 응답 객체 모양을 적었다**.
-- **Host 범위를 표마다 적었다**: 블로그 주소에서만 되는 API와 어디서나 되는 API를 구분한다.
+- **범위(처음엔 Host 범위)를 표마다 적었다**: 블로그 화면에서만 되는 API와 어디서나 되는 API를 구분한다. 블로그는 처음엔 요청 Host의 서브도메인으로 정했고, 2026-10-12부터 `X-Blog-Address` 헤더로 정한다(아래 [주소와 블로그 범위](#주소와-블로그-범위)).
 
 ## 공통
 
-### 주소와 Host 범위
+### 주소와 블로그 범위
 
 | 표기 | 뜻 | 예 |
 | --- | --- | --- |
-| **P** | 플랫폼 주소에서 부른다 | `blog.com/api/...` |
-| **B** | 블로그 주소에서 부른다. Host의 서브도메인으로 블로그를 정한다. 없거나 볼 수 없는 블로그면 404 | `myblog.blog.com/api/...` |
-| **\*** | 어느 주소에서 불러도 같다. 대상은 경로의 ID로 정한다 | `/api/blogs/{blogId}/subscription` |
+| **B** | 블로그 API. `X-Blog-Address: {주소}` 헤더가 있어야 한다. 헤더의 주소로 블로그를 정하고, 헤더가 없거나 주소가 규칙에 어긋나거나 예약어거나 없는·볼 수 없는 블로그면 404 | `GET /api/posts` + `X-Blog-Address: myblog` |
+| **P** | 플랫폼 API. 헤더 없이 부른다 | `GET /api/home/latest` |
+| **\*** | 헤더가 있든 없든 같다. 대상은 경로의 ID로 정한다 | `/api/blogs/{blogId}/subscription` |
 
-- 이사한 블로그(`moved_to_blog_id`가 있음)의 Host로 **B** API를 부르면, 주인이 아닌 사람에게는 404다. 화면 주소는 서버가 먼저 301로 보내므로 프론트가 이 404를 볼 일은 거의 없다. 주인은 옛 블로그 관리 API를 계속 쓴다(BLOG-06).
-- **B** API에서 글 번호가 Host 블로그 소속이 아니면 404다. 다른 블로그로 보내는 301은 화면 주소 단계에서 서버가 한다([화면 주소 단계](#화면-주소-단계에서-서버가-하는-일-api-없음)).
+블로그 주소는 서브도메인이 아니라 경로 `blog.com/@{주소}`다(2026-10-12 지원 결정, [조사](../research.md) R-04). API 경로는 모두 `/api/...` 그대로이고, 블로그 화면(`/@{주소}/...`)의 api 클라이언트가 블로그 API를 부를 때 `X-Blog-Address`를 붙인다. 플랫폼 화면은 헤더를 붙이지 않는다. 검색(`GET /api/search`)은 같은 경로가 헤더가 있으면 블로그 안 검색(**B**), 없으면 전체 검색(**P**)이다.
+
+- 이사한 블로그(`moved_to_blog_id`가 있음)의 주소를 헤더에 담아 **B** API를 부르면, 주인이 아닌 사람에게는 404다. 화면 주소는 서버가 먼저 301로 보내므로 프론트가 이 404를 볼 일은 거의 없다. 주인은 옛 블로그 관리 API를 계속 쓴다(BLOG-06).
+- **B** API에서 글 번호가 헤더의 블로그 소속이 아니면 404다. 다른 블로그로 보내는 301은 화면 주소 단계에서 서버가 한다([화면 주소 단계](#화면-주소-단계에서-서버가-하는-일-api-없음)).
 
 ### 인증과 보안
 
-- 인증은 `Domain=.blog.com; HttpOnly; Secure; SameSite=Lax` 쿠키다(Q6, [조사](../research.md) R-03). Refresh Token 쿠키를 함께 준다. 로그인 유지(AUTH-03)를 고르면 14일 남는 쿠키, 고르지 않으면 브라우저를 닫으면 사라지는 쿠키이고 30분 동안 요청이 없으면 서버에서 끝난다(R-03). Access 토큰이 끝나면 서버가 요청을 처리하면서 새 Access 쿠키를 준다.
+- 인증은 `HttpOnly; Secure; SameSite=Lax` 쿠키다(Q6, [조사](../research.md) R-03). `Domain`은 두지 않는다. 플랫폼과 모든 블로그 화면이 한 호스트(`blog.com`, 블로그는 `/@{주소}`)라 어느 화면에서나 같은 로그인 상태다(2026-10-12, 이전엔 `Domain=.blog.com`). 기기(`device`)·비회원 방문자(`visitor_id`)·소셜 로그인 state(`oauth_state`) 쿠키도 같다. Refresh Token 쿠키를 함께 준다. 로그인 유지(AUTH-03)를 고르면 14일 남는 쿠키, 고르지 않으면 브라우저를 닫으면 사라지는 쿠키이고 30분 동안 요청이 없으면 서버에서 끝난다(R-03). Access 토큰이 끝나면 서버가 요청을 처리하면서 새 Access 쿠키를 준다.
 - 상태를 바꾸는 요청(POST·PUT·PATCH·DELETE)은 `X-Requested-With: XMLHttpRequest` 헤더가 없으면 403 `CSRF_REJECTED`다.
 - 정지된 회원이 이미 로그인한 상태로 API를 부르면 그 요청부터 403 `MEMBER_SUSPENDED`와 쿠키 삭제다(ADMIN-02). 화면 주소 요청은 403 대신 비회원으로 그리고, 화면이 부르는 첫 API에서 정지 안내를 받는다(화면이 JSON 오류로 깨지지 않게, 2026-10-08 지원 확인). 한 화면이 API 여러 개를 동시에 부르면 쿠키가 지워지기 전에 나간 요청은 모두 403이다. 화면(api 클라이언트)은 사유를 적어 두고 읽기(GET) 요청을 비회원으로 한 번 더 보내 화면을 그린다(스텝 13b).
 - 로그인에 성공하면 기기 쿠키 `device`(`회원 번호.임의 값.서명`, HMAC-SHA256, HttpOnly, 1년, 로그아웃해도 남음)를 함께 준다. 로그인할 때 이 쿠키가 그 이메일 회원의 것이면 틀린 횟수를 이메일이 아니라 기기로 센다(다른 사람이 내 이메일을 막아도 전에 로그인한 브라우저는 들어옴). 기기도 15분에 5번 틀리면 429이고, IP별 제한은 그대로다(T055b, R-17).
@@ -43,7 +45,7 @@
 - 본문은 JSON(`application/json; charset=UTF-8`). 이미지 업로드만 `multipart/form-data`.
 - 오류 응답은 `Accept`와 상관없이 JSON이다. 브라우저 주소창으로 API를 열어도 같은 오류 본문이 나온다.
 - 시각은 한국 시간 ISO-8601(`2026-10-08T13:20:00+09:00`). 날짜만 있는 값은 `2026-10-08`.
-- ID는 숫자. 글 번호 `id`가 곧 글 주소의 번호다(`{address}.blog.com/{id}`).
+- ID는 숫자. 글 번호 `id`가 곧 글 주소의 번호다(`blog.com/@{address}/{id}`).
 - 열거값은 ERD의 영문 코드 그대로다(`PUBLIC`, `SUBSCRIBERS`, `IT_DEV` 등). 화면 문구는 프론트가 코드로 고르고, 제재 사유 안내 문구만 서버가 `reasonMessage`로 준다.
 - 성공 코드: 조회·변경 200, 생성 201(본문에 새 자원), 본문 없는 성공 204.
 
@@ -237,11 +239,11 @@
 
 ## 엔드포인트
 
-권한 열: **누구나** · **회원**(로그인) · **본인** · **주인**(Host 블로그 주인) · **관리자**(ADMIN).
+권한 열: **누구나** · **회원**(로그인) · **본인** · **주인**(`X-Blog-Address`가 가리키는 블로그의 주인) · **관리자**(ADMIN).
 
 ### AUTH 회원·인증
 
-| 메서드 | 경로 | Host | 권한 | 설명 | ID |
+| 메서드 | 경로 | 범위 | 권한 | 설명 | ID |
 | --- | --- | --- | --- | --- | --- |
 | POST | /api/auth/email-verifications | P | 누구나 | `{ email }` → 202. 인증 코드 메일 발송. 이메일 가입 회원 중 중복이면 409 `EMAIL_TAKEN`, 1분 안에 다시 요청하면 429 | OWN-01 |
 | POST | /api/auth/email-verifications/verify | P | 누구나 | `{ email, code }` → 200. 화면 단계 확인용(코드를 쓰지는 않음) | OWN-01 |
@@ -259,11 +261,11 @@
 
 #### 소셜 로그인 흐름
 
-`authorize`(플랫폼 주소) → 제공사 로그인 → `callback`(콘솔에 등록한 주소) → 로그인을 시작한 플랫폼 주소의 `complete` → 아래 결과로 302. 로그인 쿠키는 `.{플랫폼}` 도메인이라 플랫폼 주소의 `complete`에서 준다. 구글은 https가 아니면 리다이렉트 URI로 `localhost`만 받아서, 개발에서는 콜백과 쿠키를 주는 곳을 나눴다(스텝 20b, 2026-10-12). 아래 주소는 모두 시작한 플랫폼 주소 기준이다.
+`authorize`(플랫폼 주소) → 제공사 로그인 → `callback`(콘솔에 등록한 주소) → 로그인을 시작한 플랫폼 주소의 `complete` → 아래 결과로 302. 로그인 쿠키는 플랫폼 주소의 쿠키(Domain 없음)라 플랫폼 주소의 `complete`에서 준다. 구글은 https가 아니면 리다이렉트 URI로 `localhost`만 받아서, 개발에서는 콜백과 쿠키를 주는 곳을 나눴다(스텝 20b, 2026-10-12). 아래 주소는 모두 시작한 플랫폼 주소 기준이다.
 
 | mode | 상황 | 결과 |
 | --- | --- | --- |
-| `login` | 연결된 소셜 계정, 활동 회원 | 쿠키 발급, `redirect`로 302 (우리 서비스 주소만, 아니면 홈) |
+| `login` | 연결된 소셜 계정, 활동 회원 | 쿠키 발급, `redirect`로 302 (플랫폼 호스트의 절대 주소(블로그는 그 아래 `/@{주소}/...`)나 경로만, 아니면 홈) |
 | `login` | 연결된 소셜 계정, 정지 회원 | `blog.com/login?error=MEMBER_SUSPENDED&reasonMessage=…&until=…`로 302 (화면이 `POST /api/auth/login`과 같은 사유·기한 안내, 기한이 없으면 영구) |
 | `login` | 처음 보는 소셜 계정 | `blog.com/signup/social?token={signupToken}&provider={provider}`으로 302. 토큰은 10분 유효, 제공사 이메일은 담지 않음. `provider`는 화면 문구("카카오 계정으로 새로 가입합니다")용 |
 | `link` | 처음 보는 소셜 계정 | 연결 후 `blog.com/me?linked={provider}` |
@@ -277,7 +279,7 @@
 
 ### ME 내 정보 (마이페이지)
 
-| 메서드 | 경로 | Host | 권한 | 설명 | ID |
+| 메서드 | 경로 | 범위 | 권한 | 설명 | ID |
 | --- | --- | --- | --- | --- | --- |
 | GET | /api/me | \* | 회원 | `Me`. 비회원이면 401 (프론트는 로그인 상태 확인에 씀) | AUTH-04, AUTH-05 |
 | PATCH | /api/me | P | 회원 | `{ nickname?, profileImageId? }` → `Me`. 보내지 않은 칸은 그대로. 닉네임 중복 409(대소문자만 바꾸기는 됨). `profileImageId`는 본인이 올린 이미지만(아니면 400 `fieldErrors[].field = profileImageId`). `Me.profileImageUrl`은 썸네일 주소 | AUTH-05 |
@@ -293,11 +295,11 @@
 | PUT | /api/me/notifications/{id}/read | P | 본인 | 204. 남의 알림·없는 번호 404 | SUB-04 |
 | PUT | /api/me/notifications/read-all | P | 회원 | 204 | SUB-04 |
 
-알림 `type`은 `COMMENT`, `REPLY`, `LIKE`, `SUBSCRIBE`, `SANCTION`. `link`는 눌렀을 때 갈 화면 주소다(`https://jiwon.blog.com/1532#comment-88`). 대상이 지워졌거나 볼 수 없게 된 알림은 목록에서 빠진다. 언제 만드나(스텝 16): 내 글에 댓글 → `COMMENT`, 내 댓글에 답글 → `REPLY`(글 주인이 부모 댓글 작성자이면 `REPLY` 하나만), 내 글에 새 공감 → `LIKE`, 새 구독자 → `SUBSCRIBE`, 제재·해제 → `SANCTION`(스텝 18). 내가 한 일은 나에게 알리지 않고, 연타한 공감·구독은 하나다. 방명록은 알림 종류가 없어 알리지 않는다. `message`는 만들 때의 닉네임·제목으로 정해 둔다.
+알림 `type`은 `COMMENT`, `REPLY`, `LIKE`, `SUBSCRIBE`, `SANCTION`. `link`는 눌렀을 때 갈 화면 주소다(`https://blog.com/@jiwon/1532#comment-88`, 블로그 화면은 `http(s)://{플랫폼}/@{주소}/...` 전체 주소). 대상이 지워졌거나 볼 수 없게 된 알림은 목록에서 빠진다. 언제 만드나(스텝 16): 내 글에 댓글 → `COMMENT`, 내 댓글에 답글 → `REPLY`(글 주인이 부모 댓글 작성자이면 `REPLY` 하나만), 내 글에 새 공감 → `LIKE`, 새 구독자 → `SUBSCRIBE`, 제재·해제 → `SANCTION`(스텝 18). 내가 한 일은 나에게 알리지 않고, 연타한 공감·구독은 하나다. 방명록은 알림 종류가 없어 알리지 않는다. `message`는 만들 때의 닉네임·제목으로 정해 둔다.
 
 ### BLOG 블로그
 
-| 메서드 | 경로 | Host | 권한 | 설명 | ID |
+| 메서드 | 경로 | 범위 | 권한 | 설명 | ID |
 | --- | --- | --- | --- | --- | --- |
 | GET | /api/blogs/address-availability?address= | P | 회원 | `{ available, reason }`. `reason`: `INVALID`·`RESERVED`·`TAKEN` | BLOG-01 |
 | POST | /api/blogs | P | 회원 | `{ address, name, description? }` → 201 `Blog`. 6번째 409 `BLOG_LIMIT_EXCEEDED`. 첫 블로그는 대표 | BLOG-01 |
@@ -337,11 +339,11 @@
 
 ### POST 글
 
-| 메서드 | 경로 | Host | 권한 | 설명 | ID |
+| 메서드 | 경로 | 범위 | 권한 | 설명 | ID |
 | --- | --- | --- | --- | --- | --- |
 | GET | /api/posts?page=&size=&categoryId=&tag= | B | 누구나 | 블로그 글 목록 10, 최신순. `categoryId`면 하위 카테고리 글 포함, `categoryId=0`은 미분류. 주인에게는 비공개·숨긴 글을 포함한 발행 글 전부(임시저장·예약 제외). `tag`가 이 블로그에 없거나, 그 태그가 달린 글 가운데 보는 사람이 볼 수 있는 글이 하나도 없으면 404 | BLOG-03, CAT-02, TAG-02 |
 | GET | /api/posts/{id} | B | 누구나 | `PostDetail`. 볼 수 없으면 404, 구독자 공개를 구독 안 한 사람이 열면 403 `SUBSCRIBERS_ONLY` | POST-04, POST-10, POST-12 |
-| POST | /api/posts | B | 주인 | [글 저장 본문](#글-저장-본문) → 201 `{ id, status, url }`. `Idempotency-Key` 필수 | POST-01, POST-08, POST-13 |
+| POST | /api/posts | B | 주인 | [글 저장 본문](#글-저장-본문) → 201 `{ id, status, url }`. `url`은 글 주소 전체(`https://blog.com/@{주소}/{id}`). `Idempotency-Key` 필수 | POST-01, POST-08, POST-13 |
 | GET | /api/manage/posts/{id} | B | 주인 | 편집용. 본문 + 임시저장·예약·숨김 상태와 `blind` 사유, 고른 대표 이미지 `thumbnailImageId`(없으면 `null`)와 대표 이미지 후보인 본문 이미지 `images: [{ id, url, thumbnailUrl }]`(본문 순서, 2026-10-10 스텝 13에서 더함) | POST-02, POST-07, POST-08 |
 | PUT | /api/posts/{id} | B | 주인 | [글 저장 본문](#글-저장-본문) → 200 `{ id, status, url }`. 숨긴 글이면 403 `POST_BLINDED`. 자동 임시저장도 이 경로 | POST-02, POST-08 |
 | DELETE | /api/posts/{id} | B | 주인 | 204. 소프트 삭제, 숨긴 글도 삭제는 됨 | POST-03 |
@@ -386,7 +388,7 @@
 
 ### CAT 카테고리 · TAG 태그
 
-| 메서드 | 경로 | Host | 권한 | 설명 | ID |
+| 메서드 | 경로 | 범위 | 권한 | 설명 | ID |
 | --- | --- | --- | --- | --- | --- |
 | GET | /api/categories | B | 누구나 | 트리. 주인이 아니면 비공개 카테고리와 그 글 수는 빠짐 | CAT-01, CAT-05, BLOG-04 |
 | POST | /api/categories | B | 주인 | `{ name, parentId? }` → 201 `{ id, name, parentId, sortOrder }`. 같은 자리(최상위끼리, 같은 상위의 하위끼리) 이름 중복 409 `NAME_TAKEN`, 하위의 하위 409 `CATEGORY_DEPTH`, 이 블로그 카테고리가 아닌 `parentId`는 400 | CAT-01, CAT-03 |
@@ -415,7 +417,7 @@
 
 ### CMT 댓글 · 방명록
 
-| 메서드 | 경로 | Host | 권한 | 설명 | ID |
+| 메서드 | 경로 | 범위 | 권한 | 설명 | ID |
 | --- | --- | --- | --- | --- | --- |
 | GET | /api/posts/{id}/comments?cursor= | B | 누구나 | `Comment` 20 작성순, 답글은 부모 안에. `+ totalCount` | CMT-01, CMT-05, CMT-06 |
 | POST | /api/posts/{id}/comments | B | 회원 | `{ content, parentId?, secret }` → 201 `Comment`. `Idempotency-Key` 필수. 차단 403 `BLOCKED_BY_BLOG`, 금칙어 400 `BANNED_WORD`, 댓글 막힘 403 `COMMENTS_DISABLED`, 답글의 답글 400 | CMT-01, CMT-05, CMT-06, CMT-07, MNG-04 |
@@ -428,7 +430,7 @@
 
 ### SOC 반응
 
-| 메서드 | 경로 | Host | 권한 | 설명 | ID |
+| 메서드 | 경로 | 범위 | 권한 | 설명 | ID |
 | --- | --- | --- | --- | --- | --- |
 | PUT | /api/posts/{id}/like | B | 회원 | → `{ liked: true, likeCount }` | SOC-01 |
 | DELETE | /api/posts/{id}/like | B | 회원 | → `{ liked: false, likeCount }` | SOC-01 |
@@ -439,7 +441,7 @@
 
 ### SUB 구독 · 피드
 
-| 메서드 | 경로 | Host | 권한 | 설명 | ID |
+| 메서드 | 경로 | 범위 | 권한 | 설명 | ID |
 | --- | --- | --- | --- | --- | --- |
 | PUT | /api/blogs/{blogId}/subscription | \* | 회원 | → `{ subscribed: true, subscriberCount }`. 멱등(이미 구독이면 그대로). 볼 수 없거나 이사한 블로그 404, 자기 블로그 400 `fieldErrors[].field = blogId`, 차단된 회원 403 `BLOCKED_BY_BLOG`(MNG-04, 백로그). 새로 구독했을 때만 주인에게 알림 | SUB-01, SUB-03, MNG-04 |
 | DELETE | /api/blogs/{blogId}/subscription | \* | 회원 | → `{ subscribed: false, subscriberCount }`. 멱등(구독하지 않았어도 같은 응답) | SUB-01 |
@@ -448,10 +450,10 @@
 
 ### SRCH 검색 · HOME 홈
 
-| 메서드 | 경로 | Host | 권한 | 설명 | ID |
+| 메서드 | 경로 | 범위 | 권한 | 설명 | ID |
 | --- | --- | --- | --- | --- | --- |
-| GET | /api/search?q=&page= | B | 누구나 | 블로그 안 제목·본문·태그 검색 `PostSummary` 10 최신순 | SRCH-01 |
-| GET | /api/search?q=&type=post&page= | P | 누구나 | 전체 글 검색 `PostSummary` 10 최신순. 남에게 보이는 글만(홈 최신 글과 같은 조건이라 주인도 자기 비공개 글은 여기서 안 나오고 블로그 안 검색에서 찾는다). `type`을 빼면 `post`, 그 밖의 값은 400 | SRCH-02 |
+| GET | /api/search?q=&page= | B | 누구나 | `X-Blog-Address`가 있으면 블로그 안 제목·본문·태그 검색(없으면 아래 전체 검색) `PostSummary` 10 최신순 | SRCH-01 |
+| GET | /api/search?q=&type=post&page= | P | 누구나 | 헤더가 없으면 전체 글 검색 `PostSummary` 10 최신순. 남에게 보이는 글만(홈 최신 글과 같은 조건이라 주인도 자기 비공개 글은 여기서 안 나오고 블로그 안 검색에서 찾는다). `type`을 빼면 `post`, 그 밖의 값은 400 | SRCH-02 |
 | GET | /api/search?q=&type=blog&page= | P | 누구나 | 블로그 이름·소개 검색 `[{ blog: { id, address, name, description, profileImageUrl }, owner: MemberSummary, subscriberCount }]` 10, 새로 만든 순. 지운·이용 제한·주인 정지·이사한 블로그는 빠진다 | SRCH-02 |
 | GET | /api/home/latest?cursor= | P | 누구나 | 모든 블로그 공개 글 `PostSummary` 20 최신순 | HOME-01 |
 | GET | /api/home/popular | P | 누구나 | 인기 점수 상위 10 `{ snapshotAt, items: [{ rank, post }] }`. 5분 스냅숏 | HOME-02 |
@@ -465,7 +467,7 @@
 
 ### MNG 블로그 관리
 
-모두 **B**, **주인**만. 블로그 관리 화면(`{address}.blog.com/manage/...`)이 부른다.
+모두 **B**, **주인**만. 블로그 관리 화면(`blog.com/@{address}/manage/...`)이 부른다.
 
 | 메서드 | 경로 | 설명 | ID |
 | --- | --- | --- | --- |
@@ -490,7 +492,7 @@
 
 ### REPORT 신고
 
-| 메서드 | 경로 | Host | 권한 | 설명 | ID |
+| 메서드 | 경로 | 범위 | 권한 | 설명 | ID |
 | --- | --- | --- | --- | --- | --- |
 | POST | /api/reports | \* | 회원 | `{ targetType, targetId, reason, description? }` → 201. `targetType`: `POST`·`COMMENT`·`BLOG`(아니면 400 `targetType`). 같은 대상 다시 신고 409 `ALREADY_REPORTED`(처리한 뒤에도, 회원·대상마다 한 번), 볼 수 없는 대상 404(비밀댓글을 볼 수 없는 사람, 이미 숨긴 댓글, 이사한 블로그 포함). `ETC`면 `description` 필수(400 `description`), 500자. 순서: 대상 종류 400 → 대상 404 → 비회원 401 → 사유 400 → 409 | ADMIN-04 |
 
@@ -525,14 +527,14 @@
 
 ## 화면 주소 단계에서 서버가 하는 일 (API 없음)
 
-`/api/`로 시작하지 않는 요청은 서버가 아래를 처리한 뒤 React 앱(`index.html`)을 준다(원본 6장 ①, 작업 T010).
+`/api/`로 시작하지 않는 요청은 서버가 아래를 처리한 뒤 React 앱(`index.html`)을 준다(원본 6장 ①, 작업 T010). `/@{주소}`로 시작하는 주소가 블로그 화면이고(`/@{주소}`, `/@{주소}/{id}`, `/@{주소}/category/{id}`, `/@{주소}/tag/{이름}`, `/@{주소}/search`, `/@{주소}/guestbook`, `/@{주소}/manage/...`), 그 밖은 플랫폼 화면이다(2026-10-12, 작업 T117). 아래 표의 경로(`/{id}`, `/manage/**`)는 `/@{주소}` 뒤의 블로그 안 경로다. 서버가 만드는 블로그 주소(301의 `Location`, `og:url`, 알림 `link`, 글 저장 `url`)는 `http(s)://{플랫폼}/@{주소}/...`이고, 블로그 첫 화면은 끝에 `/` 없이 `/@{주소}`다.
 
 | 일 | 규칙 | ID |
 | --- | --- | --- |
-| 블로그 확인 | 없거나 볼 수 없는 블로그 404 화면. 이사한 블로그는 새 블로그 같은 경로로 301 (주인의 `/manage/**`는 예외). 옛 블로그가 지워졌어도 이사 대상이 있으면 301(지운 블로그의 관리 화면은 없음). 이사 간 블로그가 삭제됐으면 404. 글 주소 `/{id}`는 아래 글 확인이 먼저다 | BLOG-06, BLOG-07, COM-01 |
-| 글 확인 | `/{id}`가 다른 블로그 소속이고 볼 수 있으면 지금 블로그로 301, 아니면 404 화면. 옛 블로그가 지워졌어도 옮긴 글은 301, 옮기지 않은 글은 함께 지워져 404. 이사한 블로그에 남은(옮기지 않은) 글은 옛 주소에서 그대로 보인다(블로그 301을 먼저 하면 옛 주소↔새 주소 무한 리다이렉트, 2026-10-08 지원 확인) | POST-04, SC-005 |
-| 방문 기록 | 블로그 주소의 화면 요청(볼 수 있는 블로그 화면·글 화면, 관리 화면 제외)마다 `blog_visit`에 블로그·날짜·방문자 하나를 남긴다(하루 한 번, `INSERT IGNORE`). 유입 종류·호스트는 `Referer`로 정하고(플랫폼 주소와 그 아래 블로그면 `INTERNAL`), 주인 본인은 세지 않는다. 기록에 실패해도 화면은 그대로 준다. 앱 안의 화면 전환은 서버를 거치지 않아 세지 않는다 | MNG-03 |
-| 공유 미리보기 | 글 주소면 `index.html`에 `og:title`·`og:description`(요약)·`og:image`(대표 이미지)를 넣는다. 볼 수 없는 글이면 넣지 않는다 | SOC-02 |
+| 블로그 확인 | 주소 규칙에 어긋나거나 예약어인 주소, 없거나 볼 수 없는 블로그 404 화면. 이사한 블로그는 새 블로그 같은 경로로 301(`/@old/category/3` → `/@new/category/3`) (주인의 `/manage/**`는 예외). 옛 블로그가 지워졌어도 이사 대상이 있으면 301(지운 블로그의 관리 화면은 없음). 이사 간 블로그가 삭제됐으면 404. 글 주소 `/{id}`는 아래 글 확인이 먼저다 | BLOG-06, BLOG-07, COM-01 |
+| 글 확인 | `/{id}`가 다른 블로그 소속이고 볼 수 있으면 지금 블로그로 301(`/@b/15` → `/@a/15`), 아니면 404 화면. 옛 블로그가 지워졌어도 옮긴 글은 301, 옮기지 않은 글은 함께 지워져 404. 이사한 블로그에 남은(옮기지 않은) 글은 옛 주소에서 그대로 보인다(블로그 301을 먼저 하면 옛 주소↔새 주소 무한 리다이렉트, 2026-10-08 지원 확인) | POST-04, SC-005 |
+| 방문 기록 | 블로그 주소의 화면 요청(볼 수 있는 블로그 화면·글 화면, 관리 화면 제외)마다 `blog_visit`에 블로그·날짜·방문자 하나를 남긴다(하루 한 번, `INSERT IGNORE`). 유입 종류·호스트는 `Referer`로 정하고(플랫폼 주소면, 그 아래 블로그 화면 `/@{주소}`도 같은 호스트라 `INTERNAL`), 주인 본인은 세지 않는다. 기록에 실패해도 화면은 그대로 준다. 앱 안의 화면 전환은 서버를 거치지 않아 세지 않는다 | MNG-03 |
+| 공유 미리보기 | 글 주소면 `index.html`에 `og:title`·`og:description`(요약)·`og:image`(대표 이미지)·`og:url`(글 주소 전체)을 넣는다. 볼 수 없는 글이면 넣지 않는다 | SOC-02 |
 
 ## 화면별 API
 
@@ -557,7 +559,7 @@
 | 공지 수정·삭제 | 관리자가 자기 공지를 고치고 지울 수 있음 | 작성만 |
 | 같은 카테고리·비슷한 글 개수 | 각 5개 | 다른 개수 |
 | 내 정보 경로 | `/api/me/**`로 통일 | `/api/members/me/**` |
-| 비회원 조회자 식별 | 서버가 주는 `visitor_id` 쿠키(UUID, 1년, 모든 블로그 주소 공통). 키는 회원 `m:{id}`, 비회원 `a:{uuid}` (지원 확인 2026-10-09) | IP 주소, 브라우저 지문 |
+| 비회원 조회자 식별 | 서버가 주는 `visitor_id` 쿠키(UUID, 1년, 플랫폼 주소에 두어 모든 블로그 화면 공통). 키는 회원 `m:{id}`, 비회원 `a:{uuid}` (지원 확인 2026-10-09) | IP 주소, 브라우저 지문 |
 | 주인 본인 조회 | 조회수에 셈 (지원 확인 2026-10-09) | 빼기 |
 | 비밀번호 변경의 지금 비밀번호 틀림 | 400 `VALIDATION_FAILED`, 칸 `currentPassword` (지원 확인 2026-10-09) | 새 오류 코드, 401 |
 | 프로필 사진 이미지 | 본인이 올린 이미지만, 응답은 썸네일 주소 (지원 확인 2026-10-09) | 아무 이미지 |
