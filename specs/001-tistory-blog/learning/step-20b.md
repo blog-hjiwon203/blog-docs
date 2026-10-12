@@ -75,7 +75,7 @@
 | 항목 | 지금 | 언제 |
 | --- | --- | --- |
 | 소셜 콜백 뒤 `complete` | 계약에 없던 `GET /api/auth/oauth/complete?ticket=`을 더함(콜백과 쿠키 주는 곳을 나눔) | rest-api.md·research R-07 구현 메모에 적음 |
-| 제공사 쪽 연결 끊기(카카오 unlink, 구글 토큰 철회) | 하지 않음. 우리 `social_account` 행만 지움(같은 소셜 계정은 다시 가입·연동 가능) | research R-07 구현 메모에 적음. 제공사 토큰을 저장하지 않고, 카카오는 어드민 키가 따로 필요 |
+| 제공사 쪽 연결 끊기(카카오 unlink, 구글 토큰 철회) | 하지 않음. 우리 `social_account` 행만 지움(같은 소셜 계정은 다시 가입·연동 가능) | 2026-10-12 지원 결정으로 이대로 둔다(research R-07 구현 메모). 서비스 동작에는 차이가 없고, 카카오 unlink에 필요한 어드민 키는 모든 사용자를 다룰 수 있어 공용 서버에 두기 위험하다 |
 | 진짜 카카오·구글 로그인 | 가짜 제공사 테스트와 authorize 주소까지만 | 지원이 키를 `config/application-dev.yml`에 넣은 뒤 |
 | 운영 메일 | `APP_MAIL_SENDER` 기본 `log`(로그로만) | 운영 SMTP 계정이 준비되면 환경 변수로 |
 | PKCE, 구글 `auth_time` 확인 | 쓰지 않음 | 받아들임([61](./concepts/61-oauth-social-login.md) 6장) |

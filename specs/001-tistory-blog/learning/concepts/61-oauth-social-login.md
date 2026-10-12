@@ -811,7 +811,7 @@ R-07의 두 거절이 DB의 두 UNIQUE와 하나씩 짝이다.
 
 ### 5.6 탈퇴와 소셜 연동: `MemberTraceCleaner`, `MeResponse`
 
-탈퇴하면 `MemberTraceCleaner`가 `DELETE FROM social_account WHERE member_id = ?`로 연동 행을 지운다. 그래서 같은 카카오 계정으로 다시 오면 **처음 보는 계정**이 되어 새로 가입할 수 있다(테스트 `socialOnlyMemberWithdrawsAfterReauthAndTheAccountCanSignUpAgain`). 카카오 쪽의 "앱 연결 끊기"(카카오 unlink, 구글 토큰 철회)는 하지 않았다. 제공사 토큰을 저장하지 않고, 카카오는 어드민 키가 따로 필요해서다(research R-07 구현 메모).
+탈퇴하면 `MemberTraceCleaner`가 `DELETE FROM social_account WHERE member_id = ?`로 연동 행을 지운다. 그래서 같은 카카오 계정으로 다시 오면 **처음 보는 계정**이 되어 새로 가입할 수 있다(테스트 `socialOnlyMemberWithdrawsAfterReauthAndTheAccountCanSignUpAgain`). 카카오 쪽의 "앱 연결 끊기"(카카오 unlink, 구글 토큰 철회)는 하지 않는다(2026-10-12 지원 결정, research R-07 구현 메모). 그 사람의 카카오 계정 설정 "연결된 서비스"에는 남아 있어 본인이 거기서 끊는다. 카카오 unlink는 모든 사용자를 다룰 수 있는 어드민 키가 필요해 공용 서버에 두기 위험하고, 구글은 토큰을 저장하지 않아서다.
 
 마이페이지는 `GET /api/me`의 `socialAccounts`로 연결 상태를 그린다.
 
