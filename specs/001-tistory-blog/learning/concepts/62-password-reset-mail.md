@@ -599,7 +599,7 @@ spring:
 
 - dev 프로필로 띄우면 Spring Boot가 `./config/application-dev.yml`을 저절로 읽고, `src/main/resources`의 값보다 **먼저** 쓴다([02](./02-configuration-profiles.md)). 그래서 이 파일을 만든 PC만 smtp가 된다.
 - `properties.mail.smtp.*`는 Jakarta Mail에 그대로 넘어가는 설정이다. `auth: true`(로그인), `starttls.enable: true`(587에서 암호화로 바꾸기).
-- 운영(`application-prod.yml`)은 `sender: ${APP_MAIL_SENDER:log}`이고, `spring.mail`은 `smtp.gmail.com:587`에 `username: ${MAIL_USERNAME:}`, `password: ${MAIL_PASSWORD:}`다. 값은 GitHub secrets `MAIL_USERNAME`·`MAIL_PASSWORD`에서 오고, `deploy/deploy.sh`가 `MAIL_PASSWORD`가 있으면 `APP_MAIL_SENDER=smtp`, 없으면 `log`로 넘긴다. 그래서 메일 계정을 secrets에 넣기 전까지는 로그로만 남는다. 카카오·구글 키도 같은 방식이다(`${KAKAO_CLIENT_ID:}` 등).
+- 운영(`application-prod.yml`)은 `sender: ${APP_MAIL_SENDER:log}`이고, `spring.mail`은 `smtp.gmail.com:587`에 `username: ${MAIL_USERNAME:}`, `password: ${MAIL_PASSWORD:}`다. 값은 GitHub secrets `MAIL_USERNAME`·`MAIL_PASSWORD`에서 오고, `deploy/deploy.sh`가 `MAIL_PASSWORD`가 있으면 `APP_MAIL_SENDER=smtp`, 없으면 `log`로 넘긴다. 그래서 메일 계정을 secrets에 넣기 전까지는 로그로만 남는다. 카카오 키도 같은 방식이다(`${KAKAO_CLIENT_ID:}` 등).
 
 `docker-compose.yml`:
 
