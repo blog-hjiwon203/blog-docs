@@ -2,6 +2,8 @@
 
 > 관련 스텝: [스텝 3](../step-03.md) (T010), [스텝 1](../step-01.md) (T002, T004) · 관련 개념: [15-subdomain-host-routing](./15-subdomain-host-routing.md), [16-authorization-visibility](./16-authorization-visibility.md), [19-react-router-api-client](./19-react-router-api-client.md), [07-spring-mvc-exception-handling](./07-spring-mvc-exception-handling.md)
 
+> **스텝 21에서 바뀜**: 블로그 화면 주소가 `alpha.blog.test/15`에서 `blog.test/@alpha/15`로 바뀌었다. `SpaForwardController`는 Host 대신 경로 첫 칸 `@주소`로 블로그를 찾고, 그 뒤를 블로그 안 경로로 써서 404·301·공유 미리보기를 판단한다(5.2의 Host별 분기와 `isUnderPlatform`은 없어졌다). 태그 패턴은 `/{s1:@[^.]+}/tag/{name:.+}`가 되었다. 아래 설명의 원리(서버 폴백, 404 상태의 index.html, 301)는 그대로이고, 바뀐 코드는 [63](./63-path-based-blog-address.md) 3.6, 5.3.
+
 ## 1. 이 문서로 배우는 것
 
 - MPA(여러 페이지 앱)와 SPA(한 페이지 앱)의 차이

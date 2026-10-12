@@ -2,6 +2,8 @@
 
 > 관련 스텝: [스텝 3](../step-03.md) · 관련 결정: spec.md Q6, research.md R-03, AUTH-02, AUTH-03
 
+> **스텝 21에서 바뀜**: 블로그 주소가 경로(`blog.com/@alpha`)가 되어 플랫폼과 모든 블로그가 한 호스트다. 그래서 로그인·기기·방문자·소셜 state 쿠키 모두 `Domain`을 빼고 host-only 쿠키로 준다(research.md R-03). 아래의 `Domain=.blog.test` 예와 3.11의 "서브도메인이라 쿠키를 골랐다"는 스텝 3~20 기준이다. Domain 속성 자체의 설명은 그대로 유효하다. 바뀐 이유와 코드는 [63](./63-path-based-blog-address.md) 3.5, 5.5.
+
 ## 1. 이 문서로 배우는 것
 
 - HTTP가 "상태가 없다(stateless)"는 말의 뜻과, 그래서 쿠키가 생긴 이유

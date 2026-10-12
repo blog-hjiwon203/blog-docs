@@ -34,6 +34,7 @@
 | 19b | [인증 경계 정리](./step-19b.md) | 서비스 분리 대신 모듈러 모놀리스, 인증의 속을 auth로 옮기기, 본인 확인·로그인 끝내기 입구, ArchUnit 경계·계층 테스트 |
 | 20 | [저장한 글·스팸 차단·방문 통계·랭킹·기기 쿠키](./step-20.md) | 저장(스냅숏, 볼 수 없는 글), 블로그별 차단과 금칙어, 하루 방문자와 새벽 모으기, 일·주·월 그래프와 유입 경로, 인기 블로거(정시 칸 캐시)·랭킹 전체보기(409)·추천 블로그, 잠금 악용을 줄이는 기기 쿠키. 메일·소셜(T088·T099·T100)은 키를 받은 뒤 |
 | 20b | [비밀번호 재설정·메일·카카오·구글 로그인](./step-20b.md) | 재설정 링크 메일(256비트 토큰·SHA-256·30분·한 번만), 로그인이 막히면 메일로 잠금 풀기, SMTP 발송과 Mailpit, 카카오·구글 인가 코드 흐름(state를 Redis와 쿠키에, callback → complete), 닉네임 확인 뒤 소셜 가입, 연동·해제(마지막 수단 지키기), 소셜 회원 탈퇴 재인증 |
+| 21 | [블로그 주소를 경로로](./step-21.md) | 서브도메인(`alpha.blog.com`)을 경로(`blog.com/@alpha`)로(배포 서버에 와일드카드 DNS가 없어서), 블로그 API는 `X-Blog-Address` 헤더(①안), 쿠키 Domain 없앰, `/@주소` 화면의 404·301·공유 미리보기, React Router basename, 같은 출처 기준 열린 리다이렉트 |
 
 ## 개념 문서
 
@@ -109,6 +110,7 @@
 | 문서 | 다루는 것 |
 | --- | --- |
 | [15 서브도메인과 Host 라우팅](./concepts/15-subdomain-host-routing.md) | DNS, `/etc/hosts`, Host 헤더, 멀티테넌시, 인자 해석기, 같은 경로를 Host로 나누기 |
+| [63 블로그 주소를 경로로](./concepts/63-path-based-blog-address.md) | 서브도메인과 경로 주소(와일드카드 DNS·nginx `server_name`·인증서), `@`를 붙이는 이유, API에 블로그 알리기(Host·사용자 지정 헤더·경로 칸, ①안과 ②안), 헤더는 권한이 아님, 같은 출처와 사전 요청, 한 출처의 XSS 영향, host-only 쿠키, `/@주소` 서버 확인과 화면·파일 주소 구분, React Router `basename`, 같은 출처 열린 리다이렉트, 경로 패턴에 `/` 넣기 함정 (스텝 21, 15의 다음 이야기) |
 | [16 인가와 가시성 판단](./concepts/16-authorization-visibility.md) | 인증과 인가, 존재를 숨기는 404, 정책 객체, sealed 타입과 switch |
 | [17 멱등성과 Redis](./concepts/17-idempotency-redis.md) | 멱등성, 중복 요청, Idempotency-Key, Redis 기초와 `SET NX` |
 | [35 캐시: Spring Cache와 Redis](./concepts/35-spring-cache-redis.md) | 캐시와 오래된 값, TTL, `@Cacheable`과 프록시, Redis 키·Java 직렬화, `sync`, 캐시에 번호만 두기 |
