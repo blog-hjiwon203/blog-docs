@@ -26,7 +26,7 @@
 | suspended_until | datetime, NULL | NULL + SUSPENDED = 영구. 정지 사유는 `moderation_log`의 최신 SUSPEND 행 |
 | withdrawn_at | datetime, NULL | |
 
-**social_account**: member_id, provider(KAKAO, GOOGLE), provider_user_id. UNIQUE(provider, provider_user_id), UNIQUE(member_id, provider).
+**social_account**: member_id, provider(KAKAO. DB CHECK에는 GOOGLE도 있지만 구글 로그인은 뺐다, 2026-10-12 지원 결정), provider_user_id. UNIQUE(provider, provider_user_id), UNIQUE(member_id, provider).
 
 **email_verification** (OWN-01): email, code, expires_at, verified_at. 가입 전 단계라 회원과 관계가 없고 이메일 값으로 찾는다. 인덱스 (email, created_at DESC).
 
