@@ -34,6 +34,7 @@
 - 인증은 `Domain=.blog.com; HttpOnly; Secure; SameSite=Lax` 쿠키다(Q6, [조사](../research.md) R-03). Refresh Token 쿠키를 함께 준다. 로그인 유지(AUTH-03)를 고르면 14일 남는 쿠키, 고르지 않으면 브라우저를 닫으면 사라지는 쿠키이고 30분 동안 요청이 없으면 서버에서 끝난다(R-03). Access 토큰이 끝나면 서버가 요청을 처리하면서 새 Access 쿠키를 준다.
 - 상태를 바꾸는 요청(POST·PUT·PATCH·DELETE)은 `X-Requested-With: XMLHttpRequest` 헤더가 없으면 403 `CSRF_REJECTED`다.
 - 정지된 회원이 이미 로그인한 상태로 API를 부르면 그 요청부터 403 `MEMBER_SUSPENDED`와 쿠키 삭제다(ADMIN-02). 화면 주소 요청은 403 대신 비회원으로 그리고, 화면이 부르는 첫 API에서 정지 안내를 받는다(화면이 JSON 오류로 깨지지 않게, 2026-10-08 지원 확인). 한 화면이 API 여러 개를 동시에 부르면 쿠키가 지워지기 전에 나간 요청은 모두 403이다. 화면(api 클라이언트)은 사유를 적어 두고 읽기(GET) 요청을 비회원으로 한 번 더 보내 화면을 그린다(스텝 13b).
+- 로그인에 성공하면 기기 쿠키 `device`(`회원 번호.임의 값.서명`, HMAC-SHA256, HttpOnly, 1년, 로그아웃해도 남음)를 함께 준다. 로그인할 때 이 쿠키가 그 이메일 회원의 것이면 틀린 횟수를 이메일이 아니라 기기로 센다(다른 사람이 내 이메일을 막아도 전에 로그인한 브라우저는 들어옴). 기기도 15분에 5번 틀리면 429이고, IP별 제한은 그대로다(T055b, R-17).
 - 탈퇴한 회원의 쿠키가 남아 있으면 쿠키를 지우고 비회원으로 처리한다. 로그인이 필요한 요청은 그대로 401이다(2026-10-08 지원 확인).
 - 본문 HTML(`contentHtml`)은 서버가 허용 목록으로 정화해 저장하고, 그 밖의 문자열은 글자 그대로 돌려준다. 프론트는 `contentHtml`만 DOMPurify를 한 번 더 거쳐 넣고, 나머지는 텍스트로 넣는다.
 
@@ -245,7 +246,7 @@
 | POST | /api/auth/email-verifications/verify | P | 누구나 | `{ email, code }` → 200. 화면 단계 확인용(코드를 쓰지는 않음) | OWN-01 |
 | GET | /api/auth/nickname-availability?nickname= | P | 누구나 | `{ available }`. 형식 오류면 400 | AUTH-01 |
 | POST | /api/auth/signup | P | 누구나 | `{ email, code, password, nickname }` → 201 `Me` + 로그인 쿠키. 서버가 코드를 다시 확인하고 `verified_at`을 남긴다. 비밀번호는 8자 이상 영문+숫자, 72바이트 이하(아니면 400 `VALIDATION_FAILED`, `field: password`) | AUTH-01, OWN-01 |
-| POST | /api/auth/login | P | 누구나 | `{ email, password, rememberMe }` → 200 `Me` + 쿠키. 실패 401 `LOGIN_FAILED`, 정지 403 `MEMBER_SUSPENDED` | AUTH-01, AUTH-03, ADMIN-02 |
+| POST | /api/auth/login | P | 누구나 | `{ email, password, rememberMe }` → 200 `Me` + 쿠키(로그인 쿠키와 기기 쿠키). 실패 401 `LOGIN_FAILED`, 정지 403 `MEMBER_SUSPENDED` | AUTH-01, AUTH-03, ADMIN-02 |
 | POST | /api/auth/logout | \* | 회원 | 204. 쿠키 삭제 + 토큰 무효화. 모든 블로그 주소에서 로그아웃 | AUTH-02 |
 | POST | /api/auth/token/refresh | \* | 누구나 | Refresh 쿠키로 Access 쿠키 재발급(Access가 끝났으면 새 쿠키, 살아 있으면 그대로) → 204. Refresh가 없거나 끝났거나 탈퇴면 401. 정지면 다른 API와 같이 403 `MEMBER_SUSPENDED`(정지 사유, 2026-10-10 지원 결정) | AUTH-03 |
 | GET | /api/auth/oauth/{provider}/authorize?mode=&redirect= | P | 누구나 | `provider`: `kakao`·`google`. `mode`: `login`(기본)·`link`·`reauth`. state를 만들고 제공사로 302 | AUTH-01, OWN-03, AUTH-06 |
@@ -276,7 +277,7 @@
 | DELETE | /api/me | P | 회원 | `{ password }`(이메일 가입) 또는 `{}`(소셜 재인증 10분 안, 소셜 로그인과 함께 스텝 20) → 204 + 쿠키 삭제. 본인 확인 실패 401 `LOGIN_FAILED`, 비밀번호 변경과 같은 횟수 제한(회원별 15분 5번, 429). 처리: 그 회원의 블로그를 모두 삭제(대표 포함, 블로그 삭제와 같은 규칙), 그 회원이 누른 공감·구독을 지우고 공감 수를 맞추며, 그 회원의 댓글·방명록을 소프트 삭제하고 댓글 수를 맞추고, 소셜 연동을 끊고, 회원은 `WITHDRAWN`과 이메일·비밀번호를 비운다(같은 이메일로 다시 가입할 수 있음). 글·댓글의 수정 시각은 그대로 | AUTH-06 |
 | GET | /api/me/blogs | P | 회원 | 내 활성 블로그 `[{ id, address, name, isPrimary, movedTo, postCount }]`, 만든 순서. `movedTo`는 이사한 블로그의 새 주소(아니면 `null`), `postCount`는 지우지 않은 발행 글 수(비공개·숨김 포함, 임시저장 제외). 마이페이지가 이 목록 아래에 "블로그 만들기 (n/5)"를 둔다 | BLOG-08, BLOG-01 |
 | PUT | /api/me/primary-blog | P | 회원 | `{ blogId }` → 204. 내 활성 블로그만(아니거나 비면 400 `fieldErrors[].field = blogId`). 이미 대표면 그대로 204 | BLOG-08 |
-| GET | /api/me/bookmarks?cursor= | P | 회원 | 저장한 글 20, 저장 최신순. 볼 수 있으면 `{ post: PostSummary, savedAt, visible: true }`, 볼 수 없으면 `{ postId, visible: false, titleSnapshot, blogNameSnapshot, savedAt }` | SOC-03 |
+| GET | /api/me/bookmarks?cursor= | P | 회원 | 저장한 글 20, 저장 최신순 `{ content, nextCursor }`. 볼 수 있으면 `{ postId, post: PostSummary, savedAt, visible: true }`, 볼 수 없으면 `{ postId, visible: false, titleSnapshot, blogNameSnapshot, savedAt }`(없는 칸은 뺌). 볼 수 있는지는 글 상세와 같은 판단으로 지금 다시 보고, 왜 볼 수 없는지는 알리지 않는다(주인이어도 관리자가 숨긴 글은 볼 수 없음으로) | SOC-03 |
 | DELETE | /api/me/bookmarks/{postId} | P | 회원 | 204. 목록에서 바로 저장 취소(볼 수 없는 글도) | SOC-03 |
 | GET | /api/me/notifications?cursor= | P | 회원 | 알림 20 최신순 `{ content: [{ id, type, message, link, read, createdAt }], nextCursor }`. 볼 수 없게 된 대상의 알림은 빠져서 한 묶음이 20개보다 적을 수 있다(다음 커서는 읽은 행 기준) | SUB-04 |
 | GET | /api/me/notifications/unread-count | \* | 회원 | `{ count }`. 상단 종 표시. `Me.unreadNotificationCount`와 같은 값. 볼 수 없게 된 대상의 알림도 읽기 전까지 센다 | SUB-04 |
@@ -409,11 +410,11 @@
 | --- | --- | --- | --- | --- | --- |
 | GET | /api/posts/{id}/comments?cursor= | B | 누구나 | `Comment` 20 작성순, 답글은 부모 안에. `+ totalCount` | CMT-01, CMT-05, CMT-06 |
 | POST | /api/posts/{id}/comments | B | 회원 | `{ content, parentId?, secret }` → 201 `Comment`. `Idempotency-Key` 필수. 차단 403 `BLOCKED_BY_BLOG`, 금칙어 400 `BANNED_WORD`, 댓글 막힘 403 `COMMENTS_DISABLED`, 답글의 답글 400 | CMT-01, CMT-05, CMT-06, CMT-07, MNG-04 |
-| PATCH | /api/comments/{id} | B | 본인 | `{ content }` → `Comment`. 숨긴 댓글은 403. 상태 코드 순서: 없음·지움·글을 볼 수 없음 404 → 비회원 401 → 본인 아님(주인도)·숨김 403 → 입력 400. 고치면 `updatedAt`이 생긴다 | CMT-03 |
+| PATCH | /api/comments/{id} | B | 본인 | `{ content }` → `Comment`. 숨긴 댓글은 403. 상태 코드 순서: 없음·지움·글을 볼 수 없음 404 → 비회원 401 → 본인 아님(주인도)·숨김 403 → 차단된 회원 403 `BLOCKED_BY_BLOG` → 입력 400 → 금칙어 400 `BANNED_WORD`(새로 쓸 때와 같게, 2026-10-11 지원 결정). 고치면 `updatedAt`이 생긴다 | CMT-03, MNG-04 |
 | DELETE | /api/comments/{id} | B | 본인·주인 | 204. 답글이 있으면 자리만 남김 | CMT-01, CMT-02 |
 | GET | /api/guestbook?page= | B | 누구나 | `Comment` 페이지 20 최신순(`{ content, page, size, totalElements, totalPages }`, 최상위 글 기준), 답글은 부모 안에 작성순. 비밀글은 블로그 주인·작성자가 아니면 `SECRET` | CMT-04 |
 | POST | /api/guestbook | B | 회원 | `{ content, parentId?, secret }` → 201. `Idempotency-Key`, 차단·금칙어는 댓글과 같음 | CMT-04, MNG-04 |
-| PATCH | /api/guestbook/{id} | B | 본인 | `{ content }` → `Comment`. 상태 코드 순서는 댓글 고치기와 같다(404 → 401 → 403 → 400) | CMT-04 |
+| PATCH | /api/guestbook/{id} | B | 본인 | `{ content }` → `Comment`. 상태 코드 순서는 댓글 고치기와 같다(404 → 401 → 403 → 차단 403 → 400 → 금칙어 400) | CMT-04, MNG-04 |
 | DELETE | /api/guestbook/{id} | B | 본인·주인 | 204 | CMT-04 |
 
 ### SOC 반응
@@ -422,8 +423,8 @@
 | --- | --- | --- | --- | --- | --- |
 | PUT | /api/posts/{id}/like | B | 회원 | → `{ liked: true, likeCount }` | SOC-01 |
 | DELETE | /api/posts/{id}/like | B | 회원 | → `{ liked: false, likeCount }` | SOC-01 |
-| PUT | /api/posts/{id}/bookmark | B | 회원 | → `{ bookmarked: true }`. 저장 시점 제목·블로그 이름을 남김 | SOC-03 |
-| DELETE | /api/posts/{id}/bookmark | B | 회원 | → `{ bookmarked: false }` | SOC-03 |
+| PUT | /api/posts/{id}/bookmark | B | 회원 | → `{ bookmarked: true }`. 멱등(이미 저장했으면 그대로, 처음 저장한 시각·제목이 남음). 저장 시점 제목·블로그 이름을 남김. 순서: 볼 수 없는 글 404(구독자 공개 403) → 비회원 401 | SOC-03 |
+| DELETE | /api/posts/{id}/bookmark | B | 회원 | → `{ bookmarked: false }`. 멱등, 순서는 저장과 같음 | SOC-03 |
 
 공유(SOC-02)는 API가 없다. 화면이 글 주소를 복사하거나 SNS 공유 주소를 열고, 미리보기는 [화면 주소 단계](#화면-주소-단계에서-서버가-하는-일-api-없음)의 메타 태그가 맡는다.
 
@@ -434,7 +435,7 @@
 | PUT | /api/blogs/{blogId}/subscription | \* | 회원 | → `{ subscribed: true, subscriberCount }`. 멱등(이미 구독이면 그대로). 볼 수 없거나 이사한 블로그 404, 자기 블로그 400 `fieldErrors[].field = blogId`, 차단된 회원 403 `BLOCKED_BY_BLOG`(MNG-04, 백로그). 새로 구독했을 때만 주인에게 알림 | SUB-01, SUB-03, MNG-04 |
 | DELETE | /api/blogs/{blogId}/subscription | \* | 회원 | → `{ subscribed: false, subscriberCount }`. 멱등(구독하지 않았어도 같은 응답) | SUB-01 |
 | GET | /api/feed?cursor= | P | 회원 | 구독한 블로그의 새 글 `PostSummary` 20 최신순 `{ content, nextCursor }`(홈 최신 글과 같은 모양). 보는 사람이 볼 수 있는 글만(구독자 공개 글 포함) | SUB-02 |
-| GET | /api/recommend/blogs | P | 누구나 | 추천 블로그 5 `[{ blog, owner, subscriberCount, recentPostTitle }]`. 비회원은 인기 블로거와 같음 | SUB-06 |
+| GET | /api/recommend/blogs | P | 누구나 | 추천 블로그 5 `[BlogCard]`(`recentPostTitle` 포함). 인기 블로거 순위에서 내 블로그와 이미 구독한 블로그를 뺀 위에서부터. 비회원은 인기 블로거와 같음 | SUB-06 |
 
 ### SRCH 검색 · HOME 홈
 
@@ -446,9 +447,9 @@
 | GET | /api/home/latest?cursor= | P | 누구나 | 모든 블로그 공개 글 `PostSummary` 20 최신순 | HOME-01 |
 | GET | /api/home/popular | P | 누구나 | 인기 점수 상위 10 `{ snapshotAt, items: [{ rank, post }] }`. 5분 스냅숏 | HOME-02 |
 | GET | /api/home/topics/{topic} | P | 누구나 | 주제별 `PostSummary[]` 6. 인기 점수 순(주제마다 5분 캐시), 모자라면 그 주제의 최신 글. `topic`은 주제 code(`IT_DEV` 등), 모르는 값은 404 | HOME-03 |
-| GET | /api/home/bloggers | P | 누구나 | 인기 블로거 상위 5 `{ snapshotAt, items: [{ rank, blog, owner }] }`. 1시간 스냅숏 | HOME-04 |
-| GET | /api/ranking/posts?snapshotAt=&offset= | P | 누구나 | 인기 글 100위까지 20개씩. 처음엔 `snapshotAt` 없이. 스냅숏이 바뀌었으면 409 `RANKING_UPDATED` | HOME-05 |
-| GET | /api/ranking/bloggers?snapshotAt=&offset= | P | 누구나 | 인기 블로거 100위까지 20개씩. 같은 규칙 | HOME-05 |
+| GET | /api/home/bloggers | P | 누구나 | 인기 블로거 상위 5 `{ snapshotAt, items: [BlogCard], nextOffset: null }`. `BlogCard` = `{ rank, blog: { id, address, name, description, profileImageUrl }, owner: MemberSummary, subscriberCount, recentPostTitle? }`. 1시간 스냅숏: [정시 − 7일, 정시)의 점수, `snapshotAt` = 그 정시. 볼 수 없거나 이사한 블로그는 뺌 | HOME-04 |
+| GET | /api/ranking/posts?snapshotAt=&offset= | P | 누구나 | 인기 글 100위까지 20개씩 `{ snapshotAt, items: [{ rank, post: PostSummary }], nextOffset }`(마지막이면 `nextOffset: null`). 홈 인기 글과 같은 스냅숏. 처음엔 `snapshotAt` 없이. 스냅숏이 바뀌었으면 409 `RANKING_UPDATED`(`detail.snapshotAt` = 새 기준 시각). `offset`은 0~99(아니면 400 `offset`), `snapshotAt` 형식이 틀리면 400 | HOME-05 |
+| GET | /api/ranking/bloggers?snapshotAt=&offset= | P | 누구나 | 인기 블로거 100위까지 20개씩 `{ snapshotAt, items: [BlogCard], nextOffset }`. 같은 규칙 | HOME-05 |
 | GET | /api/notices?page= | P | 누구나 | 공지 목록 10 최신순 `[{ id, title, createdAt }]` | ADMIN-06 |
 | GET | /api/notices/latest | P | 누구나 | 홈 상단 최신 공지 1개 `{ id, title, createdAt }`. 공지가 없으면 본문 없이 200(화면은 띠를 숨김) | ADMIN-06 |
 | GET | /api/notices/{id} | P | 누구나 | `{ id, title, content, createdAt, updatedAt }`. `content`는 HTML이 아니라 글자(화면은 줄바꿈만 살려 글자로 넣음). 없으면 404 | ADMIN-06 |
@@ -463,16 +464,16 @@
 | PATCH | /api/manage/posts | `{ postIds, visibility }` → `{ updatedCount }` 일괄 공개 범위. `postIds` 1~100개. 이 블로그의 지우지 않은 글만 바꾸고 남의 글·지운 글·없는 번호는 건너뛴다(수에서 빠짐). 한 트랜잭션 | MNG-01 |
 | DELETE | /api/manage/posts | `{ postIds }` → `{ deletedCount }` 일괄 삭제(글 하나 삭제와 같은 처리). `postIds` 1~100개, 건너뛰는 규칙은 위와 같음 | MNG-01 |
 | GET | /api/manage/comments?type=comment\|guestbook&page= | 받은 댓글·방명록 20 최신순 `[{ ...Comment, post: { id, title } \| null }]` 페이지. "받은" 것이라 주인 자신이 쓴 것은 빼고, 지운 것·지운 글의 댓글도 뺀다. 답글도 한 줄씩(`parentId`로 구분, `replies`는 빈 배열). `type`을 빼면 `comment`, 그 밖의 값은 400. 비회원 401 → 주인 아님 403 → 400 | MNG-02 |
-| GET | /api/manage/stats | 관리 홈 `{ today, yesterday, total, recentComments[5], recentPosts[5] }` | MNG-03 |
-| GET | /api/manage/stats/visitors?unit=day\|week\|month&from=&to= | `[{ date, visitorCount, viewCount }]`. 주·월은 일별 합 | MNG-03 |
-| GET | /api/manage/stats/popular-posts?range=all\|7d | `[{ rank, post, viewCount }]` 10 | MNG-03 |
-| GET | /api/manage/stats/referrers?from=&to= | `{ byType: [{ type, count }], bySite: [{ type, host, count }] }` | MNG-03 |
-| GET | /api/manage/blocked-members?page= | `[{ member: MemberSummary, memo, blockedAt }]` 20 | MNG-04 |
-| POST | /api/manage/blocked-members | `{ memberId, memo? }` → 201. 그 회원의 이 블로그 구독을 지움. 중복 409 `ALREADY_BLOCKED` | MNG-04 |
-| DELETE | /api/manage/blocked-members/{memberId} | 204 | MNG-04 |
+| GET | /api/manage/stats | 관리 홈 `{ today, yesterday, total, recentComments[5], recentPosts[5] }`. 오늘은 바로 센 값, 어제까지는 새벽에 모은 값, `total` = 모아 둔 누적 + 오늘. `recentComments`는 받은 댓글(댓글 관리와 같은 모양), `recentPosts`는 `{ id, title, viewCount, publishedAt }` | MNG-03 |
+| GET | /api/manage/stats/visitors?unit=day\|week\|month&from=&to= | `[{ date, visitorCount, viewCount }]`. 주·월은 일별 합, `date`는 칸의 첫날(주는 월요일). 기본은 최근 14일·12주·12달, 값이 없는 칸은 0. 기간은 400일까지(넘으면 400 `from`) | MNG-03 |
+| GET | /api/manage/stats/popular-posts?range=all\|7d | `[{ rank, post: { id, title }, viewCount }]` 10. `all`은 누적 조회 수, `7d`는 최근 7일 조회 기록 | MNG-03 |
+| GET | /api/manage/stats/referrers?from=&to= | `{ byType: [{ type, count }], bySite: [{ type, host, count }] }`. 기본은 최근 30일(오늘 포함), `bySite`는 상위 20. `type`은 `SEARCH`·`SNS`·`DIRECT`·`INTERNAL`(이 서비스 안)·`OTHER` | MNG-03 |
+| GET | /api/manage/blocked-members?page= | `{ member: MemberSummary, memo, blockedAt }` 페이지 20, 차단 최신순 | MNG-04 |
+| POST | /api/manage/blocked-members | `{ memberId, memo? }` → 201. 그 회원의 이 블로그 구독을 지움. 없거나 탈퇴한 회원 404, 자기 자신 400 `memberId`, 메모 200자 초과 400 `memo`, 중복 409 `ALREADY_BLOCKED` | MNG-04 |
+| DELETE | /api/manage/blocked-members/{memberId} | 204. 멱등 | MNG-04 |
 | GET | /api/manage/banned-words | `[{ id, word }]` 전체 | MNG-04 |
 | POST | /api/manage/banned-words | `{ word }`(1~30자) → 201. 중복 409 `NAME_TAKEN`, 100개 초과 409 `BANNED_WORD_LIMIT` | MNG-04 |
-| DELETE | /api/manage/banned-words/{id} | 204 | MNG-04 |
+| DELETE | /api/manage/banned-words/{id} | 204. 이 블로그의 금칙어가 아니면 404 | MNG-04 |
 
 - 관리 홈의 `today`는 오늘 지금까지의 방문자(`blog_visit` 실시간), `yesterday`는 `blog_daily_stat`, `total`은 `blog.total_visitor_count + today`.
 - 차단할 회원은 MNG-02 댓글 목록이나 글 댓글의 작성자에서 고른다(`memberId`).
@@ -521,7 +522,7 @@
 | --- | --- | --- |
 | 블로그 확인 | 없거나 볼 수 없는 블로그 404 화면. 이사한 블로그는 새 블로그 같은 경로로 301 (주인의 `/manage/**`는 예외). 옛 블로그가 지워졌어도 이사 대상이 있으면 301(지운 블로그의 관리 화면은 없음). 이사 간 블로그가 삭제됐으면 404. 글 주소 `/{id}`는 아래 글 확인이 먼저다 | BLOG-06, BLOG-07, COM-01 |
 | 글 확인 | `/{id}`가 다른 블로그 소속이고 볼 수 있으면 지금 블로그로 301, 아니면 404 화면. 옛 블로그가 지워졌어도 옮긴 글은 301, 옮기지 않은 글은 함께 지워져 404. 이사한 블로그에 남은(옮기지 않은) 글은 옛 주소에서 그대로 보인다(블로그 301을 먼저 하면 옛 주소↔새 주소 무한 리다이렉트, 2026-10-08 지원 확인) | POST-04, SC-005 |
-| 방문 기록 | 블로그 주소의 화면 요청마다 `blog_visit`에 블로그·날짜·방문자 하나를 남긴다. 유입 종류·호스트는 `Referer`로 정하고, 주인 본인은 세지 않는다 | MNG-03 |
+| 방문 기록 | 블로그 주소의 화면 요청(볼 수 있는 블로그 화면·글 화면, 관리 화면 제외)마다 `blog_visit`에 블로그·날짜·방문자 하나를 남긴다(하루 한 번, `INSERT IGNORE`). 유입 종류·호스트는 `Referer`로 정하고(플랫폼 주소와 그 아래 블로그면 `INTERNAL`), 주인 본인은 세지 않는다. 기록에 실패해도 화면은 그대로 준다. 앱 안의 화면 전환은 서버를 거치지 않아 세지 않는다 | MNG-03 |
 | 공유 미리보기 | 글 주소면 `index.html`에 `og:title`·`og:description`(요약)·`og:image`(대표 이미지)를 넣는다. 볼 수 없는 글이면 넣지 않는다 | SOC-02 |
 
 ## 화면별 API
