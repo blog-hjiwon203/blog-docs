@@ -93,6 +93,7 @@
 | 400 | `INVALID_VERIFICATION_CODE` | 이메일 인증 코드가 틀림 | |
 | 400 | `VERIFICATION_EXPIRED` | 인증 코드 만료 | |
 | 400 | `RESET_TOKEN_INVALID` | 재설정 링크가 틀렸거나 만료·사용됨 | |
+| 400 | `SOCIAL_SIGNUP_EXPIRED` | 소셜 가입 토큰이 없거나 10분 지났거나 이미 씀(스텝 20b) | |
 | 400 | `BLOG_ADDRESS_INVALID` | 주소 규칙 위반·예약어 | `fieldErrors` |
 | 400 | `UNSUPPORTED_IMAGE` | jpg/png/gif/webp가 아님(파일 앞부분으로 판단), 파일 이름의 확장자가 jpg·jpeg·png·gif·webp가 아니거나 실제 형식과 다름 | |
 | 400 | `IMAGE_TOO_LARGE` | 10MB 초과 | |
@@ -246,25 +247,33 @@
 | POST | /api/auth/email-verifications/verify | P | 누구나 | `{ email, code }` → 200. 화면 단계 확인용(코드를 쓰지는 않음) | OWN-01 |
 | GET | /api/auth/nickname-availability?nickname= | P | 누구나 | `{ available }`. 형식 오류면 400 | AUTH-01 |
 | POST | /api/auth/signup | P | 누구나 | `{ email, code, password, nickname }` → 201 `Me` + 로그인 쿠키. 서버가 코드를 다시 확인하고 `verified_at`을 남긴다. 비밀번호는 8자 이상 영문+숫자, 72바이트 이하(아니면 400 `VALIDATION_FAILED`, `field: password`) | AUTH-01, OWN-01 |
-| POST | /api/auth/login | P | 누구나 | `{ email, password, rememberMe }` → 200 `Me` + 쿠키(로그인 쿠키와 기기 쿠키). 실패 401 `LOGIN_FAILED`, 정지 403 `MEMBER_SUSPENDED` | AUTH-01, AUTH-03, ADMIN-02 |
+| POST | /api/auth/login | P | 누구나 | `{ email, password, rememberMe }` → 200 `Me` + 쿠키(로그인 쿠키와 기기 쿠키). 실패 401 `LOGIN_FAILED`, 정지 403 `MEMBER_SUSPENDED`. 이메일별 횟수 제한에 걸리면(429) 가입한 이메일이면 그 메일함으로 "본인이면 이 링크로" 재설정 링크 메일을 15분에 한 번 보낸다(응답은 같음, R-17 ②, 스텝 20b) | AUTH-01, AUTH-03, ADMIN-02 |
 | POST | /api/auth/logout | \* | 회원 | 204. 쿠키 삭제 + 토큰 무효화. 모든 블로그 주소에서 로그아웃 | AUTH-02 |
 | POST | /api/auth/token/refresh | \* | 누구나 | Refresh 쿠키로 Access 쿠키 재발급(Access가 끝났으면 새 쿠키, 살아 있으면 그대로) → 204. Refresh가 없거나 끝났거나 탈퇴면 401. 정지면 다른 API와 같이 403 `MEMBER_SUSPENDED`(정지 사유, 2026-10-10 지원 결정) | AUTH-03 |
 | GET | /api/auth/oauth/{provider}/authorize?mode=&redirect= | P | 누구나 | `provider`: `kakao`·`google`. `mode`: `login`(기본)·`link`·`reauth`. state를 만들고 제공사로 302 | AUTH-01, OWN-03, AUTH-06 |
-| GET | /api/auth/oauth/{provider}/callback | P | 누구나 | state 확인 후 302. 아래 [소셜 로그인 흐름](#소셜-로그인-흐름) | AUTH-01, OWN-03 |
+| GET | /api/auth/oauth/{provider}/callback | \* | 누구나 | 제공사 콘솔에 등록한 리다이렉트 URI(개발은 `localhost`일 수 있음). state를 한 번 쓰고 지운 뒤, code를 제공사 회원 번호로 바꿔 2분짜리 표를 만들고 로그인을 시작한 플랫폼 주소의 `complete`로 302. state가 없거나 썼으면 `blog.com/login?error=OAUTH_FAILED` | AUTH-01, OWN-03 |
+| GET | /api/auth/oauth/complete?ticket= | P | 누구나 | 표를 한 번 쓰고, 이 브라우저의 `oauth_state` 쿠키가 표의 state와 같아야 진행(로그인 CSRF 방지). 아래 [소셜 로그인 흐름](#소셜-로그인-흐름)의 결과로 302 (스텝 20b) | AUTH-01, OWN-03, AUTH-06 |
 | POST | /api/auth/oauth/signup | P | 누구나 | `{ signupToken, nickname }` → 201 `Me` + 쿠키. 처음 보는 소셜 계정의 닉네임 확인 단계 | AUTH-01 |
 | POST | /api/auth/password-reset | P | 누구나 | `{ email }` → 202. 가입된 이메일이 아니어도 같은 응답(가입 여부를 드러내지 않음) | OWN-02 |
 | PUT | /api/auth/password-reset | P | 누구나 | `{ token, newPassword }` → 204. 틀렸거나 30분 지났거나 쓴 링크면 400 `RESET_TOKEN_INVALID` | OWN-02 |
 
 #### 소셜 로그인 흐름
 
-| mode | 상황 | 콜백 결과 |
+`authorize`(플랫폼 주소) → 제공사 로그인 → `callback`(콘솔에 등록한 주소) → 로그인을 시작한 플랫폼 주소의 `complete` → 아래 결과로 302. 로그인 쿠키는 `.{플랫폼}` 도메인이라 플랫폼 주소의 `complete`에서 준다. 구글은 https가 아니면 리다이렉트 URI로 `localhost`만 받아서, 개발에서는 콜백과 쿠키를 주는 곳을 나눴다(스텝 20b, 2026-10-12). 아래 주소는 모두 시작한 플랫폼 주소 기준이다.
+
+| mode | 상황 | 결과 |
 | --- | --- | --- |
 | `login` | 연결된 소셜 계정, 활동 회원 | 쿠키 발급, `redirect`로 302 (우리 서비스 주소만, 아니면 홈) |
-| `login` | 연결된 소셜 계정, 정지 회원 | `blog.com/login?error=MEMBER_SUSPENDED`로 302 (화면이 `POST /api/auth/login`과 같은 안내) |
-| `login` | 처음 보는 소셜 계정 | `blog.com/signup/social?token={signupToken}`으로 302. 토큰은 10분 유효, 제공사 이메일은 담지 않음 |
+| `login` | 연결된 소셜 계정, 정지 회원 | `blog.com/login?error=MEMBER_SUSPENDED&reasonMessage=…&until=…`로 302 (화면이 `POST /api/auth/login`과 같은 사유·기한 안내, 기한이 없으면 영구) |
+| `login` | 처음 보는 소셜 계정 | `blog.com/signup/social?token={signupToken}&provider={provider}`으로 302. 토큰은 10분 유효, 제공사 이메일은 담지 않음. `provider`는 화면 문구("카카오 계정으로 새로 가입합니다")용 |
 | `link` | 처음 보는 소셜 계정 | 연결 후 `blog.com/me?linked={provider}` |
 | `link` | 다른 회원에 연결됨 / 같은 제공사 이미 연결 | `blog.com/me?error=SOCIAL_ALREADY_LINKED` / `PROVIDER_ALREADY_LINKED` |
 | `reauth` | 로그인한 회원 본인의 소셜 계정 | 10분짜리 재인증 표시를 남기고 `blog.com/me/withdraw?reauth=ok` |
+| `reauth` | 다른 회원의 소셜 계정, 연결 안 된 계정 | `blog.com/me/withdraw?error=REAUTH_FAILED` |
+| 모두 | 제공사 화면에서 취소 | 시작한 화면(`/login`, `/me`, `/me/withdraw`)에 `?error=OAUTH_CANCELLED` |
+| 모두 | code를 회원 번호로 못 바꿈, 표·state 쿠키가 없거나 다름, `link`·`reauth`를 시작한 회원과 끝내는 회원이 다름 | 시작한 화면에 `?error=OAUTH_FAILED` |
+| 모두 | 그 제공사의 앱 키가 설정되지 않음 | `authorize`가 바로 시작한 화면에 `?error=OAUTH_UNAVAILABLE` |
+| `link`·`reauth` | 비회원이 시작 | `blog.com/login?redirect=/me`(또는 `/me/withdraw`) |
 
 ### ME 내 정보 (마이페이지)
 
@@ -273,7 +282,7 @@
 | GET | /api/me | \* | 회원 | `Me`. 비회원이면 401 (프론트는 로그인 상태 확인에 씀) | AUTH-04, AUTH-05 |
 | PATCH | /api/me | P | 회원 | `{ nickname?, profileImageId? }` → `Me`. 보내지 않은 칸은 그대로. 닉네임 중복 409(대소문자만 바꾸기는 됨). `profileImageId`는 본인이 올린 이미지만(아니면 400 `fieldErrors[].field = profileImageId`). `Me.profileImageUrl`은 썸네일 주소 | AUTH-05 |
 | PUT | /api/me/password | P | 회원 | `{ currentPassword, newPassword }` → 204. 이메일 가입 회원만(아니면 403). 지금 비밀번호가 틀리면 400(`fieldErrors[].field = currentPassword`), 새 비밀번호는 가입 규칙(`newPassword`). 지금 로그인과 다른 기기 로그인은 그대로 | AUTH-05 |
-| DELETE | /api/me/social/{provider} | P | 회원 | 204. 남는 로그인 수단이 없으면 409 `LAST_LOGIN_METHOD`. 연동은 `authorize?mode=link` | OWN-03 |
+| DELETE | /api/me/social/{provider} | P | 회원 | 204(연결되어 있지 않아도 204). 남는 로그인 수단이 없으면 409 `LAST_LOGIN_METHOD`, 모르는 제공사 404. 연동은 `authorize?mode=link` | OWN-03 |
 | DELETE | /api/me | P | 회원 | `{ password }`(이메일 가입) 또는 `{}`(소셜 재인증 10분 안, 소셜 로그인과 함께 스텝 20) → 204 + 쿠키 삭제. 본인 확인 실패 401 `LOGIN_FAILED`, 비밀번호 변경과 같은 횟수 제한(회원별 15분 5번, 429). 처리: 그 회원의 블로그를 모두 삭제(대표 포함, 블로그 삭제와 같은 규칙), 그 회원이 누른 공감·구독을 지우고 공감 수를 맞추며, 그 회원의 댓글·방명록을 소프트 삭제하고 댓글 수를 맞추고, 소셜 연동을 끊고, 회원은 `WITHDRAWN`과 이메일·비밀번호를 비운다(같은 이메일로 다시 가입할 수 있음). 글·댓글의 수정 시각은 그대로 | AUTH-06 |
 | GET | /api/me/blogs | P | 회원 | 내 활성 블로그 `[{ id, address, name, isPrimary, movedTo, postCount }]`, 만든 순서. `movedTo`는 이사한 블로그의 새 주소(아니면 `null`), `postCount`는 지우지 않은 발행 글 수(비공개·숨김 포함, 임시저장 제외). 마이페이지가 이 목록 아래에 "블로그 만들기 (n/5)"를 둔다 | BLOG-08, BLOG-01 |
 | PUT | /api/me/primary-blog | P | 회원 | `{ blogId }` → 204. 내 활성 블로그만(아니거나 비면 400 `fieldErrors[].field = blogId`). 이미 대표면 그대로 204 | BLOG-08 |
