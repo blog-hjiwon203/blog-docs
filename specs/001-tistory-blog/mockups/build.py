@@ -346,7 +346,7 @@ page(
   <button class="btn primary" type="button">로그인 {P(1)}</button>
   <div class="row between small"><a href="password-reset.html">비밀번호를 잊었어요</a><a href="signup.html">회원가입</a></div>
   <div class="stack"><span class="small muted">또는</span>
-    <a class="btn" href="#">카카오로 계속하기 {P(2)}</a><a class="btn" href="#">구글로 계속하기 {P(2)}</a></div>
+    <a class="btn" href="#">카카오로 계속하기 {P(2)}</a></div>
 </div>""",
     states=[("실패 (401 LOGIN_FAILED)", '<p class="err">이메일 또는 비밀번호가 맞지 않습니다.</p><p class="small muted">탈퇴 회원도 같은 문구(없는 계정 취급).</p>'),
             ("정지 회원 (403 MEMBER_SUSPENDED)", '<div class="box danger"><b>이용이 정지된 계정입니다</b><span>사유: 스팸·광고 — 광고성 글을 반복해서 올려 이용이 정지되었습니다.</span><span class="num">정지 기한: 2026.11.07 13:00까지</span></div>')],
@@ -383,7 +383,7 @@ page(
 page(
     slug="signup-social", group="회원", title="소셜 가입 닉네임 확인", url="blog.com/signup/social?token=…",
     codes=["AUTH-01"], chrome="platform-guest",
-    lead="처음 보는 카카오·구글 계정으로 로그인하면 여기로 온다. 제공사 이메일은 저장하지 않는다.",
+    lead="처음 보는 카카오 계정으로 로그인하면 여기로 온다. 제공사 이메일은 저장하지 않는다.",
     body=f"""
 <div class="page narrow" style="padding:0">
   <h2 style="font-size:22px">닉네임을 정해 주세요</h2>
@@ -436,9 +436,9 @@ page(
       <button class="btn" type="button" style="justify-self:start">변경 {P(4)}</button>
       <p class="small muted">소셜로 가입한 회원에게는 이 칸이 없다(hasPassword=false).</p></section>
     <section class="section"><h2>소셜 계정 연동</h2>
-      <p class="small muted">다른 소셜 계정도 연결해 두면 로그인 수단을 잃었을 때 대비할 수 있어요.</p>
+      <p class="small muted">카카오 계정을 연결해 두면 비밀번호를 잊었을 때도 카카오로 로그인할 수 있어요.</p>
       <div class="row between box"><span>카카오 <span class="chip brand">연결됨 2026.10.08</span></span><button class="btn" type="button">해제 {P(5)}</button></div>
-      <div class="row between box"><span>구글 <span class="chip">연결 안 됨</span></span><a class="btn" href="#">연결 {P(6)}</a></div></section>
+      </section>
   </div>
   <aside class="sidebar"><section class="section"><h2>내 블로그 {P(7)}</h2>
     <div class="stack">
@@ -449,7 +449,8 @@ page(
     <button class="btn" type="button">로그아웃 {P(9)}</button>
     <a class="small muted" href="withdraw.html">회원 탈퇴</a></aside>
 </div>""",
-    states=[("연동 실패 (돌아온 주소의 error)", '<p class="err">이미 다른 계정에 연결된 소셜 계정입니다.</p><p class="err">구글 계정은 이미 하나 연결되어 있습니다.</p>'),
+    states=[("카카오 연결 안 됨", f'<div class="row between box"><span>카카오 <span class="chip">연결 안 됨</span></span><a class="btn" href="#">연결 {P(6)}</a></div>'),
+            ("연동 실패 (돌아온 주소의 error)", '<p class="err">이미 다른 계정에 연결된 소셜 계정입니다.</p><p class="err">같은 서비스의 계정이 이미 하나 연결되어 있습니다.</p>'),
             ("해제 거절 (409 LAST_LOGIN_METHOD)", '<p class="err">로그인 수단이 하나도 남지 않아 해제할 수 없습니다.</p>')],
     apis=[
         (1, "화면 열 때", "GET", "/api/me", "공통 A와 같은 응답을 그대로 씀(이메일, 소셜 목록, hasPassword)"),
