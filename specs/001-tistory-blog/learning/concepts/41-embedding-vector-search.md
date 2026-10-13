@@ -120,6 +120,7 @@ POST http://localhost:11434/api/embed
   PostEmbeddingService.refresh(postId)
     MySQL에서 글 읽기 → 지웠거나 발행 글이 아니면 임베딩 지움
     글자 = 제목 + "\n" + 본문 글자(content_text) 앞부분, 합쳐 2,000자까지
+    (스텝 22부터 제목과 본문 사이에 "태그: a, b" 줄이 들어간다. 의미 검색과 함께 [66](./66-semantic-search.md) 3.9)
     Ollama /api/embed → 1024개 숫자
     PostgreSQL: INSERT ... ON CONFLICT (post_id) DO UPDATE    (있으면 바꿈)
 

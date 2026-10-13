@@ -1,0 +1,496 @@
+# 66. 의미 검색: 낱말이 아니라 뜻으로 찾기
+
+> 관련 스텝: [스텝 22](../step-22.md) (T120, T121, T122) · 관련 개념: [41-embedding-vector-search](./41-embedding-vector-search.md), [42-second-db-async-events](./42-second-db-async-events.md), [35-spring-cache-redis](./35-spring-cache-redis.md), [32-search-like](./32-search-like.md), [65-postgresql-vs-mysql](./65-postgresql-vs-mysql.md)
+
+## 1. 이 문서로 배우는 것
+
+- **의미 검색**(semantic search)이 글자 검색(`LIKE`)과 무엇이 다른가
+- 검색어도 글과 **같은 모델로** 임베딩해야 하는 이유
+- **유사도 기준값**(threshold)을 왜 두고, 어떻게 정했나(실제로 재 본 숫자)
+- 두 DB에 나뉜 데이터로 검색할 때의 순서: **뽑고 → 거르고 → 자르기**
+- 블로그 안 검색에서 "범위를 먼저 정하고 그 안에서 찾기"
+- pgvector HNSW 인덱스의 **`hnsw.ef_search`**: 결과가 40개에서 끊기는 함정
+- 검색어 임베딩을 **캐시**하는 이유와 `@Cacheable`을 따로 된 부품에 두는 이유
+- 임베딩에 넣는 글자를 바꿨을 때 **옛 임베딩을 다시 만드는 법**(`text_version`)
+- 의미 검색이 안 될 때 몰래 글자 검색으로 바꾸지 않는 이유(503)
+
+**먼저 알면 좋은 것**: 임베딩·코사인·pgvector 기초([41](./41-embedding-vector-search.md) 3장), 두 번째 DB와 커밋 뒤 비동기 이벤트([42](./42-second-db-async-events.md)), 글자 검색과 가시성([32](./32-search-like.md)).
+
+## 2. 왜 필요한가
+
+글자 검색은 **낱말이 들어 있는 글**만 찾는다. "자바 공부"로 찾으면 제목이나 본문에 "자바"와 "공부"가 그대로 있어야 한다. 그런데 사람이 찾고 싶은 건 낱말이 아니라 **주제**인 경우가 많다.
+
+| 검색어 | 찾고 싶은 글 | 글자 검색 | 의미 검색 |
+| --- | --- | --- | --- |
+| 자바 공부 | "스프링 부트 입문기" | 못 찾음(낱말 없음) | 찾음 |
+| 데이터베이스 성능 | "MySQL 인덱스 공부" | 못 찾음 | 찾음 |
+| 반려동물 | "강아지 산책 일기" | 못 찾음 | 찾음 |
+| JPA N+1 | "JPA N+1과 fetch join" | 찾음 | 찾음 |
+
+비슷한 글 추천(스텝 10, OWN-06)을 만들면서 글마다 **임베딩**(뜻을 숫자 1,024개로 나타낸 것)을 이미 만들어 두었다. 의미 검색은 같은 임베딩을 다시 쓴다. "이 글과 가까운 글"을 찾던 것을 "**이 검색어와** 가까운 글"로 바꾸는 것이다.
+
+반대로 의미 검색이 약한 곳도 있다. 정확한 낱말(예: 에러 메시지, 사람 이름, 버전 번호)은 글자 검색이 낫다. 그래서 이 프로젝트는 둘을 **탭으로 나눠** 사용자가 고르게 했다(2026-10-13 지원 결정).
+
+## 3. 기본 개념
+
+### 3.1 검색어도 같은 모델로 임베딩한다
+
+임베딩은 모델마다 "숫자 공간"이 다르다. bge-m3로 만든 글 벡터와 다른 모델로 만든 검색어 벡터는 거리를 재도 뜻이 없다. 축(차원)의 의미가 서로 다르기 때문이다. 그래서 검색어도 **글과 같은 모델(bge-m3)**, 같은 방법(Ollama `/api/embed`)으로 바꾼다.
+
+```
+글   "스프링 부트 입문기\n태그: 자바\n…"  ──bge-m3──▶ [0.012, -0.031, …] (1024개, 길이 1)
+검색어 "자바 공부"                         ──bge-m3──▶ [0.020, -0.015, …] (1024개, 길이 1)
+                                       코사인 유사도 = 두 벡터의 내적 = 0.58
+```
+
+어떤 모델은 검색어 앞에 `query: ` 같은 표시를 붙이라고 한다(검색어용·문서용을 나눠 학습한 모델). bge-m3는 검색어에 표시를 붙이지 않고 그대로 넣는다.
+
+### 3.2 코사인 유사도와 거리
+
+[41](./41-embedding-vector-search.md) 3.2에서 본 것처럼, 길이가 1인 벡터 둘의 코사인 유사도는 내적이다. pgvector의 `<=>`는 **코사인 거리** = `1 - 코사인 유사도`다.
+
+| | 같은 뜻 | 관계없음 | 반대 |
+| --- | --- | --- | --- |
+| 코사인 유사도 | 1 | 0 근처 | -1 |
+| 코사인 거리 `<=>` | 0 | 1 근처 | 2 |
+
+그래서 "유사도 0.40 이상"은 SQL에서 "거리 0.60 이하"(`<=> ... <= 0.60`)로 쓴다.
+
+### 3.3 기준값(threshold): 의미 검색은 늘 무언가를 돌려준다
+
+글자 검색은 낱말이 없으면 결과가 0개다. 의미 검색은 다르다. **가장 가까운 글은 언제나 있다.** "양자역학"으로 찾아도 이 블로그에서 그나마 가까운 글이 1등으로 나온다. 그대로 보여 주면 관계없는 글이 "검색 결과"처럼 보인다.
+
+그래서 유사도가 기준값보다 낮은 글은 뺀다. 기준값은 모델마다 다르므로 **재 봐야** 한다. 2026-10-13 개발 Ollama(bge-m3)로 글 6개와 검색어 9개를 재 보니 이랬다.
+
+| 검색어 | 스프링 입문기 | 객체지향 정리 | 제주 여행 | 김치찌개 | MySQL 인덱스 | 강아지 산책 |
+| --- | --- | --- | --- | --- | --- | --- |
+| 자바 공부 | **0.58** | **0.44** | 0.34 | 0.28 | 0.41 | 0.38 |
+| 데이터베이스 성능 | 0.36 | 0.39 | 0.32 | 0.21 | **0.53** | 0.31 |
+| 맛집 | 0.31 | 0.32 | **0.52** | **0.41** | 0.27 | 0.38 |
+| 반려동물 | 0.26 | 0.28 | 0.34 | 0.31 | 0.27 | **0.50** |
+| 양자역학 | 0.27 | 0.34 | 0.23 | 0.27 | 0.28 | 0.30 |
+
+관련 있는 글은 0.42~0.58, 관련 없는 글은 0.21~0.39였다. 그 사이인 **0.40**을 기준값으로 정했다. 보이듯이 경계는 깔끔하지 않다("자바 공부"와 "MySQL 인덱스"가 0.41). bge-m3의 유사도는 0.2~0.6 사이에 몰려 있어서 숫자 차이가 작다. 기준값은 설정(`app.search.semantic.min-similarity`)으로 두고, 글이 쌓이면 다시 재서 고친다.
+
+### 3.4 앞쪽만 쓸모 있다: 최대 결과 수
+
+의미 검색 결과는 뒤로 갈수록 "덜 비슷한" 글이다. 50등, 100등 결과를 보는 사람은 거의 없다. 그래서 **가까운 순 100개까지만** 보고 그 안에서 10개씩 페이지를 나눈다(`max-results: 100`). 이 제한 덕에 아래 3.5의 "거르고 자르기"를 메모리에서 할 수 있다.
+
+### 3.5 두 DB에서 검색하기: 뽑고 → 거르고 → 자르기
+
+이 프로젝트는 글이 MySQL에, 임베딩이 PostgreSQL에 있다([42](./42-second-db-async-events.md)). 임베딩 표에는 **비공개·숨긴 글도** 들어 있다(글이 밖으로 나가지 않으니 모두 만들어 두고, 보여 줄 때 거른다). 그래서 순서가 정해진다.
+
+```
+① 뽑기   PostgreSQL: 유사도 0.40 이상, 가까운 순 100개   → [(12, 0.58), (7, 0.44), (31, 0.43), …]
+② 거르기  MySQL: 그중 보는 사람이 볼 수 있는 글만         → 12, 31 (7은 남의 비공개 글)
+③ 자르기  ①의 순서를 지키며 page번째 10개                 → [(12, 0.58), (31, 0.43)]
+```
+
+②를 빼먹으면 남의 비공개 글 제목이 검색 결과로 새어 나간다. 이 프로젝트의 가장 중요한 규칙(볼 수 없는 글은 어디에도 안 보임, 헌법 II)이 깨진다.
+
+②에서 빠진 글이 많으면 결과가 100개보다 적어진다. 예를 들어 가까운 100개 중 70개가 남의 비공개 글이면 30개만 남는다. 의미 검색은 앞쪽만 보면 되므로 받아들인 한계다. DB가 하나라면 ①과 ②를 SQL 한 번에 할 수 있다([65](./65-postgresql-vs-mysql.md)).
+
+### 3.6 블로그 안 검색: 범위를 먼저 정한다
+
+전체 검색은 3.5대로 하면 된다. 블로그 안 검색은 다르다. 임베딩 표는 **어느 블로그의 글인지 모른다**(`post_id`와 벡터뿐). 전체에서 가까운 100개를 뽑은 뒤 "이 블로그 것만" 거르면, 다른 블로그 글이 100개를 다 차지해 이 블로그 글이 하나도 안 남을 수 있다.
+
+그래서 순서를 바꾼다. MySQL에서 **이 블로그의 볼 수 있는 글 번호를 먼저** 읽고, PostgreSQL에는 "이 번호들 안에서만 찾아라"(`post_id IN (…)`)라고 보낸다.
+
+```
+① 범위   MySQL: 이 블로그에서 보는 사람이 볼 수 있는 글 번호   → [3, 5, 8, 12, …]
+② 뽑기   PostgreSQL: 그 번호 안에서 유사도 0.40 이상 가까운 순 100개
+③ 다시 거르기·자르기 (①과 ③ 사이에 글이 비공개로 바뀌었을 수 있으니 한 번 더 본다)
+```
+
+### 3.7 HNSW와 `hnsw.ef_search`: 40개에서 끊기는 함정
+
+pgvector의 HNSW 인덱스는 **근사** 최근접 이웃 검색이다. 모든 벡터와 거리를 재지 않고, 그래프를 따라가며 "가까울 것 같은" 후보를 모은다. 이때 모으는 후보 목록의 크기가 `hnsw.ef_search`이고 **기본값은 40**이다.
+
+함정은 이것이다. `LIMIT 100`으로 물어도 인덱스가 쓰이면 **최대 40개**만 돌아온다. 오류도 나지 않는다. 비슷한 글 추천은 30개만 뽑아서 문제가 없었지만, 의미 검색은 100개까지 본다. 그래서 추천 DB 연결을 열 때마다 `SET hnsw.ef_search = 200`을 실행한다(`connectionInitSql`).
+
+글이 적을 때는 PostgreSQL이 인덱스를 쓰지 않고 표 전체를 읽기도 한다(그러면 40개 제한도 없다). 그래서 개발에서 잘 되다가 글이 많아진 운영에서만 결과가 줄어드는 식으로 드러나기 쉽다.
+
+pgvector 0.8부터는 `hnsw.iterative_scan`으로 "모자라면 더 찾기"를 켤 수도 있다. 이 프로젝트는 값 하나로 끝나는 `ef_search`를 골랐다.
+
+### 3.8 검색어 임베딩 캐시
+
+검색어를 임베딩하는 데 개발 PC에서 처음엔 약 0.86초가 걸렸다. 같은 검색어로 2쪽, 3쪽을 누를 때마다 다시 계산할 이유가 없다. 그래서 Redis 캐시(5분, [35](./35-spring-cache-redis.md))에 둔다. 두 번째부터는 0.03초였다.
+
+`@Cacheable`은 **프록시**가 거는 것이다([52](./52-scheduled-jobs-proxy.md)). 같은 클래스 안의 메서드를 `this.embed()`로 부르면 프록시를 거치지 않아 캐시가 걸리지 않는다. 그래서 캐시를 거는 메서드를 따로 된 부품(`QueryEmbeddings`)에 둔다. 예외는 캐시하지 않는다. 임베딩 서버가 잠깐 꺼졌다 켜지면 다음 요청에서 다시 계산한다.
+
+### 3.9 넣는 글자를 바꿨을 때: 버전 번호
+
+임베딩은 "무엇을 넣었나"에 따라 달라진다. 이번에 넣는 글자를 `제목 + 본문`에서 `제목 + 태그 + 본문`으로 바꿨다. 이미 만든 임베딩은 옛 방식이라 그대로 두면 태그가 반영되지 않는다.
+
+그래서 표에 `text_version`(넣는 글자 방식 번호)을 두었다. 코드의 `TEXT_VERSION`(지금 2)과 다른 행은 서버가 뜰 때 다시 만든다. 넣는 글자를 또 바꾸면 번호만 올리면 된다. 모델을 바꿀 때도 같은 생각을 쓸 수 있다(그때는 차원이 달라질 수 있어 표를 새로 만드는 편이 낫다).
+
+태그는 글 저장 말고도 바뀐다. 태그 관리 화면에서 이름을 바꾸거나 지우면 그 태그가 달린 글들의 넣는 글자가 바뀐다. 그래서 그때도 "글 내용이 바뀌었다"는 이벤트를 글마다 보낸다.
+
+### 3.10 안 될 때는 안 된다고 말한다
+
+추천 기능을 꺼 둔 서버(1차 배포)나 Ollama·추천 DB가 죽은 경우, 의미 검색은 **503 `SEMANTIC_SEARCH_UNAVAILABLE`**("지금은 의미 검색을 쓸 수 없습니다. 글자로 찾기를 이용해 주세요.")을 돌려준다. 몰래 글자 검색 결과를 돌려주지 않는 이유는, 사용자가 "의미로 찾기" 탭에서 본 결과를 의미 검색 결과로 믿기 때문이다. 결과의 순서도, "가까움" 점수도 달라서 섞으면 틀린 정보가 된다.
+
+비슷한 글 추천은 반대로 빈 목록을 준다. 추천은 글 화면의 덧붙은 칸이라 비어 있어도 되지만, 검색은 사용자가 직접 요청한 일이라 실패를 알려야 한다.
+
+## 4. 동작 원리
+
+```
+[화면] /search?q=자바 공부&mode=semantic
+  → GET /api/search?q=자바 공부&mode=semantic&page=1      (블로그 화면이면 X-Blog-Address)
+[SearchController]
+  mode 검사(keyword|semantic, 그 밖은 400 mode, type=blog와 함께면 400 mode)
+  → 블로그 헤더 있음: SemanticSearchService.search(blog, …) / 없음: searchAll(…)
+[SemanticSearchService]
+  검색어 정리(공백·100자, SearchService.normalize)  ── 비면 400 q
+  (블로그 안) MySQL: listedIn(blog, 보는 사람) 글 번호
+  QueryEmbeddings.embed("자바 공부")  ── Redis 캐시 blog:semanticQuery::자바 공부 (5분)
+        └─ 없으면 Ollama POST /api/embed {model: bge-m3, input: "자바 공부"}
+  PostEmbeddingRepository.findNearestTo(벡터, 0.40, 100, 범위)
+        └─ PostgreSQL: WHERE 거리 <= 0.60 [AND post_id IN (…)] ORDER BY 거리 LIMIT 100
+  MySQL: visibleTo 또는 listedIn + id IN (…)   ── 볼 수 있는 글만
+  가까운 순서대로 page번째 10개 자르기
+  (부품 없음, 임베딩·추천 DB 오류 → 503 SEMANTIC_SEARCH_UNAVAILABLE)
+[응답] { content: [{ post: PostSummary, similarity: 0.58 }, …], page, size, totalElements, totalPages }
+[화면] 글 줄마다 "가까움 0.58"
+```
+
+글 쪽(임베딩 만들기):
+
+```
+글 저장·수정·예약 발행·이사, 태그 이름 바꾸기·지우기
+  → PostContentChangedEvent(글 번호)  ── 커밋된 뒤 비동기(PostEmbeddingListener)
+  → PostEmbeddingService.refresh: 글 + 태그 이름(PostRepository.findTagNames)
+      → "제목\n태그: a, b\n본문 글자" 앞 2,000자 → Ollama → post_embedding(…, text_version = 2)
+서버 시작 → sync: 임베딩 없거나 text_version ≠ 2인 발행 글을 다시 만듦
+```
+
+## 5. 이 프로젝트에서는
+
+### 5.1 넣는 글자와 버전: `recommend/application/PostEmbeddingService.java`
+
+```java
+public static final int TEXT_VERSION = 2;
+
+static String text(Post post, List<String> tagNames) {
+    String body = post.getContentText() == null ? "" : post.getContentText();
+    String tags = tagNames.isEmpty() ? "" : "태그: " + String.join(", ", tagNames) + "\n";
+    String text = post.getTitle() + "\n" + tags + body;
+    return text.length() > MAX_TEXT_LENGTH ? text.substring(0, MAX_TEXT_LENGTH) : text;
+}
+```
+
+- `TEXT_VERSION`: 이 방식의 번호. `text()`를 바꾸면 올린다.
+- 태그가 없으면 태그 줄을 아예 넣지 않는다. 빈 "태그:" 줄이 모든 글에 들어가면 글끼리 괜히 가까워진다.
+- 태그를 본문보다 앞에 둔다. 2,000자에서 자를 때 본문 뒤쪽이 잘려도 태그는 남는다.
+
+```java
+String text = text(post, postRepository.findTagNames(postId));
+postEmbeddingRepository.save(postId, embeddingClient.embed(text), TEXT_VERSION);
+```
+
+- `refresh`는 비동기 스레드에서 트랜잭션 없이 돈다. `post.tagNames()`(지연 로딩)를 부르면 `LazyInitializationException`이 난다. 그래서 태그 이름을 쿼리 하나로 따로 읽는다(`select t.name from PostTag pt join pt.tag t where pt.post.id = :postId order by t.name`).
+
+```java
+Set<Long> current = new HashSet<>(postEmbeddingRepository.findPostIdsByTextVersion(TEXT_VERSION));
+for (Long postId : published) {
+    if (!current.contains(postId)) {
+        refresh(postId);
+```
+
+- `sync()`: 예전에는 "임베딩이 있는가"만 봤다. 이제 "**지금 방식으로** 만든 임베딩이 있는가"를 본다. 옛 방식(1)인 글은 다시 만든다.
+
+표는 Flyway로 칸을 더했다(`db/recommend/V2__post_embedding_text_version.sql`).
+
+```sql
+ALTER TABLE post_embedding ADD COLUMN text_version SMALLINT NOT NULL DEFAULT 1;
+```
+
+- 이미 있던 행은 기본값 1(옛 방식)이 된다. 그래서 운영에 배포하면 서버가 뜰 때 모든 글을 한 번 다시 만든다(개발 DB에서 26개가 모두 2로 바뀐 것을 확인했다).
+
+### 5.2 태그가 바뀌면: `tag/application/TagManageService.java`
+
+```java
+public void delete(Blog blog, Long tagId) {
+    Tag tag = find(blog, tagId);
+    List<Long> postIds = tagRepository.findPostIdsByTagId(tag.getId());
+    tagRepository.delete(tag);
+    contentChanged(postIds);
+}
+
+private void contentChanged(List<Long> postIds) {
+    postIds.forEach(postId -> events.publishEvent(new PostContentChangedEvent(postId)));
+}
+```
+
+- 지우기 **전에** 글 번호를 읽는다. 지운 뒤에는 `post_tag` 행이 외래 키 `ON DELETE CASCADE`로 사라져 어느 글이었는지 알 수 없다.
+- 이벤트를 받는 `PostEmbeddingListener`는 `@TransactionalEventListener`(커밋된 뒤)라, 이름 바꾸기가 409로 되돌려지면 임베딩도 다시 만들지 않는다.
+
+### 5.3 가까운 글 뽑기: `recommend/domain/PostEmbeddingRepository.java`
+
+```java
+public List<NearPost> findNearestTo(float[] query, double minSimilarity, int limit, Collection<Long> within) {
+    if (within != null && within.isEmpty()) {
+        return List.of();
+    }
+    MapSqlParameterSource params = new MapSqlParameterSource()
+            .addValue("query", toLiteral(query))
+            .addValue("maxDistance", 1 - minSimilarity)
+            .addValue("limit", limit);
+    String onlyWithin = "";
+    if (within != null) {
+        onlyWithin = "AND post_id IN (:within)";
+        params.addValue("within", within);
+    }
+    return jdbc.query("""
+            SELECT post_id, 1 - (embedding <=> CAST(:query AS vector)) AS similarity
+            FROM post_embedding
+            WHERE embedding <=> CAST(:query AS vector) <= :maxDistance
+            """ + onlyWithin + """
+            ORDER BY embedding <=> CAST(:query AS vector), post_id DESC
+            LIMIT :limit
+            """, params, (row, rowNum) -> new NearPost(row.getLong("post_id"), row.getDouble("similarity")));
+}
+```
+
+- `within`이 빈 목록이면 SQL을 보내지 않는다. 블로그에 볼 수 있는 글이 없는 경우다. `IN ()`은 SQL 문법 오류라 꼭 먼저 막는다.
+- `1 - minSimilarity`: 유사도 0.40 → 거리 0.60(3.2).
+- `ORDER BY 거리, post_id DESC`: 거리가 같으면 새 글 먼저. 순서가 늘 같아야 페이지를 넘겨도 결과가 흔들리지 않는다.
+- `IN (:within)`: `NamedParameterJdbcTemplate`이 목록을 `?, ?, ?`로 펼친다. 글이 아주 많은 블로그(수만 개)라면 이 목록이 길어진다. 지금 규모에서는 문제가 없고, 커지면 DB 합치기([65](./65-postgresql-vs-mysql.md))로 푸는 것이 맞다.
+
+연결마다 `ef_search`를 올리는 곳(`recommend/config/RecommendDataSourceConfig.java`):
+
+```java
+static final int HNSW_EF_SEARCH = 200;
+...
+dataSource.setConnectionInitSql("SET hnsw.ef_search = " + HNSW_EF_SEARCH);
+```
+
+- Hikari는 연결을 새로 만들 때마다 이 SQL을 실행한다. 연결은 풀에 남아 다시 쓰이므로 요청마다 SET하지 않아도 된다.
+- 처음 서버가 뜰 때는 확장(`CREATE EXTENSION vector`)을 Flyway가 만들기 전이다. PostgreSQL은 이름에 점이 있는 설정(`hnsw.ef_search`)을 확장이 없어도 SET할 수 있게 해 준다(나중에 확장이 올라오면 그 값을 쓴다). 테스트(Testcontainers, 빈 DB에서 시작)가 이 경우를 지나간다.
+
+### 5.4 거르고 자르기: `search/application/SemanticSearchService.java`
+
+```java
+public Page<SemanticHit> search(Blog blog, Long viewerId, String rawQuery, PageQuery page) {
+    String query = SearchService.normalize(rawQuery);
+    Specification<Post> listed = PostSpecifications.listedIn(blog, viewerId, LocalDateTime.now(clock));
+    List<NearPost> nearest = nearest(query, postRepository.findIds(listed));
+    return page(nearest, listed, page, "category");
+}
+```
+
+- 검색어 검사(`normalize`)를 맨 먼저 한다. 빈 검색어는 의미 검색을 쓸 수 있든 없든 400 `q`다.
+- `listedIn`은 블로그 화면 목록과 같은 조건이다. 주인에게는 자기 비공개 글도 들어간다. 글자 검색(`SearchService.search`)과 같은 조건을 써야 두 탭의 "볼 수 있는 글"이 같다.
+- `findIds`: 글 엔티티를 통째로 읽지 않고 번호만 읽는다(Criteria `select(post.get("id"))`).
+
+```java
+private Page<SemanticHit> page(List<NearPost> nearest, Specification<Post> visible, PageQuery page,
+                               String... fetch) {
+    Pageable pageable = page.toPageable(Sort.unsorted());
+    ...
+    Specification<Post> condition = visible.and((root, criteria, cb) -> root.get("id").in(ids));
+    Map<Long, Post> posts = postRepository.findBy(condition, q -> q.project(fetch).all()).stream()
+            .collect(Collectors.toMap(Post::getId, Function.identity()));
+    List<SemanticHit> hits = nearest.stream()
+            .filter(near -> posts.containsKey(near.postId()))
+            .map(near -> new SemanticHit(posts.get(near.postId()), near.similarity()))
+            .toList();
+    int from = (int) Math.min(pageable.getOffset(), hits.size());
+    int to = Math.min(from + pageable.getPageSize(), hits.size());
+    return new PageImpl<>(hits.subList(from, to), pageable, hits.size());
+}
+```
+
+- `page.toPageable(...)`: 이 프로젝트의 페이지는 **1부터**다(`PageQuery`). Spring Data는 0부터라 `toPageable`이 하나 뺀다. 처음에 `PageRequest.of(page.page(), …)`로 썼다가 2쪽이 비는 실수를 테스트가 잡았다(아래 6장).
+- MySQL은 `id IN (…)`의 순서를 지켜 주지 않는다. 그래서 결과를 `Map`으로 받고, **PostgreSQL이 준 순서(`nearest`)대로** 다시 늘어놓는다.
+- `filter(posts::containsKey)`: MySQL에서 빠진 글(볼 수 없는 글)이 여기서 사라진다.
+- `PageImpl(이 쪽 내용, pageable, 전체 수)`: 전체 수는 "볼 수 있는 글 수"다. 화면의 "글 N개"와 쪽수가 이 값으로 나온다.
+- `fetch`: 전체 검색은 줄마다 블로그 이름이 필요해 `blog`, `category`를 함께 읽고, 블로그 안 검색은 블로그가 하나라 `category`만 읽는다(N+1 막기).
+
+```java
+private List<NearPost> nearest(String query, Collection<Long> within) {
+    if (queryEmbeddings.isEmpty() || postEmbeddingRepository.isEmpty()) {
+        throw new BusinessException(ErrorCode.SEMANTIC_SEARCH_UNAVAILABLE);
+    }
+    try {
+        float[] vector = queryEmbeddings.get().embed(query);
+        return postEmbeddingRepository.get()
+                .findNearestTo(vector, properties.minSimilarity(), properties.maxResults(), within);
+    } catch (RuntimeException e) {
+        log.warn("의미 검색을 하지 못했습니다(임베딩 서버·추천 DB): {}", e.toString());
+        throw new BusinessException(ErrorCode.SEMANTIC_SEARCH_UNAVAILABLE);
+    }
+}
+```
+
+- `Optional<QueryEmbeddings>`: 추천을 끄면(`app.recommend.enabled=false`) 이 부품이 없다(`@ConditionalOnProperty`). 비슷한 글 추천과 같은 방식이다.
+- `RuntimeException`을 잡아 503으로 바꾼다. Ollama 연결 실패(`ResourceAccessException`), 추천 DB 오류(`DataAccessException`) 모두 여기로 온다. 원인은 로그에 남기고, 화면에는 정해진 문장만 보낸다.
+
+### 5.5 검색어 캐시: `search/application/QueryEmbeddings.java`
+
+```java
+@ConditionalOnProperty(name = "app.recommend.enabled", havingValue = "true", matchIfMissing = true)
+@Component
+public class QueryEmbeddings {
+
+    public static final String CACHE = "semanticQuery";
+    ...
+    @Cacheable(cacheNames = CACHE, key = "#query")
+    public float[] embed(String query) {
+        return embeddingClient.embed(query);
+    }
+}
+```
+
+- Redis 키는 `blog:semanticQuery::자바 공부`가 된다(`spring.cache.redis.key-prefix: "blog:"`). 개발 Redis에서 `redis-cli --scan --pattern 'blog:semanticQuery*'`로 보인다.
+- `float[]`는 Java 직렬화로 저장된다(이 프로젝트의 Redis 캐시 기본 직렬화).
+
+### 5.6 주소: `search/presentation/SearchController.java`
+
+```java
+private static boolean semantic(String mode) {
+    if (mode == null || mode.isBlank() || mode.equals("keyword")) {
+        return false;
+    }
+    if (mode.equals("semantic")) {
+        return true;
+    }
+    throw BusinessException.invalidField("mode", "keyword 또는 semantic이어야 합니다.");
+}
+```
+
+- `mode`를 빼면 글자 검색이라 예전 주소(`/api/search?q=`)는 그대로 동작한다.
+- 블로그 검색(`type=blog`)에 `mode=semantic`을 붙이면 400 `mode`. 블로그 이름·소개는 임베딩이 없다.
+- 응답 한 줄은 `{ post: PostSummary, similarity }`(`SemanticSearchResponse`). `similarity`는 소수 둘째 자리로 반올림해서 보낸다. 화면에 "0.58"로 보이는데 더 자세한 값은 뜻이 없다.
+
+### 5.7 화면: `frontend/src/components/SearchModeTabs.tsx`, `app/searchMode.ts`
+
+```tsx
+<div className="tabs" role="tablist" aria-label="검색 방식">
+  <button type="button" role="tab" aria-selected={mode === 'keyword'} …>글자로 찾기</button>
+  <button type="button" role="tab" aria-selected={mode === 'semantic'} …>의미로 찾기</button>
+</div>
+```
+
+- 전체 검색(`GlobalSearchPage`)과 블로그 안 검색(`BlogSearchPage`)이 같이 쓴다.
+- 검색 방식은 주소의 `?mode=semantic`에 둔다(`searchMode`, `searchQuery`). 새로고침·공유해도 같은 탭이다. 글자로 찾기는 `mode`를 붙이지 않아 예전 주소와 같다.
+- 전체 검색에서 "의미로 찾기"를 고르면 글/블로그 탭은 숨는다(의미 검색은 글만).
+- 글 줄(`PlatformPostItem`, `PostItem`)은 `similarity`를 받으면 "가까움 0.58"을 덧붙인다. 글자 검색 결과와 줄 모양이 같다.
+- 503이면 서버가 준 문장("지금은 의미 검색을 쓸 수 없습니다. 글자로 찾기를 이용해 주세요.")이 오류 자리에 그대로 나온다(`errorMessage`).
+
+### 5.8 테스트: `search/SemanticSearchIntegrationTest`
+
+가짜 임베딩(낱말 주머니, [41](./41-embedding-vector-search.md) 5.7)은 같은 낱말이 많이 겹칠수록 가깝다. 그래서 유사도를 손으로 계산해 정확히 맞출 수 있다. 글 본문을 제목과 같게 넣으므로 넣는 글자는 "제목\n제목"이고, 제목 낱말이 두 번씩 들어간다.
+
+| 검색어 | 글 제목 | 글 벡터(낱말별 수) | 계산 | 유사도 |
+| --- | --- | --- | --- | --- |
+| A B | A B | A2 B2 | (2+2) / (√2 × √8) | 1.00 |
+| A B | A B C | A2 B2 C2 | (2+2) / (√2 × √12) | 0.82 |
+| A B | C | C2 | 0 | 0 → 빠짐 |
+| A T | A (태그 T) | A2 태그1 T1 | (2+1) / (√2 × √6) | 0.87 |
+
+| 테스트 | 확인하는 것 |
+| --- | --- |
+| `searchAllGivesVisibleCloseOnesInOrderWithSimilarity` | 가까운 순(1.00 → 0.82), 먼 글 빠짐, 비공개 글은 주인이 봐도 전체 검색에 없음, 다른 블로그 글 포함 |
+| `pagesAreCutInSimilarityOrder` | `page=2&size=1`이 두 번째로 가까운 글, 전체 2개·2쪽 |
+| `blogSearchStaysInTheBlogAndShowsOwnPrivatePostsToTheOwner` | 블로그 안에서는 다른 블로그 글 없음, 주인에게만 자기 비공개 글 |
+| `tagNamesAreEmbeddedAndRenamingATagRemakesTheEmbedding` | 태그가 임베딩에 들어감(`text_version` 2), 태그 이름을 바꾸면 임베딩이 다시 만들어짐 |
+| `wrongModeOrBlogTypeIsRejected` | `mode=vector` 400, `type=blog&mode=semantic` 400, 빈 검색어 400 `q` |
+| `RecommendDisabledIntegrationTest.semanticSearchIsUnavailableButKeywordSearchWorks` | 추천을 끈 서버: 의미 검색 503, 글자 검색은 200 |
+| `SemanticSearchServiceTest` | Ollama 연결 실패 → 503, 빈 검색어는 503보다 먼저 400 |
+| `PostEmbeddingIntegrationTest.syncRemakesEmbeddingsMadeTheOldWay` | `text_version = 1`인 임베딩을 `sync()`가 다시 만듦 |
+
+가짜 임베딩은 낱말을 해시로 1,024칸 중 하나에 넣는다. 서로 다른 낱말이 같은 칸에 들어가면(충돌) 계산이 어긋난다. 그래서 테스트 낱말끼리 칸이 겹치지 않는 표식을 고르고(`distinctMark`), 다른 테스트 글과 섞일 수 있는 전체 검색은 이 테스트의 글만 골라 순서를 본다.
+
+## 6. 자주 하는 실수와 함정
+
+- **임베딩 표의 결과를 그대로 보여 줌**: 비공개·숨긴 글의 제목이 검색 결과로 샌다. 뽑은 뒤 반드시 주 DB의 가시성으로 거른다(3.5).
+- **블로그 안 검색을 "전체에서 뽑고 거르기"로**: 다른 블로그 글이 앞자리를 다 차지해 이 블로그 결과가 0개가 될 수 있다. 범위를 먼저 정한다(3.6).
+- **`IN ()` 빈 목록**: 범위가 비면 SQL 문법 오류다. 보내기 전에 빈 목록을 돌려준다.
+- **`LIMIT 100`인데 40개만**: HNSW `ef_search` 기본 40(3.7). 오류가 안 나서 알아채기 어렵다. 글이 적은 개발 DB에서는 인덱스를 안 써 드러나지 않는다.
+- **기준값 없이 보여 주기**: 의미 검색은 늘 1등이 있다. 관계없는 글이 결과처럼 보인다(3.3).
+- **다른 모델로 검색어 임베딩**: 차원이 같아도 공간이 달라 거리가 뜻이 없다(3.1).
+- **넣는 글자만 바꾸고 옛 임베딩을 그대로**: 새 글만 새 방식이라 같은 내용인데 거리가 달라진다. 버전 번호로 다시 만든다(3.9).
+- **같은 클래스에서 `@Cacheable` 메서드를 부름**: 프록시를 거치지 않아 캐시가 안 걸린다(3.8).
+- **MySQL `IN` 결과 순서를 믿음**: `id IN (12, 7, 31)`은 그 순서로 오지 않는다. 가까운 순서는 PostgreSQL이 준 목록으로 다시 맞춘다.
+- **페이지 번호 0부터·1부터 섞기**: 이 프로젝트 API는 1부터, Spring Data는 0부터다. `PageQuery.toPageable`을 거친다. 직접 `PageRequest.of(page.page(), …)`를 쓰면 한 쪽씩 밀린다(이번에 테스트가 잡음).
+- **의미 검색 실패를 글자 검색으로 몰래 대신함**: 사용자는 다른 종류의 결과를 의미 검색으로 믿는다(3.10).
+
+## 7. 직접 해 보기
+
+### 7.1 유사도 직접 재 보기 (개발 Ollama)
+
+```bash
+curl -s http://localhost:11434/api/embed -d '{"model":"bge-m3","input":["자바 공부","스프링 부트 입문기","제주 여행"]}' \
+ | python3 -c 'import sys,json; e=json.load(sys.stdin)["embeddings"]; d=lambda a,b:sum(x*y for x,y in zip(a,b)); print(round(d(e[0],e[1]),2), round(d(e[0],e[2]),2))'
+```
+
+두 숫자 중 앞(관련 있음)이 뒤(관련 없음)보다 크다. 내 블로그 글 제목으로 바꿔 넣어 보고, 0.40이 내 글에 맞는 기준인지 생각해 본다.
+
+### 7.2 API로 검색
+
+```bash
+# 전체 의미 검색
+curl -s -G http://localhost:8080/api/search --data-urlencode 'q=자바 공부' -d mode=semantic | python3 -m json.tool | head -40
+# 블로그 안 의미 검색
+curl -s -G http://localhost:8080/api/search -H 'X-Blog-Address: {내 주소}' --data-urlencode 'q=여행' -d mode=semantic
+# 같은 검색어를 두 번: 두 번째가 훨씬 빠르다(캐시)
+for i in 1 2; do curl -s -o /dev/null -w '%{time_total}s\n' -G http://localhost:8080/api/search --data-urlencode 'q=데이터베이스 성능' -d mode=semantic; done
+docker compose exec redis redis-cli --scan --pattern 'blog:semanticQuery*'
+```
+
+### 7.3 화면
+
+1. `http://blog.test:8080/search?q=자바 공부` → "의미로 찾기" 탭 → 주소에 `&mode=semantic`이 붙고 글마다 "가까움 0.xx".
+2. 내 블로그 `/@{내 주소}/search?q=…` → 같은 탭. 로그인한 주인이면 자기 비공개 글도 나온다. 로그아웃하면 사라진다.
+3. `docker compose stop ollama` → 의미로 찾기 → "지금은 의미 검색을 쓸 수 없습니다…" → 글자로 찾기는 그대로 된다 → `docker compose start ollama`.
+
+### 7.4 태그를 바꾸면 임베딩이 바뀐다
+
+```bash
+docker compose exec postgres psql -U blog -d recommend -c "select post_id, text_version, updated_at from post_embedding order by updated_at desc limit 5"
+```
+
+관리 화면에서 태그 이름을 바꾼 뒤 다시 보면, 그 태그가 달린 글의 `updated_at`이 방금 시각으로 바뀌어 있다.
+
+### 7.5 기준값 바꿔 보기
+
+`application.yml`의 `app.search.semantic.min-similarity`를 `0.30`, `0.50`으로 바꿔 서버를 다시 띄우고 같은 검색어의 결과 수를 비교한다. 낮추면 관계없는 글이 섞이고, 높이면 관련 있는 글도 빠진다.
+
+### 7.6 테스트
+
+```bash
+./mvnw test -Dtest='SemanticSearch*,PostEmbedding*,RecommendDisabled*'
+cd frontend && npx vitest run src/app/searchMode.test.ts
+```
+
+## 8. 확인 문제
+
+1. "자바 공부"로 글자 검색은 0개인데 의미 검색은 "스프링 부트 입문기"를 찾는다. 왜 그런가?
+2. 의미 검색에 기준값(0.40)이 없으면 "양자역학"으로 찾았을 때 무슨 일이 생기나?
+3. 임베딩 표에서 가까운 100개를 뽑은 뒤 MySQL에서 거르는 이유는? 거르지 않으면 무엇이 깨지나?
+4. 블로그 안 검색은 왜 MySQL에서 글 번호를 먼저 읽나? 전체 검색처럼 하면 어떤 경우에 결과가 0개가 되나?
+5. `LIMIT 100`으로 물었는데 운영에서 결과가 40개를 넘지 않는다. 원인과 이 프로젝트의 해결은?
+6. `QueryEmbeddings`를 `SemanticSearchService` 안의 메서드로 두면 캐시가 왜 동작하지 않나?
+7. 넣는 글자에 태그를 더한 뒤, 이미 있던 글의 임베딩은 어떻게 새 방식이 되나?
+8. 추천을 꺼 둔 서버에서 의미 검색은 왜 빈 목록이 아니라 503을 주나? 비슷한 글 추천은 왜 빈 목록을 주나?
+
+<details><summary>답</summary>
+
+1. 글자 검색은 낱말이 들어 있어야 찾는다. 의미 검색은 검색어와 글을 같은 모델로 임베딩해 뜻이 가까운지(코사인 유사도) 본다. bge-m3는 "자바"와 "스프링"이 가까운 주제라는 것을 학습했다.
+2. 의미 검색은 늘 가장 가까운 글이 있으므로, 관계없는 글들이 가까운 순으로 결과처럼 나온다. 기준값이 "충분히 가깝지 않은 글"을 뺀다.
+3. 임베딩 표에는 비공개·숨긴 글도 있다. 거르지 않으면 볼 수 없는 글의 제목이 검색 결과로 샌다(헌법 II).
+4. 임베딩 표가 블로그를 모르기 때문이다. 전체에서 100개를 뽑으면 다른 블로그의 가까운 글이 100자리를 다 차지할 수 있고, 그 뒤 "이 블로그 것만" 거르면 0개가 된다.
+5. HNSW 인덱스가 한 번에 모으는 후보 수 `hnsw.ef_search`의 기본값이 40이다. 연결을 만들 때 `SET hnsw.ef_search = 200`(Hikari `connectionInitSql`).
+6. `@Cacheable`은 프록시가 메서드 호출을 가로채서 건다. 같은 클래스 안에서 `this.embed()`로 부르면 프록시를 거치지 않는다.
+7. 표에 `text_version`을 두고 지금 방식은 2다. 서버가 뜰 때 `sync()`가 `text_version`이 2가 아닌 발행 글을 다시 만든다. 기존 행은 칸을 더할 때 기본값 1이 되었다.
+8. 의미 검색은 사용자가 직접 요청한 일이라, 결과가 없는 것("뜻이 가까운 글이 없습니다")과 못 찾은 것을 구분해 알려야 한다. 추천은 글 화면의 덧붙은 칸이라 비어 있어도 글을 읽는 데 지장이 없다.
+
+</details>
+
+## 9. 더 읽을거리
+
+- pgvector README: HNSW 인덱스, `hnsw.ef_search`, 반복 검색(`hnsw.iterative_scan`), 필터링: https://github.com/pgvector/pgvector
+- BGE-M3 모델 카드(밀집·희소·다중 벡터 검색): https://huggingface.co/BAAI/bge-m3
+- Ollama 임베딩 API: https://github.com/ollama/ollama/blob/main/docs/api.md#generate-embeddings
+- 글자 검색과 의미 검색 점수를 섞는 방법(Reciprocal Rank Fusion, 이번에 고르지 않음): Cormack et al., "Reciprocal Rank Fusion outperforms Condorcet and individual Rank Learning Methods" (SIGIR 2009)

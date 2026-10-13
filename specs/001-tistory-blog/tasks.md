@@ -761,9 +761,9 @@ description: "지원 서비스 구현 작업 (2주 일정 기준)"
 
 2026-10-13 지원 결정: 벡터 검색을 주 DB와 추천 DB를 합치지 않은 지금 구조로 먼저 만든다. 화면은 탭으로 나누고, 전체 검색과 블로그 안 검색 모두, 임베딩에 태그를 넣는다.
 
-- [ ] T120 [US15] 임베딩 글자에 태그 추가, `text_version`으로 옛 임베딩 다시 만들기, 태그 이름 바꾸기·지우기 때 다시 만들기 in `recommend/`, `tag/` (R-02, OWN-06, OWN-07)
-- [ ] T121 [US7] 의미 검색 API `GET /api/search?mode=semantic` in `search/` (OWN-07, R-02)
-- [ ] T122 [P] [US7] 화면: 검색 탭 "글자로 찾기 / 의미로 찾기" in `frontend/src/pages/search/` (OWN-07)
+- [X] T120 [US15] 임베딩 글자에 태그 추가, `text_version`으로 옛 임베딩 다시 만들기, 태그 이름 바꾸기·지우기 때 다시 만들기 in `recommend/`, `tag/` (R-02, OWN-06, OWN-07)
+- [X] T121 [US7] 의미 검색 API `GET /api/search?mode=semantic` in `search/` (OWN-07, R-02)
+- [X] T122 [P] [US7] 화면: 검색 탭 "글자로 찾기 / 의미로 찾기" in `frontend/src/pages/search/` (OWN-07)
 
 ### 기능별로 보기
 

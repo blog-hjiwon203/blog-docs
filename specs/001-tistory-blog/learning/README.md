@@ -35,6 +35,7 @@
 | 20 | [저장한 글·스팸 차단·방문 통계·랭킹·기기 쿠키](./step-20.md) | 저장(스냅숏, 볼 수 없는 글), 블로그별 차단과 금칙어, 하루 방문자와 새벽 모으기, 일·주·월 그래프와 유입 경로, 인기 블로거(정시 칸 캐시)·랭킹 전체보기(409)·추천 블로그, 잠금 악용을 줄이는 기기 쿠키. 메일·소셜(T088·T099·T100)은 키를 받은 뒤 |
 | 20b | [비밀번호 재설정·메일·카카오·구글 로그인](./step-20b.md) | 재설정 링크 메일(256비트 토큰·SHA-256·30분·한 번만), 로그인이 막히면 메일로 잠금 풀기, SMTP 발송과 Mailpit, 카카오·구글 인가 코드 흐름(state를 Redis와 쿠키에, callback → complete), 닉네임 확인 뒤 소셜 가입, 연동·해제(마지막 수단 지키기), 소셜 회원 탈퇴 재인증 |
 | 21 | [블로그 주소를 경로로](./step-21.md) | 서브도메인(`alpha.blog.com`)을 경로(`blog.com/@alpha`)로(배포 서버에 와일드카드 DNS가 없어서), 블로그 API는 `X-Blog-Address` 헤더(①안), 쿠키 Domain 없앰, `/@주소` 화면의 404·301·공유 미리보기, React Router basename, 같은 출처 기준 열린 리다이렉트 |
+| 22 | [의미 검색](./step-22.md) | 검색 화면 "글자로 찾기 / 의미로 찾기" 탭(전체·블로그 안), 검색어를 같은 모델로 임베딩(Redis 캐시), 유사도 기준값 0.40(bge-m3로 잼), 두 DB에서 뽑고 → 거르고 → 자르기, 블로그 안은 범위를 먼저, HNSW `ef_search` 40개 함정, 임베딩에 태그를 넣고 `text_version`으로 다시 만들기, 안 되면 503 |
 
 ## 개념 문서
 
@@ -84,6 +85,7 @@
 | [41 임베딩과 벡터 검색](./concepts/41-embedding-vector-search.md) | 임베딩, 코사인 유사도·거리, pgvector `<=>`와 HNSW, Ollama bge-m3, 추천에서 볼 수 없는 글 거르기, 가짜 임베딩 테스트 |
 | [42 두 번째 DB와 커밋 뒤 비동기 처리](./concepts/42-second-db-async-events.md) | `@Bean(defaultCandidate = false)` DataSource, DB별 Flyway, 최종 일관성, 이벤트·`@TransactionalEventListener`·`@Async`, 비동기 테스트 |
 | [65 PostgreSQL vs MySQL: DB 두 개를 하나로 합쳐도 될까](./concepts/65-postgresql-vs-mysql.md) | 두 DB의 같은 점과 다른 점(확장·문법·대소문자 비교·격리 수준), 데이터를 한 곳에 두면 얻는 것(외래 키·한 트랜잭션·가시성 거르기를 SQL 한 번에), 선택지 셋 비교와 설계상 최선, PostgreSQL로 옮길 때 고칠 곳(INSERT IGNORE 8곳 등) |
+| [66 의미 검색: 낱말이 아니라 뜻으로 찾기](./concepts/66-semantic-search.md) | 글자 검색과 의미 검색, 검색어도 같은 모델로, 기준값을 재서 정하기, 최대 결과 수, 두 DB에서 뽑고 → 거르고 → 자르기, 블로그 안 검색은 범위 먼저, HNSW `hnsw.ef_search`, 검색어 임베딩 캐시와 프록시, 넣는 글자 버전(`text_version`), 실패는 503 |
 | [37 거르기 조건이 있는 목록과 일괄 처리](./concepts/37-filtered-list-bulk-actions.md) | 동적 Specification, `COALESCE` 정렬과 개수 쿼리, 주인 확인 뒤 값 검사, 일괄 변경·삭제, `LikePatterns`, 주소에 둔 거르기 조건 |
 | [39 계층 데이터: 카테고리 2단계와 주제](./concepts/39-category-hierarchy.md) | 자기 참조 트리, 2단계 제한, 계산 칸 `parent_key`와 UNIQUE, 주제 enum, 주제별 글 채우기, 비공개 카테고리의 글 숨기기(NOT EXISTS 부분 쿼리), 전체 순서 한 번에 저장과 끌어서 놓기 순수 함수 |
 | [30 이미지 업로드와 처리](./concepts/30-image-upload.md) | multipart, 크기 제한, 매직 넘버, Thumbnailator·EXIF, WebP 플러그인, `/uploads` 내보내기와 캐시, 목록 썸네일 |
