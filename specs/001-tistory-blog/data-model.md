@@ -98,7 +98,7 @@
 
 **image**: path(`/uploads/{uuid}.{ext}`), thumbnail_path(`/uploads/t_{uuid}.jpg` 또는 `.png`, 400px), original_name, content_type(jpg/png/gif/webp), size(CHECK ≤ 10MB), uploader_id. path·thumbnail_path에는 화면이 그대로 쓰는 주소를 저장하고, 실제 파일은 설정값 `app.upload.dir` 폴더에 같은 파일 이름으로 둔다(R-15). `uploader_id`는 회원 ↔ 이미지 순환 참조를 피하려고 외래 키 없이 두고(인덱스만), 서버가 로그인 회원으로 채운다.
 
-**category**: blog_id, parent_id(NULL 또는 1단계 상위), name(30), sort_order, is_private(P2). 계산 컬럼 `parent_key = IFNULL(parent_id, 0)`과 UNIQUE(blog_id, parent_key, name). MySQL UNIQUE는 NULL끼리 중복을 허용해서 (blog_id, parent_id, name)만으로는 최상위 이름 중복을 못 막기 때문이다. '전체 글'·'미분류'는 행이 아니라 가상 항목.
+**category**: blog_id, parent_id(NULL 또는 1단계 상위), name(30), sort_order, is_private(P2). 계산 컬럼 `parent_key = COALESCE(parent_id, 0)`과 UNIQUE(blog_id, parent_key, name). UNIQUE는 NULL끼리 중복을 허용해서(MySQL·PostgreSQL 모두) (blog_id, parent_id, name)만으로는 최상위 이름 중복을 못 막기 때문이다. '전체 글'·'미분류'는 행이 아니라 가상 항목.
 
 **tag**: blog_id, name. UNIQUE(blog_id, name). **post_tag**: post_id, tag_id. PK(post_id, tag_id). 글당 최대 10개는 서비스에서 검사. JPA에서는 `@ManyToMany`가 아니라 중간 엔티티 `PostTag`(@ManyToOne 두 개, 복합 키)로 매핑한다(2026-10-09 지원 결정, T038a).
 
@@ -132,7 +132,7 @@ MNG-03의 인기 글 순위는 테이블을 따로 두지 않고 누적은 `post
 
 ## 추천 (PostgreSQL + pgvector, 도전 과제)
 
-**post_embedding**: post_id(MySQL post.id, FK 아님, PK), embedding(vector(1024), Ollama bge-m3), text_version(넣는 글자 방식 번호, 2026-10-13 추가: 1 = 제목+본문, 2 = 제목+태그+본문), updated_at. 글을 지우면 함께 지우고, 비공개 등은 추천할 때 가시성으로 거른다(R-02).
+**post_embedding**: post_id(PK, post.id 외래 키 ON DELETE CASCADE, 스텝 23부터. 그 전에는 다른 DB라 FK 없음), embedding(vector(1024), Ollama bge-m3), text_version(넣는 글자 방식 번호, 2026-10-13 추가: 1 = 제목+본문, 2 = 제목+태그+본문), updated_at. 글을 지우면 함께 지우고, 비공개 등은 추천할 때 가시성으로 거른다(R-02).
 
 ## 관리
 

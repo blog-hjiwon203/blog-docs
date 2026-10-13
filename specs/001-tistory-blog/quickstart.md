@@ -7,7 +7,7 @@
 ```bash
 # 모두 코드 저장소 루트(~/IdeaProjects/blog)에서
 
-# MySQL 8, Redis, PostgreSQL(pgvector, 비슷한 글 추천), Ollama(임베딩 bge-m3, 기존 docker 볼륨 ollama)
+# PostgreSQL(pgvector, 주 DB와 글 임베딩), Redis, Ollama(임베딩 bge-m3, 기존 docker 볼륨 ollama)
 docker compose up -d
 
 # 프론트 빌드를 static으로 복사한 뒤 백엔드 (http://blog.test:8080, 처음 뜰 때 Flyway가 테이블 생성)

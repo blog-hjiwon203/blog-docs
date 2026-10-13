@@ -37,6 +37,7 @@
 | 21 | [블로그 주소를 경로로](./step-21.md) | 서브도메인(`alpha.blog.com`)을 경로(`blog.com/@alpha`)로(배포 서버에 와일드카드 DNS가 없어서), 블로그 API는 `X-Blog-Address` 헤더(①안), 쿠키 Domain 없앰, `/@주소` 화면의 404·301·공유 미리보기, React Router basename, 같은 출처 기준 열린 리다이렉트 |
 | 22 | [의미 검색](./step-22.md) | 검색 화면 "글자로 찾기 / 의미로 찾기" 탭(전체·블로그 안), 검색어를 같은 모델로 임베딩(Redis 캐시), 유사도 기준값 0.40(bge-m3로 잼), 두 DB에서 뽑고 → 거르고 → 자르기, 블로그 안은 범위를 먼저, HNSW `ef_search` 40개 함정, 임베딩에 태그를 넣고 `text_version`으로 다시 만들기, 안 되면 503 |
 | 23 | [주 DB를 PostgreSQL로](./step-23.md) | MySQL과 추천 DB를 PostgreSQL 하나로: PostgreSQL용 Flyway V1, citext와 드라이버 `stringtype` 함정, `ON CONFLICT`·`UPDATE … FROM`·`DELETE … USING`, `updated_at`을 JPA에만, READ COMMITTED와 `FOR KEY SHARE`, 의미 검색·비슷한 글을 Criteria 한 쿼리로(hibernate-vector), 테스트 SQL 차이 |
+| 24 | [운영 데이터 옮기기·배포·문서](./step-24.md) | 서버·Docker·포트·docker 네트워크와 개발용·운영용 두 벌, `deploy.sh`가 같은 컨테이너에 `blog` DB를 만들고 앱을 붙임, MySQL → PostgreSQL 이전 스크립트(COPY 글자 형식, `sql_mode`와 상관없는 이스케이프, 외래 키 순서, 시퀀스), 행 수·내용 대조, 운영 전환과 되돌리기, 비밀번호를 명령줄에 쓰지 않기 |
 
 ## 개념 문서
 
@@ -88,6 +89,7 @@
 | [65 PostgreSQL vs MySQL: DB 두 개를 하나로 합쳐도 될까](./concepts/65-postgresql-vs-mysql.md) | 두 DB의 같은 점과 다른 점(확장·문법·대소문자 비교·격리 수준), 데이터를 한 곳에 두면 얻는 것(외래 키·한 트랜잭션·가시성 거르기를 SQL 한 번에), 선택지 셋 비교와 설계상 최선, PostgreSQL로 옮길 때 고칠 곳(INSERT IGNORE 8곳 등) |
 | [66 의미 검색: 낱말이 아니라 뜻으로 찾기](./concepts/66-semantic-search.md) | 글자 검색과 의미 검색, 검색어도 같은 모델로, 기준값을 재서 정하기, 최대 결과 수, 두 DB에서 뽑고 → 거르고 → 자르기, 블로그 안 검색은 범위 먼저, HNSW `hnsw.ef_search`, 검색어 임베딩 캐시와 프록시, 넣는 글자 버전(`text_version`), 실패는 503 |
 | [67 MySQL에서 PostgreSQL로 옮기기](./concepts/67-mysql-to-postgresql.md) | 옮기기의 세 겹(스키마·쿼리·조용한 의미 차이), 타입 대응, citext·ILIKE·비결정적 콜레이션, JDBC가 `varchar`로 보내면 citext가 대소문자를 가리는 함정과 `stringtype=unspecified`, `INSERT IGNORE`와 `ON CONFLICT DO NOTHING`의 차이, `UPDATE … FROM`, `ON UPDATE` 없이 `updated_at`, 격리 수준과 외래 키 잠금, 벡터 거리와 가시성을 Criteria 한 쿼리로, `fetch`가 INNER JOIN인 함정 |
+| [68 운영 데이터 옮기기와 전환](./concepts/68-data-migration-cutover.md) | 서버와 Docker(컴퓨터마다 따로), 건물·방·현관문으로 본 포트와 docker 네트워크, 개발용과 운영용 두 벌, PostgreSQL COPY 글자 형식과 NULL·역슬래시 이스케이프, 외래 키 순서와 `session_replication_role`, IDENTITY와 `setval`, 행 수·내용 대조, 멈추는 시간과 되돌릴 길, 비밀번호를 `ps`에 안 보이게 |
 | [37 거르기 조건이 있는 목록과 일괄 처리](./concepts/37-filtered-list-bulk-actions.md) | 동적 Specification, `COALESCE` 정렬과 개수 쿼리, 주인 확인 뒤 값 검사, 일괄 변경·삭제, `LikePatterns`, 주소에 둔 거르기 조건 |
 | [39 계층 데이터: 카테고리 2단계와 주제](./concepts/39-category-hierarchy.md) | 자기 참조 트리, 2단계 제한, 계산 칸 `parent_key`와 UNIQUE, 주제 enum, 주제별 글 채우기, 비공개 카테고리의 글 숨기기(NOT EXISTS 부분 쿼리), 전체 순서 한 번에 저장과 끌어서 놓기 순수 함수 |
 | [30 이미지 업로드와 처리](./concepts/30-image-upload.md) | multipart, 크기 제한, 매직 넘버, Thumbnailator·EXIF, WebP 플러그인, `/uploads` 내보내기와 캐시, 목록 썸네일 |

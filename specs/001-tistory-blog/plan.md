@@ -16,9 +16,9 @@
 
 **주요 의존성**: Spring Boot (Web, Security, Data JPA, Validation, Cache, Data Redis), Flyway, JWT(Nimbus, `spring-security-oauth2-jose`: Boot가 버전 관리, Jackson 3과 충돌 없음), OWASP Java HTML Sanitizer, jsoup / React 18, React Router 7(8은 React 19 필요), Vite, Vitest, Tiptap, DOMPurify
 
-**저장소**: 주 DB는 MySQL 8 (개발은 docker compose의 MySQL, 운영 MySQL). 테이블은 Flyway가 [erd/schema.sql](./erd/schema.sql)로 만들고 JPA는 `ddl-auto=validate`로 엔티티가 스키마와 맞는지만 확인한다 (R-02). Redis는 캐시(@Cacheable, TTL 5분)와 연타 방지 키 저장. PostgreSQL + pgvector는 비슷한 글 추천(OWN-06) 전용으로 2주 안에 도전(도전 과제, R-02). 이미지는 서버 로컬 디스크의 업로드 폴더(UUID 파일명)에 두고, DB에는 경로·원본 파일명·크기만. 업로드 폴더는 설정값 `app.upload.dir`이고 개발 기본값은 코드 저장소 루트 아래 `/Users/chosun-nhn54/IdeaProjects/blog/uploads`(git에서 뺌), 운영은 서버 경로로 따로 준다. 화면에서는 `/uploads/{파일명}`으로 연다. ERD·data-model의 `./uploads/`는 이 폴더를 뜻한다.
+**저장소**: 주 DB는 PostgreSQL 17 + pgvector 하나(개발은 docker compose의 `pgvector/pgvector:pg17`, 운영은 실습 서버의 같은 이미지 컨테이너). 처음에는 주 DB가 MySQL 8이고 PostgreSQL은 비슷한 글 추천 전용이었는데, 2026-10-13 지원 결정으로 하나로 합쳤다(스텝 23·24, R-02). 글 임베딩(`post_embedding`)도 같은 DB에 있다. 테이블은 Flyway가 [erd/schema.sql](./erd/schema.sql)과 같은 V1로 만들고 JPA는 `ddl-auto=validate`로 엔티티가 스키마와 맞는지만 확인한다 (R-02). Redis는 캐시(@Cacheable, TTL 5분)와 연타 방지 키 저장. 이미지는 서버 로컬 디스크의 업로드 폴더(UUID 파일명)에 두고, DB에는 경로·원본 파일명·크기만. 업로드 폴더는 설정값 `app.upload.dir`이고 개발 기본값은 코드 저장소 루트 아래 `/Users/chosun-nhn54/IdeaProjects/blog/uploads`(git에서 뺌), 운영은 서버 경로로 따로 준다. 화면에서는 `/uploads/{파일명}`으로 연다. ERD·data-model의 `./uploads/`는 이 폴더를 뜻한다.
 
-**테스트**: JUnit 5 + Spring Boot Test + MockMvc(백엔드, DB는 Testcontainers MySQL), Vitest(프론트, 최소) — 원본에 없어 기본값으로 둠 (R-01). 실행은 `./mvnw test`
+**테스트**: JUnit 5 + Spring Boot Test + MockMvc(백엔드, DB는 Testcontainers PostgreSQL pgvector), Vitest(프론트, 최소) — 원본에 없어 기본값으로 둠 (R-01). 실행은 `./mvnw test`
 
 **대상 플랫폼**: Linux 서버 1대(학교 nginx 뒤, 도메인 `now-log.java21.net` 하나). 와일드카드 DNS가 없어 블로그 주소는 서브도메인이 아니라 경로 `{플랫폼}/@{주소}`다(2026-10-12 지원 결정, R-04). 로컬은 hosts에 `127.0.0.1 blog.test` 한 줄을 넣고 `blog.test:8080`, 블로그는 `blog.test:8080/@{주소}`
 
@@ -104,7 +104,7 @@ specs/001-tistory-blog/
 코드 저장소는 GitHub [AIP-1/blog-basic-AIGJ_01_017-blog](https://github.com/AIP-1/blog-basic-AIGJ_01_017-blog)이고, 지원 컴퓨터의 `/Users/chosun-nhn54/IdeaProjects/blog`가 그 클론이다(IntelliJ 프로젝트). 이 문서 저장소(blog-docs)와는 별개다. Spring Initializr로 만든 Maven 프로젝트가 루트에 있어서 **저장소 루트가 곧 백엔드**이고, 프론트만 `frontend/` 하위 폴더에 둔다. 기본 패키지는 `com.nhnacademy.blog`. 아래 경로는 모두 이 저장소 루트 기준이다.
 
 ```text
-docker-compose.yml          # 개발용 MySQL 8, Redis (도전 과제 때 PostgreSQL + pgvector 추가)
+docker-compose.yml          # 개발용 PostgreSQL(pgvector), Redis, Ollama (스텝 23까지는 MySQL도)
 uploads/                    # 개발용 이미지 저장 폴더 (app.upload.dir, .gitignore)
 
 pom.xml
@@ -128,7 +128,7 @@ src/
     │   ├── manage/          # 블로그 주인 관리 (글·댓글 관리, 방문 통계, 차단·금칙어)
     │   ├── admin/           # 서비스 관리
     │   ├── image/
-    │   └── recommend/       # 비슷한 글 추천 (PostgreSQL + pgvector, 도전 과제)
+    │   └── recommend/       # 비슷한 글 추천·글 임베딩 (pgvector, 도전 과제)
     ├── main/resources/      # application.yml(지금의 application.properties를 바꿈), db/migration/(V1__init.sql = erd/schema.sql, 이후 V2…), ADMIN 초기 계정(Flyway 데이터 마이그레이션), static/(React 빌드 결과)
     └── test/java/com/nhnacademy/blog/
 
@@ -158,5 +158,5 @@ frontend/
 | 항목 | 이유 | 더 단순한 대안을 안 쓴 이유 |
 | --- | --- | --- |
 | ~~서브도메인 주소~~ (2026-10-12 없앰) | 티스토리와 같은 경험을 위해 처음엔 서브도메인을 골랐다 | 배포 서버에 와일드카드 DNS가 없어 더 단순한 경로 방식(`blog.com/@{주소}`)으로 바꿨다. 상위 도메인 쿠키도 필요 없어졌다. 쿠키 인증이라 CSRF 대책은 그대로 둔다(R-03, R-04) |
-| 저장소 3종(MySQL, Redis, PostgreSQL) | Redis는 캐시·연타 방지, PostgreSQL은 벡터 검색 | 벡터 검색을 MySQL로 하기 어려움. PostgreSQL은 추천 기능에만 쓰고, 일정이 밀리면 통째로 뺄 수 있게 분리 |
+| 저장소 2종(PostgreSQL, Redis) | Redis는 캐시·연타 방지, PostgreSQL은 주 데이터와 벡터 검색(pgvector) | 처음에는 MySQL + 추천 전용 PostgreSQL의 3종이었다. 의미 검색에서 두 DB를 오가는 비용이 커서 운영 데이터가 적을 때 하나로 합쳤다(2026-10-13 지원 결정, R-02) |
 | XSS 이중 정화 | WYSIWYG HTML 저장 | 마크다운이면 단순하지만 티스토리와 같은 편집 경험을 위해 WYSIWYG를 고름. 서버 정화가 필수, 클라이언트는 보조. 같은 에디터에서 마크다운 문법도 쓰게 했지만(T035a) 저장은 HTML이라 정화 방식은 같다 |
