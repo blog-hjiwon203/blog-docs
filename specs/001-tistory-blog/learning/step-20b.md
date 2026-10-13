@@ -1,20 +1,19 @@
-# 스텝 20b. 비밀번호 재설정·메일·카카오 로그인
+# 스텝 20b. 비밀번호 재설정·메일·카카오·구글 로그인
 
 > 작업: T088, T099, T100 · 코드 브랜치: `step-20b-mail-social` · 날짜: 2026-10-12 · 스텝 20에서 "키를 받은 뒤"로 미룬 셋(2026-10-11 지원 결정)
 
 ## 한눈에 보기
 
-스텝 20에서 외부 서비스 키가 필요해 남긴 작업 셋을 했다. 메일은 개발용 가짜 메일함(Mailpit)으로 실제 SMTP 발송까지 확인했다. 소셜 로그인은 **카카오 하나**다. 구글도 만들었다가, 배포 주소가 http라 구글에 콜백을 등록할 수 없어 뺐다(2026-10-12 지원 결정, [61](./concepts/61-oauth-social-login.md) 3.10). 카카오는 아직 키가 없어 **가짜 제공사로 흐름 전체를 테스트**하고, 진짜 제공사로는 "카카오 로그인 화면으로 보내는 주소"까지만 확인했다.
+스텝 20에서 외부 서비스 키가 필요해 남긴 작업 셋을 했다. 메일은 개발용 가짜 메일함(Mailpit)으로 실제 SMTP 발송까지 확인했다. 카카오·구글은 아직 키가 없어 **가짜 제공사로 흐름 전체를 테스트**하고, 진짜 제공사로는 "카카오 로그인 화면으로 보내는 주소"까지만 확인했다.
 
 | 작업 | 만든 것 | 핵심 파일 |
 | --- | --- | --- |
 | T088 비밀번호 재설정 | 로그인 화면 "비밀번호를 잊었어요" → 재설정 메일(가입하지 않은 이메일도 같은 202, 같은 이메일 1분에 한 번) → 메일 링크로 새 비밀번호(30분, 한 번만, 다른 링크도 은퇴). 링크 토큰은 256비트 임의 값이고 DB에는 SHA-256만. 메일은 커밋 뒤 다른 스레드에서 보냄(응답 시간으로 가입 여부가 새지 않게) | `auth/application/PasswordResetService`, `ResetMailRequested`, `ResetMailListener`, `auth/domain/PasswordResetToken`, `PasswordResetTokenRepository`, `auth/presentation/PasswordResetController`, `pages/auth/PasswordResetPage.tsx` |
 | T088 메일로 잠금 풀기 (R-17 ②) | 로그인이 이메일 키로 막히면 그 메일함으로 "본인이면 이 링크로" 메일(15분에 한 번). 링크로 바꾸면 그 이메일의 로그인 잠금이 풀림. 로그인 화면 429에 메일함을 보라는 안내 | `AuthService.login`, `AttemptLimiter.isLocked`·`clear`, `AuthController`, `pages/auth/LoginPage.tsx` |
 | T088 메일 발송 | `app.mail.sender`로 log·smtp 고르기, SMTP는 `spring.mail.*`(개발 Mailpit, 나중에 Gmail), Mailpit 컨테이너, 비밀 설정 틀 | `SmtpEmailSender`, `LoggingEmailSender`, `MailProperties`, `pom.xml`(starter-mail), `docker-compose.yml`, `config/application-dev.yml.example`, `application.yml` |
-| T099 소셜 로그인·가입 | 카카오 인가 코드 흐름: authorize(state를 Redis와 브라우저 쿠키에) → 제공사 → callback(state 한 번, code를 회원 번호로, 2분짜리 표) → 시작한 플랫폼 주소의 complete(쿠키와 표의 state 비교). 처음 보는 계정은 닉네임 확인 뒤 가입(회원과 연동 한 트랜잭션). 정지 회원은 돌아가는 주소에 사유·기한을 붙여 이메일 로그인과 같은 정지 안내, 돌아갈 곳은 우리 주소만. 제공사 이메일은 받지도 저장하지도 않음 | `auth/application/SocialAuthService`, `OAuthClient`, `OAuthClients`, `KakaoOAuthClient`, `OAuthProperties`, `OAuthMode`, `auth/domain/SocialAccount`, `SocialAccountRepository`, `SocialProvider`, `auth/presentation/OAuthController`, `AuthCookieManager`, `pages/auth/SignupSocialPage.tsx`, `app/social.ts` |
-| T099 소셜 회원 탈퇴 본인 확인 | `mode=reauth`(카카오 `prompt=login`) → 10분짜리 확인 표시 → `DELETE /api/me {}`가 한 번만 씀 | `CredentialService.verifyForWithdrawal`, `member/application/WithdrawalService`, `pages/me/WithdrawPage.tsx` |
-| T100 연동·해제 | 마이페이지 카카오 계정 연동(남의 것·두 번째 카카오 거절)과 해제(회원 행 잠그고 세서, 마지막 로그인 수단이면 409: 카카오로만 가입한 회원은 해제할 수 없음). `Me.socialAccounts`(제공사, 연결된 날) | `SocialAuthService.link`·`unlink`, `CredentialService.socialAccounts`, `member/presentation/dto/MeResponse`, `pages/me/MyPage.tsx` |
-| 구글 빼기 (2026-10-12 지원 결정) | `GoogleOAuthClient` 삭제, `SocialProvider`는 `KAKAO`만(DB CHECK에는 `GOOGLE`이 남음), `OAuthProperties(kakao)`, 주소의 `google`은 404, 화면·운영 설정·배포 스크립트의 구글 제거 | `SocialProvider`, `OAuthProperties`, `app/social.ts`, `MyPage.tsx`, `application-prod.yml`, `deploy/deploy.sh` |
+| T099 소셜 로그인·가입 | 카카오·구글 인가 코드 흐름: authorize(state를 Redis와 브라우저 쿠키에) → 제공사 → callback(state 한 번, code를 회원 번호로, 2분짜리 표) → 시작한 플랫폼 주소의 complete(쿠키와 표의 state 비교). 처음 보는 계정은 닉네임 확인 뒤 가입(회원과 연동 한 트랜잭션). 정지 회원은 돌아가는 주소에 사유·기한을 붙여 이메일 로그인과 같은 정지 안내, 돌아갈 곳은 우리 주소만. 제공사 이메일은 받지도 저장하지도 않음 | `auth/application/SocialAuthService`, `OAuthClient`, `OAuthClients`, `KakaoOAuthClient`, `GoogleOAuthClient`, `OAuthProperties`, `OAuthMode`, `auth/domain/SocialAccount`, `SocialAccountRepository`, `SocialProvider`, `auth/presentation/OAuthController`, `AuthCookieManager`, `pages/auth/SignupSocialPage.tsx`, `app/social.ts` |
+| T099 소셜 회원 탈퇴 본인 확인 | `mode=reauth`(카카오 `prompt=login`, 구글 `max_age=0`) → 10분짜리 확인 표시 → `DELETE /api/me {}`가 한 번만 씀 | `CredentialService.verifyForWithdrawal`, `member/application/WithdrawalService`, `pages/me/WithdrawPage.tsx` |
+| T100 연동·해제 | 마이페이지 소셜 계정 연동(남의 것·같은 제공사 거절)과 해제(회원 행 잠그고 세서, 마지막 로그인 수단이면 409). `Me.socialAccounts`(제공사, 연결된 날) | `SocialAuthService.link`·`unlink`, `CredentialService.socialAccounts`, `member/presentation/dto/MeResponse`, `pages/me/MyPage.tsx` |
 
 ## 요청 흐름
 
@@ -27,10 +26,10 @@
 [로그인] POST /api/auth/login → (기존) 키 고르기·비밀번호 확인
    → 실패이고 이메일 키가 막혀 있으면 noticeLocked(가입한 이메일, 15분에 한 번, 같은 이벤트로 커밋 뒤 메일) → 응답은 그대로 401/429
 
-[소셜 시작] <a href> GET blog.com/api/auth/oauth/kakao/authorize?mode=login&redirect=…   (google·그 밖은 404)
+[소셜 시작] <a href> GET blog.com/api/auth/oauth/kakao/authorize?mode=login&redirect=…
    → state(256비트) → Redis oauth:state:{state} 10분 + Set-Cookie oauth_state(Path=/api/auth/oauth, Lax) → 302 카카오
 [제공사] 로그인 → 302 localhost:8080/api/auth/oauth/kakao/callback?code&state
-[콜백] take(state) → code → 토큰 → /v2/user/me id → Redis oauth:ticket:{ticket} 2분 → 302 {origin}/api/auth/oauth/complete?ticket
+[콜백] take(state) → code → 토큰 → /v2/user/me id (구글: userinfo sub) → Redis oauth:ticket:{ticket} 2분 → 302 {origin}/api/auth/oauth/complete?ticket
 [끝내기] blog.com/api/auth/oauth/complete → state 쿠키 읽고 지우기 → take(ticket), 표의 state = 쿠키? → mode별
    login : 연결된 계정 → 정지면 /login?error=MEMBER_SUSPENDED&reasonMessage=…&until=…(쿠키 없음)
            → 로그인 쿠키 + redirect(우리 주소만) / 처음 → /signup/social?token(10분)
@@ -62,26 +61,25 @@
   - 로그인을 7번 틀렸더니 "[블로그] 로그인이 잠시 막혔습니다"가 **한 통만** 왔다.
   - 그 링크로 비밀번호를 바꾸자 15분을 기다리지 않고 바로 로그인됐다.
   - 같은 링크를 다시 쓰면 400 `RESET_TOKEN_INVALID`.
-- **구글 `prompt`에 `login`이 없다**(구글을 넣었을 때): 탈퇴 본인 확인을 "이미 로그인해 있어도 다시 로그인"으로 하려고 카카오처럼 `prompt=login`을 생각했다. 그런데 구글의 `prompt`는 `none`·`consent`·`select_account`만 받는다. 구글은 OpenID Connect의 `max_age=0`을 썼다([61](./concepts/61-oauth-social-login.md) 3.9). 지금은 구글을 빼서 카카오의 `prompt=login`만 남았다.
-- **구글 리다이렉트 URI에 `blog.test`를 등록할 수 없다**: 구글은 https가 아니면 localhost만 받고, 도메인은 공개 최상위 도메인으로 끝나야 한다. 개발 콜백을 `http://localhost:8080/...`으로 둘 수밖에 없는데, localhost 응답으로는 `Domain=.blog.test` 로그인 쿠키를 줄 수 없다. 그래서 콜백은 표만 만들고 **로그인을 시작한 플랫폼 주소의 `complete`로 한 번 더 보내** 거기서 쿠키를 주게 나눴다. 이 나눔 덕분에 state를 브라우저 쿠키와 맞춰 보는 일(로그인 CSRF 막기)도 complete에서 하게 됐다([61](./concepts/61-oauth-social-login.md) 3.6, 4.2). 계약(rest-api.md)에 `complete`를 더했다. 구글을 뺀 뒤에도 이 나눔은 그대로 두었다. 이유는 "콘솔에 등록한 콜백 주소가 플랫폼 호스트가 아닐 수 있다(개발의 localhost), 로그인 쿠키는 `Domain=.{플랫폼}`"으로 고쳐 적었다.
-- **구글 로그인을 뺐다**(2026-10-12 지원 결정): 배포 준비를 하며 운영 주소(학교 nginx, `http://now-log.java21.net`)가 **http**라는 것과 맞춰 보니, 구글은 https 콜백만 받아 운영에서 등록할 주소가 없었다. 개발 PC(localhost)에서는 되고 운영에서는 안 되는 기능이 되므로 뺐다. 카카오는 http 콜백을 등록할 수 있다. 흐름 코드는 `OAuthClient` 뒤에 제공사 차이를 숨겨 두어 거의 손대지 않았다. 다시 넣으려면 사이트에 https를 붙이고, 구글 콘솔에 https 콜백을 등록하고, 클라이언트 구현·enum·설정 칸·화면 버튼을 되살린다([61](./concepts/61-oauth-social-login.md) 3.10). 배운 것: 제공사의 주소 규칙은 만들기 전에 배포 환경과 대조한다.
+- **구글 `prompt`에 `login`이 없다**: 탈퇴 본인 확인을 "이미 로그인해 있어도 다시 로그인"으로 하려고 카카오처럼 `prompt=login`을 생각했다. 그런데 구글의 `prompt`는 `none`·`consent`·`select_account`만 받는다. 구글은 OpenID Connect의 `max_age=0`을 쓰기로 했다([61](./concepts/61-oauth-social-login.md) 3.9).
+- **구글 리다이렉트 URI에 `blog.test`를 등록할 수 없다**: 구글은 https가 아니면 localhost만 받고, 도메인은 공개 최상위 도메인으로 끝나야 한다. 콜백을 `http://localhost:8080/...`으로 둘 수밖에 없는데, localhost 응답으로는 `Domain=.blog.test` 로그인 쿠키를 줄 수 없다. 그래서 콜백은 표만 만들고 **로그인을 시작한 플랫폼 주소의 `complete`로 한 번 더 보내** 거기서 쿠키를 주게 나눴다. 이 나눔 덕분에 state를 브라우저 쿠키와 맞춰 보는 일(로그인 CSRF 막기)도 complete에서 하게 됐다([61](./concepts/61-oauth-social-login.md) 3.6, 4.2). 계약(rest-api.md)에 `complete`를 더했다.
 - **키 없이 확인한 것**: 키가 비어 있으면 authorize가 `/login?error=OAUTH_UNAVAILABLE`로 302했다. 가짜 키를 넣자 `https://kauth.kakao.com/oauth/authorize?response_type=code&client_id=…&redirect_uri=http://localhost:8081/api/auth/oauth/kakao/callback&state=…`로 302하고 `Set-Cookie: oauth_state=…; Path=/api/auth/oauth; Max-Age=600; HttpOnly; SameSite=Lax`를 줬다.
-- **진짜 카카오 로그인은 아직 해 보지 않았다**: 키가 `config/application-dev.yml`에 아직 없다. 흐름 전체(state, 쿠키, 표, 가입, 연동, 해제, 재인증)는 가짜 제공사(`FakeOAuthClients`, code가 곧 회원 번호)로 테스트했다. 토큰 교환과 회원 번호 읽기(`fetchUserId`)는 진짜 응답으로 처음 돌려 볼 때 확인해야 한다(아래 "직접 해 보기" 3).
+- **진짜 카카오·구글 로그인은 아직 해 보지 않았다**: 키가 `config/application-dev.yml`에 아직 없다. 흐름 전체(state, 쿠키, 표, 가입, 연동, 해제, 재인증)는 가짜 제공사(`FakeOAuthClients`, code가 곧 회원 번호)로 테스트했다. 토큰 교환과 회원 번호 읽기(`fetchUserId`)는 진짜 응답으로 처음 돌려 볼 때 확인해야 한다(아래 "직접 해 보기" 3).
 - **응답 시간으로 가입 여부가 샐 수 있었다**: 학습 자료를 쓰며 `PasswordResetService`를 다시 읽다가 찾았다. 재설정 메일을 요청 처리 안에서 SMTP로 보내고 있어서, 가입한 이메일만 SMTP 시간만큼(Gmail이면 수백 ms) 늦게 202가 돌아왔다. 응답 코드는 같아도 시간을 재면 가입한 이메일을 골라낼 수 있다. Mailpit은 수 밀리초라 확인 중에는 드러나지 않았다. 요청은 토큰을 저장하고 이벤트(`ResetMailRequested`)만 발행하고, `ResetMailListener`가 `@TransactionalEventListener`(커밋 뒤에만, 롤백된 토큰의 링크는 안 나감) + `@Async`(다른 스레드)로 보내게 고쳤다. 테스트는 메일이 늦게 오므로 `RecordingEmailSender.awaitTo`로 올 때까지(최대 5초) 기다리게 했고, 세 번 연달아 돌려 모두 통과했다([62](./concepts/62-password-reset-mail.md) 3.9, 5.3, 5.9).
 - **소셜 로그인의 정지 안내가 이메일 로그인보다 짧았다**: 처음엔 정지 회원을 `/login?error=MEMBER_SUSPENDED`로만 보내 "이용이 정지된 계정입니다." 한 줄만 보였다. 이메일 로그인은 403의 `detail`로 사유와 기한을 보인다. 302 이동에는 JSON을 실을 수 없어서 같은 값을 주소의 `reasonMessage`, `until`에 붙이고, 로그인 화면이 그것으로 같은 `SuspensionNotice`를 그리게 했다([61](./concepts/61-oauth-social-login.md) 5.2, 5.7).
 - **테스트가 토큰을 꺼낼 곳이 없었다**: 재설정 토큰은 DB에 해시만 있다. 테스트용 `@Primary` `RecordingEmailSender`를 만들어 보낸 메일을 모아 두고, 본문 링크에서 정규식으로 꺼냈다. 테스트들이 같은 메일함을 쓰므로 받는 사람으로 골라 본다([62](./concepts/62-password-reset-mail.md) 5.9).
 - **전체 테스트**: `./mvnw test` 397개 통과.
+- **운영에서 구글을 뺐다가 되살렸다 (2026-10-12 → 10-13)**: 운영 주소가 http뿐이라고 보고 구글 로그인을 뺐다. 근거는 학교 nginx 안내문 예시가 `listen 80`만 있다는 것이었는데 확인은 하지 않았다. 다음 날 `curl -v https://now-log.java21.net`으로 Let's Encrypt 인증서가 붙어 https가 열리는 것을 보고, 뺀 커밋을 되돌리고 운영 콜백(카카오·구글)을 https로, 운영 쿠키를 Secure로 바꿨다. 카카오는 http 콜백으로도 로그인이 됐는데, nginx가 http를 https로 넘겨서 로그인 뒤에도 https에 머물렀던 것이다([61 7.6](concepts/61-oauth-social-login.md)).
 
 ## 명세와 다르거나 아직 채우지 않은 것
 
 | 항목 | 지금 | 언제 |
 | --- | --- | --- |
 | 소셜 콜백 뒤 `complete` | 계약에 없던 `GET /api/auth/oauth/complete?ticket=`을 더함(콜백과 쿠키 주는 곳을 나눔) | rest-api.md·research R-07 구현 메모에 적음 |
-| 제공사 쪽 연결 끊기(카카오 unlink) | 하지 않음. 우리 `social_account` 행만 지움(같은 소셜 계정은 다시 가입·연동 가능) | 2026-10-12 지원 결정으로 이대로 둔다(research R-07 구현 메모). 서비스 동작에는 차이가 없고, 카카오 unlink에 필요한 어드민 키는 모든 사용자를 다룰 수 있어 공용 서버에 두기 위험하다 |
-| 구글 로그인 | 뺌. 소셜은 카카오만, `google` 주소는 404 | 2026-10-12 지원 결정(배포 주소가 http). https가 생기면 다시 넣을 수 있음([61](./concepts/61-oauth-social-login.md) 3.10) |
-| 진짜 카카오 로그인 | 가짜 제공사 테스트와 authorize 주소까지만 | 지원이 키를 `config/application-dev.yml`(운영은 GitHub secrets `KAKAO_CLIENT_ID`·`KAKAO_CLIENT_SECRET`)에 넣은 뒤 |
-| 운영 메일 | GitHub secrets에 `MAIL_PASSWORD`가 있으면 배포 스크립트가 `smtp`(Gmail), 없으면 `log`(로그로만) | Gmail 2단계 인증·앱 비밀번호를 만든 뒤 secrets에 |
-| PKCE | 쓰지 않음 | 받아들임([61](./concepts/61-oauth-social-login.md) 6장) |
+| 제공사 쪽 연결 끊기(카카오 unlink, 구글 토큰 철회) | 하지 않음. 우리 `social_account` 행만 지움(같은 소셜 계정은 다시 가입·연동 가능) | 2026-10-12 지원 결정으로 이대로 둔다(research R-07 구현 메모). 서비스 동작에는 차이가 없고, 카카오 unlink에 필요한 어드민 키는 모든 사용자를 다룰 수 있어 공용 서버에 두기 위험하다 |
+| 진짜 카카오·구글 로그인 | 가짜 제공사 테스트와 authorize 주소까지만 | 지원이 키를 `config/application-dev.yml`에 넣은 뒤 |
+| 운영 메일 | `APP_MAIL_SENDER` 기본 `log`(로그로만) | 운영 SMTP 계정이 준비되면 환경 변수로 |
+| PKCE, 구글 `auth_time` 확인 | 쓰지 않음 | 받아들임([61](./concepts/61-oauth-social-login.md) 6장) |
 
 ## 직접 해 보기
 
@@ -94,14 +92,14 @@ cd frontend && npx vitest run src/app/social.test.ts
 
 1. **재설정 메일**: `docker compose up -d`(Mailpit 포함) → `config/application-dev.yml`에서 `app.mail.sender: smtp`, `spring.mail.host: localhost`, `port: 1025`(틀은 `.example`) → 서버 다시 띄우기 → `http://blog.test:8080/login` → "비밀번호를 잊었어요" → 메일 받기 → `http://localhost:8025`에서 메일 → 링크로 새 비밀번호 → 로그인. 가입하지 않은 이메일로도 해 보고, 화면은 같은데 메일은 오지 않는 것을 본다([62](./concepts/62-password-reset-mail.md) 7.1, 7.2).
 2. **잠금 안내**: curl로 같은 이메일을 7번 틀리고(401 다섯, 429 둘) Mailpit에 안내 메일이 한 통인지, 그 링크로 바꾸면 바로 로그인되는지([62](./concepts/62-password-reset-mail.md) 7.3).
-3. **진짜 카카오**(키를 받은 뒤):
-   1. 카카오 developers에 리다이렉트 URI `http://localhost:8080/api/auth/oauth/kakao/callback`(운영도 쓰려면 `http://now-log.java21.net/api/auth/oauth/kakao/callback`)을 등록한다.
-   2. 받은 키를 `config/application-dev.yml`의 `app.oauth.kakao`에 넣고 서버를 다시 띄운다.
+3. **진짜 카카오·구글**(키를 받은 뒤):
+   1. 카카오 developers에 리다이렉트 URI `http://localhost:8080/api/auth/oauth/kakao/callback`, Google Cloud 콘솔의 승인된 리디렉션 URI에 `http://localhost:8080/api/auth/oauth/google/callback`을 등록한다.
+   2. 받은 키를 `config/application-dev.yml`의 `app.oauth.kakao`·`google`에 넣고 서버를 다시 띄운다.
    3. `http://blog.test:8080/login` → "카카오로 계속하기" → 처음이면 닉네임 → 가입.
    4. 개발자 도구 Network에서 `callback`(localhost)에는 로그인 쿠키가 없고 `complete`(blog.test)에만 있는 것을 본다.
-   5. 이메일 회원으로 마이페이지 → 카카오 연결·해제. 카카오로만 가입한 회원은 해제가 거절되는 것도 본다.
+   5. 이메일 회원으로 마이페이지 → 구글 연결·해제.
    6. 소셜 회원으로 회원 탈퇴 → "카카오로 본인 확인"이 다시 로그인을 묻는지 본다.
 
    자세한 순서는 [61](./concepts/61-oauth-social-login.md) 7.3.
 4. **로그인 CSRF 흉내**: 브라우저 A에서 시작한 흐름의 콜백 주소를 브라우저 B에서 열면 로그인되지 않는다([61](./concepts/61-oauth-social-login.md) 7.4). 키가 없으면 테스트 `stateMustComeFromThisBrowserAndBeUsedOnce`로 본다.
-5. **키 없이 흐름 보기**: `curl -si 'http://blog.test:8080/api/auth/oauth/kakao/authorize?mode=login' | grep -i '^location'` → `…/login?error=OAUTH_UNAVAILABLE`. 가짜 키를 넣으면 카카오 주소와 `oauth_state` 쿠키, Redis의 `oauth:state:*`를 본다([61](./concepts/61-oauth-social-login.md) 7.1, 7.2). 뺀 구글 주소(`/api/auth/oauth/google/authorize`)는 404다.
+5. **키 없이 흐름 보기**: `curl -si 'http://blog.test:8080/api/auth/oauth/kakao/authorize?mode=login' | grep -i '^location'` → `…/login?error=OAUTH_UNAVAILABLE`. 가짜 키를 넣으면 카카오 주소와 `oauth_state` 쿠키, Redis의 `oauth:state:*`를 본다([61](./concepts/61-oauth-social-login.md) 7.1, 7.2).
