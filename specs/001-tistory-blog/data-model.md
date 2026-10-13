@@ -132,7 +132,7 @@ MNG-03의 인기 글 순위는 테이블을 따로 두지 않고 누적은 `post
 
 ## 추천 (PostgreSQL + pgvector, 도전 과제)
 
-**post_embedding**: post_id(MySQL post.id, FK 아님, PK), embedding(vector(1024), Ollama bge-m3), updated_at. 글을 지우면 함께 지우고, 비공개 등은 추천할 때 가시성으로 거른다(R-02).
+**post_embedding**: post_id(MySQL post.id, FK 아님, PK), embedding(vector(1024), Ollama bge-m3), text_version(넣는 글자 방식 번호, 2026-10-13 추가: 1 = 제목+본문, 2 = 제목+태그+본문), updated_at. 글을 지우면 함께 지우고, 비공개 등은 추천할 때 가시성으로 거른다(R-02).
 
 ## 관리
 

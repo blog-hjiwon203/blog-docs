@@ -130,6 +130,7 @@
 | 409 | `RANKING_UPDATED` | 랭킹 더보기 중 스냅숏이 바뀜 | `{ snapshotAt }` (새 기준 시각) |
 | 429 | `TOO_MANY_REQUESTS` | 인증 메일·재설정 메일을 1분 안에 다시 요청, 같은 연타 방지 키의 처음 요청이 3초 넘게 처리 중, 로그인 비밀번호(이메일별)·인증 코드(이메일별)·비밀번호 변경의 지금 비밀번호(회원별)를 15분 안에 5번 틀림(다섯 번째부터 15분 동안), 같은 IP에서 이 셋을 합쳐 15분 안에 20번 틀림(research R-17) | `{ retryAfterSeconds }` |
 | 500 | `INTERNAL_ERROR` | 예상하지 못한 오류 | |
+| 503 | `SEMANTIC_SEARCH_UNAVAILABLE` | 의미 검색인데 추천 기능이 꺼져 있거나 임베딩 서버·추천 DB에 닿지 않음 | |
 
 ### 제재 사유
 
@@ -454,6 +455,7 @@
 | --- | --- | --- | --- | --- | --- |
 | GET | /api/search?q=&page= | B | 누구나 | `X-Blog-Address`가 있으면 블로그 안 제목·본문·태그 검색(없으면 아래 전체 검색) `PostSummary` 10 최신순 | SRCH-01 |
 | GET | /api/search?q=&type=post&page= | P | 누구나 | 헤더가 없으면 전체 글 검색 `PostSummary` 10 최신순. 남에게 보이는 글만(홈 최신 글과 같은 조건이라 주인도 자기 비공개 글은 여기서 안 나오고 블로그 안 검색에서 찾는다). `type`을 빼면 `post`, 그 밖의 값은 400 | SRCH-02 |
+| GET | /api/search?q=&mode=semantic&page= | B·P | 누구나 | 의미 검색. 블로그 주소면 그 블로그 안(주인에게는 자기 비공개 글도), 플랫폼 주소면 전체 글(위 글 검색과 같은 가시성). `[{ post: PostSummary, similarity }]` 10, 가까운 순(`similarity`는 코사인 유사도, 소수 둘째 자리). 유사도가 `app.search.semantic.min-similarity`(0.40)보다 낮은 글은 빼고, 가까운 순 100개 안에서만 페이지를 나눈다. `mode`는 `keyword`(기본)·`semantic`, 그 밖의 값은 400 `mode`. `type=blog`와 같이 쓰면 400 `mode`. 추천 기능이 꺼져 있거나 임베딩 서버·추천 DB에 닿지 않으면 503 `SEMANTIC_SEARCH_UNAVAILABLE` | OWN-07 |
 | GET | /api/search?q=&type=blog&page= | P | 누구나 | 블로그 이름·소개 검색 `[{ blog: { id, address, name, description, profileImageUrl }, owner: MemberSummary, subscriberCount }]` 10, 새로 만든 순. 지운·이용 제한·주인 정지·이사한 블로그는 빠진다 | SRCH-02 |
 | GET | /api/home/latest?cursor= | P | 누구나 | 모든 블로그 공개 글 `PostSummary` 20 최신순 | HOME-01 |
 | GET | /api/home/popular | P | 누구나 | 인기 점수 상위 10 `{ snapshotAt, items: [{ rank, post }] }`. 5분 스냅숏 | HOME-02 |
