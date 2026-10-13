@@ -10,13 +10,13 @@
 - 학교 MySQL(s4)의 데이터를 그대로 옮기는 스크립트를 만들고, 노트북에서 시험했다.
 - 문서의 기준 DB를 PostgreSQL로 바꿨다.
 
-운영 전환(T131)은 코드 PR을 병합한 뒤 지원이 서버에서 스크립트를 한 번 실행하는 일이다.
+운영 전환(T131)은 코드 PR을 병합한 뒤 지원이 서버에서 스크립트를 한 번 실행하는 일이다. 2026-10-13에 끝났다.
 
 | 작업 | 만든 것 | 핵심 파일 |
 | --- | --- | --- |
 | T129 배포 | PostgreSQL·Ollama를 늘 띄우고(`RECOMMEND_DB_PASSWORD` 필수), 같은 컨테이너에 `blog` DB가 없으면 만들고, 앱을 `jdbc:postgresql://aigj017-recommend-db:5432/blog`로. 비밀번호는 명령줄에 찍히지 않게. 워크플로에서 MySQL secrets(`DB_*`)를 빼고, 이전 스크립트도 서버에 올림 | `deploy/deploy.sh`, `.github/workflows/deploy.yml` |
 | T130 이전 스크립트 | 앱 정지 → 표 비우기 → 표마다 MySQL을 COPY 글자 형식으로 꺼내 `\copy` → 시퀀스 → 행 수 비교 → 앱 다시 띄움 | `deploy/migrate-from-mysql.sh` |
-| T131 운영 전환 | **아직 안 함**: 코드 PR 병합 뒤 지원이 서버에서 실행 | (아래 "운영 전환 순서") |
+| T131 운영 전환 | 코드 PR #38 병합(자동 배포) 뒤 지원이 s2에서 실행. 26개 표 행 수 모두 같음, 공개 화면·글자 검색·의미 검색 확인, 지원이 로그인해 새 글 쓰기 확인(2026-10-13) | (아래 "운영 전환 순서") |
 | T132 문서 | CLAUDE.md(두 벌), 코드 README, plan, research R-02, data-model, `erd/schema.sql`(PostgreSQL V1 사본)·ERD README, quickstart, contracts 503 | `blog-docs/specs/001-tistory-blog/…` |
 
 ## 운영 전환 순서 (T131, 지원이 할 일)
@@ -80,7 +80,7 @@
 
 ## 명세와 다르거나 아직 채우지 않은 것
 
-- **T131 운영 전환은 아직**: 코드 PR 병합과 지원의 스크립트 실행이 남았다. 끝나면 T131을 체크한다.
+- **MySQL과 `DB_*` secrets는 며칠 남겨 둔다**: 되돌릴 길이다. 문제가 없으면 secrets `DB_*` 5개를 지운다.
 - **사이트가 몇 분 비어 보인다**: 병합(자동 배포)과 스크립트 실행 사이. 그 사이의 가입·글은 스크립트가 지운다(R-02에서 받아들임).
 - **옛 `recommend` DB**: `deploy.sh`가 컨테이너 기본 DB(`recommend`)로 접속해 계정 비밀번호를 맞추고 `blog` DB가 있는지 본다. 그래서 `recommend` DB를 바로 지우면 다음 배포가 실패한다. 지우려면 `deploy.sh`의 `-d recommend`를 `-d blog`(또는 `postgres`)로 바꾼 뒤에 지운다.
 - **Crowfoot 문서는 MySQL 그대로**: `erd/schema.sql`은 PostgreSQL V1 사본이 되었지만, 원본이던 Crowfoot 문서 665는 MySQL 타입 그대로다. 표·칸·관계는 같다. Crowfoot도 PostgreSQL로 맞출지는 지원이 정한다.

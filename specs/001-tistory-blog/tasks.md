@@ -814,7 +814,7 @@ description: "지원 서비스 구현 작업 (2주 일정 기준)"
 
 - [X] T129 [구조] `deploy.sh`를 PostgreSQL 주 DB로 in `deploy/` (R-02)
 - [X] T130 [구조] MySQL → PostgreSQL 이전 스크립트 in `deploy/migrate-from-mysql.sh` (R-02)
-- [ ] T131 [구조] 운영 전환과 확인(지원이 서버에서 이전 스크립트 실행) (R-02)
+- [X] T131 [구조] 운영 전환과 확인(지원이 서버에서 이전 스크립트 실행) (R-02)
 - [X] T132 [구조] 문서를 PostgreSQL 기준으로: CLAUDE.md, plan, research, data-model, ERD, quickstart, 학습 자료 (R-02)
 
 ### 기능별로 보기
