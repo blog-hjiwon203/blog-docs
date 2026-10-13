@@ -83,6 +83,7 @@
 | [44 휴대폰 화면: 반응형과 헤드리스 Chrome 점검](./concepts/44-mobile-responsive-check.md) | viewport, 미디어 쿼리, `minmax(0, 1fr)`, 표를 카드로, CDP로 360px 화면 재기·스크린숏 |
 | [41 임베딩과 벡터 검색](./concepts/41-embedding-vector-search.md) | 임베딩, 코사인 유사도·거리, pgvector `<=>`와 HNSW, Ollama bge-m3, 추천에서 볼 수 없는 글 거르기, 가짜 임베딩 테스트 |
 | [42 두 번째 DB와 커밋 뒤 비동기 처리](./concepts/42-second-db-async-events.md) | `@Bean(defaultCandidate = false)` DataSource, DB별 Flyway, 최종 일관성, 이벤트·`@TransactionalEventListener`·`@Async`, 비동기 테스트 |
+| [65 PostgreSQL vs MySQL: DB 두 개를 하나로 합쳐도 될까](./concepts/65-postgresql-vs-mysql.md) | 두 DB의 같은 점과 다른 점(확장·문법·대소문자 비교·격리 수준), 데이터를 한 곳에 두면 얻는 것(외래 키·한 트랜잭션·가시성 거르기를 SQL 한 번에), 선택지 셋 비교와 설계상 최선, PostgreSQL로 옮길 때 고칠 곳(INSERT IGNORE 8곳 등) |
 | [37 거르기 조건이 있는 목록과 일괄 처리](./concepts/37-filtered-list-bulk-actions.md) | 동적 Specification, `COALESCE` 정렬과 개수 쿼리, 주인 확인 뒤 값 검사, 일괄 변경·삭제, `LikePatterns`, 주소에 둔 거르기 조건 |
 | [39 계층 데이터: 카테고리 2단계와 주제](./concepts/39-category-hierarchy.md) | 자기 참조 트리, 2단계 제한, 계산 칸 `parent_key`와 UNIQUE, 주제 enum, 주제별 글 채우기, 비공개 카테고리의 글 숨기기(NOT EXISTS 부분 쿼리), 전체 순서 한 번에 저장과 끌어서 놓기 순수 함수 |
 | [30 이미지 업로드와 처리](./concepts/30-image-upload.md) | multipart, 크기 제한, 매직 넘버, Thumbnailator·EXIF, WebP 플러그인, `/uploads` 내보내기와 캐시, 목록 썸네일 |
@@ -114,6 +115,7 @@
 | [16 인가와 가시성 판단](./concepts/16-authorization-visibility.md) | 인증과 인가, 존재를 숨기는 404, 정책 객체, sealed 타입과 switch |
 | [17 멱등성과 Redis](./concepts/17-idempotency-redis.md) | 멱등성, 중복 요청, Idempotency-Key, Redis 기초와 `SET NX` |
 | [35 캐시: Spring Cache와 Redis](./concepts/35-spring-cache-redis.md) | 캐시와 오래된 값, TTL, `@Cacheable`과 프록시, Redis 키·Java 직렬화, `sync`, 캐시에 번호만 두기 |
+| [64 캐시 저장소 고르기: 꼭 Redis여야 할까](./concepts/64-cache-store-choice.md) | 로컬 캐시와 원격 캐시, 자바 Map·Caffeine·Redis 비교, 고르는 질문 네 개, 캐시와 캐시가 아닌 임시 데이터(토큰·시도 횟수·연타 방지), 캐시만 Caffeine으로 바꾸는 법, 두 단계 캐시 |
 | [18 SPA와 서버 라우팅](./concepts/18-spa-server-routing.md) | History API, 서버 폴백, 301/302, Vite 개발 서버와 빌드 |
 | [28 Thymeleaf에서 React로](./concepts/28-thymeleaf-to-react.md) | 서버 렌더링과 클라이언트 렌더링, 같은 화면 두 가지 구현, 빌드가 하는 일, 개발 서버와 빌드 스크립트 (Thymeleaf를 알면 React 문서보다 먼저) |
 | [19 React Router와 API 클라이언트](./concepts/19-react-router-api-client.md) | React 기초, React Router 7, fetch, TypeScript, Vitest, 동시에 나간 요청과 정지 응답(한 곳에 기억하고 읽기만 다시 보내기) |
