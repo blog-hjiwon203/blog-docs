@@ -22,6 +22,12 @@
   - 추천: pgvector 코사인 거리(`<=>`) 가까운 순 후보 30개 → MySQL에서 보는 사람 기준 가시성(`visibleTo`)으로 거르고 자기 글을 빼고 `size`개(기본 5, 1~10, 다른 블로그 포함).
   - 표: PostgreSQL `post_embedding(post_id PK, embedding vector(1024), updated_at)`. 두 번째 DB라 Flyway를 따로 하나 더 둔다(`db/recommend`).
   - **의미 검색 (2026-10-13 지원 결정, 스텝 22, OWN-07)**: 주 DB와 추천 DB를 합치지 않고 지금 구조로 한다. 검색어를 같은 모델로 임베딩(같은 검색어는 Redis 캐시 5분)해 `post_embedding`에서 코사인 유사도 0.40 이상인 글을 가까운 순 100개까지 뽑고, MySQL에서 글자 검색과 같은 가시성(전체: `visibleTo`, 블로그 안: `listedIn`)으로 거른 뒤 그 순서대로 10개씩 나눈다. 블로그 안 검색은 추천 DB가 블로그를 모르므로 MySQL에서 그 블로그의 볼 수 있는 글 번호를 먼저 읽어 그 안에서만 찾는다. 0.40은 bge-m3로 잰 값이다(관련 있는 글 0.42~0.58, 관련 없는 글 0.21~0.39, 2026-10-13 개발 Ollama로 측정). 설정값 `app.search.semantic.min-similarity`. 의미 검색은 앞쪽 결과만 쓸모가 있어 100개 제한을 둔다. 글자 검색과 점수를 섞는 방식(RRF)은 고르지 않았다(탭으로 나눠 차이를 보이기로, 지원 결정).
+- **주 DB를 PostgreSQL로 합침 (2026-10-13 지원 결정, 스텝 23·24)**: 주 DB(MySQL)와 추천 DB(PostgreSQL)를 PostgreSQL 하나로 합친다. 운영 데이터가 아주 적은(발행 글 2개, 회원 몇 명) 지금이 옮기기 가장 싸고, 임베딩과 글이 한 DB에 있으면 의미 검색·추천의 가시성 조건을 SQL 한 번으로 쓰고 글을 지울 때 임베딩을 외래 키로 함께 지울 수 있다. DataSource·Flyway·테스트 컨테이너도 하나가 된다. 스텝 24에서 이 절과 plan·data-model·ERD를 PostgreSQL 기준으로 다시 쓴다.
+  - 대소문자: MySQL `utf8mb4_0900_ai_ci`가 하던 대소문자 무시 비교(이메일·닉네임·블로그 주소·카테고리·태그·금칙어의 중복 막기와 찾기)는 `citext`로 한다. 글자 검색·관리자 회원 검색은 `ILIKE`. 악센트 무시(é = e)는 잃는다(한글에는 영향 없음, 지원 결정).
+  - `updated_at`: MySQL의 `ON UPDATE CURRENT_TIMESTAMP`는 옮기지 않는다(트리거 없음). 엔티티 수정은 JPA `@LastModifiedDate`가 채우고, 네이티브 UPDATE 중 시각을 바꿔야 하는 곳만 직접 넣는다.
+  - 운영: s2 서버에 이미 떠 있는 `aigj017-recommend-db`(pgvector pg17) 컨테이너 안에 `blog` DB를 새로 만들어 쓴다. 서버 포트는 열지 않고 docker 네트워크 안에서만 닿는다. 데이터는 docker 볼륨 `aigj017-recommend-data`.
+  - 데이터 이전: 표는 Flyway로 만들고, s4 MySQL에서 표마다 `mysql --batch`로 꺼내 `\copy`로 넣은 뒤 시퀀스를 `max(id)`에 맞춘다. 임베딩은 옮기지 않고 서버가 뜰 때 다시 만든다. `pgloader`는 MySQL 8 기본 인증(`caching_sha2_password`)에 접속하지 못할 수 있어 쓰지 않는다. s4 MySQL은 되돌릴 길로 며칠 지우지 않는다.
+  - 백업: 하지 않는다(과제 규모, 지원 결정). 볼륨을 지우는 명령(`docker volume rm`, `docker system prune --volumes`)을 쓰면 데이터를 잃는다.
 
 ## R-03 인증 (2026-10-07 확정, 2026-10-12 쿠키 Domain 없앰)
 

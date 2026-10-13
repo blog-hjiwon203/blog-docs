@@ -461,6 +461,40 @@ description: "지원 서비스 구현 작업 (2주 일정 기준)"
 
 **확인할 것**: 의미로 찾기에서 낱말이 없는 글이 뜻으로 찾아짐(예: "자바 공부" → 스프링 글), 남의 비공개 글은 안 나오고 블로그 안에서 주인에게는 자기 비공개 글이 나옴, 너무 먼 글은 빠짐, 추천을 끈 서버에서는 의미로 찾기가 안내 문구, 태그 이름을 바꾸면 그 글이 새 태그로 찾아짐.
 
+### 스텝 23. 주 DB를 PostgreSQL로: 스키마·코드·테스트 (2026-10-13 지원 결정)
+
+**무엇을 만드나**: 주 DB를 MySQL에서 PostgreSQL(pgvector)로 바꾸고, 추천 DB를 거기에 합친다(R-02). 지금 스키마와 동작은 그대로 두고 DB만 바꾼다. 대소문자 무시 비교는 `citext`.
+
+**끝나면**: 개발·테스트가 PostgreSQL 하나로 돈다. MySQL과 두 번째 DataSource가 없다. 의미 검색과 추천이 가시성 조건까지 SQL 한 번으로 찾는다.
+
+| 작업 | 내용 |
+| --- | --- |
+| T123 | Flyway `db/migration`을 PostgreSQL용 V1 한 벌로 다시 쓴다(MySQL V1~V4와 추천 V1~V2를 합친 지금 스키마). `citext`·`vector` 확장, 대소문자 무시 컬럼은 `citext`, 번호는 identity, 참/거짓은 `boolean`, 긴 글자는 `text`, 생성 컬럼, 표·컬럼 설명은 `COMMENT ON`, `post_embedding.post_id`는 `post` 외래 키(`ON DELETE CASCADE`). `ON UPDATE CURRENT_TIMESTAMP`는 두지 않는다. 엔티티가 `ddl-auto=validate`를 통과 |
+| T124 | MySQL 전용 SQL 바꾸기: `INSERT IGNORE` 8곳 → `ON CONFLICT DO NOTHING`, `UPDATE … JOIN`·`DELETE … JOIN` 7곳 → `UPDATE … FROM`·`DELETE … USING`, 그 밖 MySQL 함수·문법. 네이티브 UPDATE 중 `updated_at`을 바꿔야 하는 곳은 직접 넣는다 |
+| T125 | 대소문자: 글자 검색·관리자 회원 검색은 `ILIKE`, 대소문자만 다른 이메일·닉네임·블로그 주소·카테고리·태그·금칙어가 지금처럼 막히는지 테스트 |
+| T126 | DB 하나로: 추천용 두 번째 DataSource·Flyway(`db/recommend`)를 없애고 임베딩 저장·추천·의미 검색을 주 DB에서. 의미 검색과 추천은 가시성 조건과 거리 정렬을 한 쿼리로(블로그 안 검색의 글 번호 목록 넘기기를 없앰). Ollama를 끄는 설정(`app.recommend.enabled`)은 그대로 |
+| T127 | 잠금·격리 수준: 기본 격리가 READ COMMITTED가 되므로 잠그는 쿼리와 동시성 테스트를 다시 확인하고, MySQL 동작(REPEATABLE READ, gap lock)을 전제로 한 주석을 고친다 |
+| T128 | 개발·테스트 환경: pom(PostgreSQL 드라이버, Flyway PostgreSQL), Testcontainers를 pgvector 하나로, 테스트의 SQL, docker compose에서 MySQL을 빼고 PostgreSQL을 주 DB로, 설정 파일 |
+
+**확인할 것**: `./mvnw test` 모두 통과, `docker compose up -d`로 새로 띄운 개발 서버에서 가입·글쓰기·글자 검색·의미 검색·비슷한 글이 됨, `Test@x.com`으로 가입한 뒤 `test@x.com` 가입은 409, 글을 지우면 그 임베딩도 지워짐.
+
+**PR**: 이 스텝의 코드는 배포 스크립트(스텝 24) 없이 운영에 나가면 앱이 뜨지 않는다. `main`에 병합하면 바로 배포되므로, 코드 PR은 스텝 24까지 같은 브랜치에 이어 커밋한 뒤 하나로 올린다. 문서 PR은 스텝마다 올린다.
+
+### 스텝 24. 운영 데이터 옮기기·배포·문서 (2026-10-13 지원 결정)
+
+**무엇을 만드나**: 운영 앱을 s2 서버의 PostgreSQL로 옮기고, s4 MySQL의 데이터를 그대로 옮긴다. 문서를 PostgreSQL 기준으로 고친다.
+
+**끝나면**: 운영(https://now-log.java21.net)이 PostgreSQL 하나로 돌고, 옮기기 전 회원·글·댓글이 그대로 있다.
+
+| 작업 | 내용 |
+| --- | --- |
+| T129 | `deploy.sh`: PostgreSQL을 늘 띄우고(`RECOMMEND_DB_PASSWORD` 필수), 같은 컨테이너에 `blog` DB가 없으면 만들고, 앱을 `aigj017-recommend-db:5432/blog`로. MySQL secrets(`DB_*`)는 필수에서 뺀다. 서버 포트는 열지 않는다 |
+| T130 | 이전 스크립트 `deploy/migrate-from-mysql.sh`(서버에서 지원이 한 번 실행): 앱 정지 → PostgreSQL 표 비우기 → s4 MySQL에서 표마다 `mysql --batch`로 꺼내 `\copy`로 넣기(Flyway 기록·생성 컬럼·임베딩 제외) → 시퀀스를 `max(id)`에 맞춤 → 표마다 행 수 비교 출력 → 앱 다시 띄움 |
+| T131 | 운영 전환: 코드 PR 병합(자동 배포) 직후 지원이 T130을 실행. 행 수 비교, 공개 화면 확인, 지원 로그인 확인. 되돌릴 때는 이전 커밋으로 다시 배포(MySQL과 `DB_*` secrets는 며칠 남겨 둠) |
+| T132 | 문서를 PostgreSQL 기준으로: 코드 저장소 CLAUDE.md(원본 `code-repo-CLAUDE.md`), plan, research R-02, data-model, `erd/schema.sql`(PostgreSQL DDL), quickstart, 학습 자료(65 보강) |
+
+**확인할 것**: 이전 스크립트가 출력한 표마다 MySQL·PostgreSQL 행 수가 같음, 운영에서 기존 글·댓글이 보이고 기존 계정으로 로그인됨, 새 가입·글쓰기가 됨(번호 중복 없음), 의미 검색·비슷한 글이 됨. 병합 뒤 이전 스크립트를 돌리기 전 몇 분 동안은 운영이 빈 DB로 뜬다.
+
 ### 진행 방식
 
 **Claude Code CLI에 시키는 법**: 코드 저장소(`~/IdeaProjects/blog`)에서 `claude --add-dir ../blog-docs`로 열고 "스텝 3 진행해"처럼 스텝 번호를 준다. `../blog-docs`는 `~/IdeaProjects/blog-docs`다. Claude Code는 코드 저장소의 `CLAUDE.md`([원본](./code-repo-CLAUDE.md))에 따라 그 스텝의 작업만 하고 결과를 정리한 뒤 멈춘다.
@@ -765,6 +799,24 @@ description: "지원 서비스 구현 작업 (2주 일정 기준)"
 - [X] T121 [US7] 의미 검색 API `GET /api/search?mode=semantic` in `search/` (OWN-07, R-02)
 - [X] T122 [P] [US7] 화면: 검색 탭 "글자로 찾기 / 의미로 찾기" in `frontend/src/pages/search/` (OWN-07)
 
+**스텝 23. 주 DB를 PostgreSQL로: 스키마·코드·테스트**
+
+2026-10-13 지원 결정: 주 DB와 추천 DB를 PostgreSQL 하나로 합친다. 대소문자 무시 비교는 `citext`, 백업은 하지 않는다(R-02).
+
+- [ ] T123 [구조] PostgreSQL용 Flyway V1(지금 스키마, `citext`·`vector`, `post_embedding` 외래 키) in `src/main/resources/db/migration/` (R-02)
+- [ ] T124 [구조] MySQL 전용 SQL(`INSERT IGNORE`, `UPDATE`·`DELETE … JOIN` 등)을 PostgreSQL로 in 각 기능 `domain/`·`application/` (R-02)
+- [ ] T125 [구조] 대소문자 무시 비교(`citext`, `ILIKE`)와 그 테스트 in `search/`, `admin/`, `src/test/` (R-02)
+- [ ] T126 [구조] DB 하나로: 추천 DataSource·Flyway 없앰, 의미 검색·추천을 한 쿼리로 in `recommend/`, `search/`, `global/config/` (R-02, OWN-06, OWN-07)
+- [ ] T127 [구조] 잠금·격리 수준(READ COMMITTED) 다시 확인과 주석 in 잠그는 쿼리가 있는 곳, `src/test/` (R-02)
+- [ ] T128 [구조] pom, Testcontainers, 테스트 SQL, docker compose, 설정 파일을 PostgreSQL로 (R-02)
+
+**스텝 24. 운영 데이터 옮기기·배포·문서**
+
+- [ ] T129 [구조] `deploy.sh`를 PostgreSQL 주 DB로 in `deploy/` (R-02)
+- [ ] T130 [구조] MySQL → PostgreSQL 이전 스크립트 in `deploy/migrate-from-mysql.sh` (R-02)
+- [ ] T131 [구조] 운영 전환과 확인(지원이 서버에서 이전 스크립트 실행) (R-02)
+- [ ] T132 [구조] 문서를 PostgreSQL 기준으로: CLAUDE.md, plan, research, data-model, ERD, quickstart, 학습 자료 (R-02)
+
 ### 기능별로 보기
 
 2주 범위 밖 기능이 어느 작업·스텝에서 만들어지는지 보는 대응표다. 진행 체크는 위의 작업 목록 한 곳에서만 한다(이 표에는 체크박스를 두지 않는다).
@@ -794,6 +846,7 @@ description: "지원 서비스 구현 작업 (2주 일정 기준)"
 | US10 | 대표 블로그 (BLOG-08) | T055c, T045a, T055e | 13, 13b |
 | US10 | 회원 탈퇴 (AUTH-06, Q1) | T108 | 19 |
 | (구조) | 인증 경계 정리 | T114, T115 | 19b |
+| (구조) | 주 DB를 PostgreSQL로 합침 | T123~T128, T129~T132 | 23, 24 |
 | US14 | 블로그 이용 제한 (ADMIN-05), 신고 (ADMIN-04), 공지·관리 이력·대시보드 (ADMIN-06) | T109, T110, T111, T112 | 18 |
 | US12 | 알림 (SUB-04) | T113 | 16 |
 | US13 | 방문 통계 (MNG-03), 스팸·차단 (MNG-04) | T082~T085 | 20 |
