@@ -11,7 +11,7 @@
 - 작업 순서와 스텝: `../blog-docs/specs/001-tistory-blog/tasks.md`의 "구현 스텝과 검토 포인트"
 - 기술 결정과 구조: `../blog-docs/specs/001-tistory-blog/plan.md`, `research.md`
 - 동작 기준: `spec.md`(수용 시나리오), `contracts/rest-api.md`(API), `data-model.md`
-- 테이블 기준: `erd/schema.sql` (Crowfoot에서 내보낸 MySQL DDL)
+- 테이블 기준: `erd/schema.sql` (PostgreSQL DDL, 코드 저장소 `V1__init.sql`과 같은 내용. 스텝 22까지는 Crowfoot에서 내보낸 MySQL DDL이었다)
 - 화면 기준: `mockups/*.html`
 - 확인 시나리오: `quickstart.md`
 
@@ -43,8 +43,8 @@
   - `presentation/`: Controller, 요청·응답 DTO는 `presentation/dto/`
   - 의존은 presentation → application → domain 한 방향. 여러 기능이 같이 쓰는 것은 `global/`(config, entity, error, security, web).
   - 인증의 속(토큰, 쿠키, 필터, 비밀번호 해시, 시도 횟수 제한)은 `auth/` 안에만 둔다. 다른 기능은 입구(`global/auth/`의 `LoginMember`·`LoginMembers`·`BlogOwnerGuard`·정지 안내, `auth`의 `CredentialService`·`LoginSessions`)만 쓴다. 이 규칙과 계층 방향은 `ArchitectureTest`(ArchUnit)가 검사한다(스텝 19b, 2026-10-11 지원 결정).
-- DB는 MySQL 8. 개발은 `docker compose up -d`, 테스트는 Testcontainers. H2는 쓰지 않는다(schema.sql이 H2에서 안 돌아감).
-- 테이블은 Flyway가 만든다. `V1__init.sql`은 `../blog-docs/specs/001-tistory-blog/erd/schema.sql`을 그대로 복사한 것이고, 이미 적용된 마이그레이션 파일은 고치지 않는다. JPA는 `ddl-auto=validate`.
+- DB는 PostgreSQL 17 + pgvector 하나(2026-10-13 지원 결정, 스텝 23에서 MySQL과 추천 DB를 합침). 개발은 `docker compose up -d`, 테스트는 Testcontainers. H2는 쓰지 않는다. 대소문자를 무시하는 이름 칸은 `citext`(엔티티에 `columnDefinition = "citext"`), 검색은 `ILIKE`(`LikePatterns.containsIgnoreCase`). 접속 설정 `stringtype=unspecified`를 빼지 않는다(빼면 citext 비교가 대소문자를 가린다).
+- 테이블은 Flyway가 만든다. `V1__init.sql`과 `../blog-docs/specs/001-tistory-blog/erd/schema.sql`은 같은 내용이고, 이미 적용된 마이그레이션 파일은 고치지 않는다(바꿀 것은 새 V 파일로). JPA는 `ddl-auto=validate`. `updated_at`은 DB가 자동으로 바꾸지 않는다(MySQL의 ON UPDATE 없음). 엔티티를 고치면 JPA Auditing이 채운다.
 - 엔티티는 schema.sql의 컬럼·제약에 맞춘다. 참/거짓 컬럼 `is_x`는 필드 `x` + `@Column(name = "is_x")`, 열거값은 `EnumType.STRING`.
 - 이미지 저장 폴더는 설정값 `app.upload.dir`(개발: `/Users/chosun-nhn54/IdeaProjects/blog/uploads`, git 제외).
 - 볼 수 없는 글은 로그인 여부와 상관없이 404. 권한은 서버에서 검사한다(헌법 II, IV).
@@ -52,7 +52,7 @@
 ## 명령
 
 ```bash
-docker compose up -d        # MySQL, Redis
+docker compose up -d        # PostgreSQL(pgvector), Redis, Ollama
 ./mvnw spring-boot:run      # http://localhost:8080
 ./mvnw test
 cd frontend && npm run dev  # 프론트 개발 서버

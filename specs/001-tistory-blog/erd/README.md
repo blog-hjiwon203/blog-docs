@@ -3,8 +3,9 @@
 > **이 문서는?** Crowfoot에서 설계한 지원 블로그 서비스의 ERD를 정리한 것이다. 원본은 Crowfoot 문서 [티스토리 클론 블로그 (지원)](https://crowfoot.java21.net/workspaces/49/models/665)이고, 이 파일은 그 내용을 옮긴 사본이다. 설계를 바꿀 때는 Crowfoot을 먼저 고치고 이 파일을 다시 만든다.
 
 - 기준: Crowfoot 문서 버전 74 (2026-10-08), MySQL. 버전 79 (2026-10-09)에서 `post.content_text`(검색용 본문 글자, R-16)를 더했다.
+- **스텝 23부터 (2026-10-13 지원 결정)**: 주 DB가 PostgreSQL이 되어 [schema.sql](./schema.sql)은 코드 저장소 `V1__init.sql`(PostgreSQL)의 사본이다. 표·칸·관계는 아래와 같고, 타입만 바뀌었다: `AUTO_INCREMENT` → IDENTITY, `TINYINT(1)` → BOOLEAN, `DATETIME` → TIMESTAMP, `MEDIUMTEXT` → TEXT, 대소문자를 무시하는 이름 칸(member.email·nickname, blog.address, category.name, tag.name, blog_banned_word.word)은 CITEXT + 길이 CHECK, `updated_at`의 ON UPDATE 없음. 글 임베딩 표 `post_embedding`(post 외래 키)이 더해져 27개다. 아래 표의 타입 칸과 Crowfoot 문서는 MySQL 기준 그대로다.
 - 테이블 26개, 관계 38개, 영역 6개
-- 실행 가능한 DDL: [schema.sql](./schema.sql)
+- 실행 가능한 DDL: [schema.sql](./schema.sql) (PostgreSQL, 스텝 23부터)
 - [data-model.md](../data-model.md)는 이 ERD와 같은 내용으로 맞춰 두었다. 원래 data-model.md에서 무엇을 왜 바꿨는지는 [data-model-diff.md](./data-model-diff.md)
 - 다이어그램 표기: `||` 정확히 하나, `|o` 없거나 하나, `|{` 하나 이상. 관계 이름은 자식 쪽 외래 키 컬럼이다. 키 표시는 PK(기본 키), FK(외래 키), UK(유니크 키에 포함)
 

@@ -9,19 +9,29 @@
 - **결정**: **Java 21**, Spring Boot 4.1(코드 저장소 pom.xml 기준 4.1.1), **빌드는 Maven**(Maven Wrapper 포함), React 18 + Vite. Java 21과 Maven은 2026-10-08 지원 결정. 테스트는 JUnit 5, Spring Boot Test, MockMvc, Testcontainers(MySQL), 프론트는 Vitest 최소.
 - **이유**: 원본에 버전·테스트 도구가 없어 Spring Boot 기본 조합으로 둠. Spring Boot 버전은 지원이 Initializr로 만든 프로젝트(4.1.1)를 따른다. 바꾸면 이 항목만 고친다.
 
-## R-02 운영 저장소 (2026-10-07 확정)
+## R-02 운영 저장소 (2026-10-07 확정, 2026-10-13 PostgreSQL 하나로 바꿈)
 
-- **결정**: 주 DB는 MySQL. 개발도 docker compose의 MySQL 8을 쓴다(2026-10-08 변경, 아래 "개발 DB"). **Redis 사용**: Spring Cache 저장소(인기 글·주제별 글 TTL 5분), 연타 방지 Idempotency-Key 저장(R-09). 정지 회원 토큰 차단·로그아웃 토큰 처리도 R-03 확정 시 Redis 후보. **PostgreSQL + pgvector**: 비슷한 글 추천(OWN-06) 전용, 2주 안에 도전(도전 과제).
+- **지금 (2026-10-13부터, 스텝 23·24)**: 주 DB는 **PostgreSQL 17 + pgvector 하나**다. 회원·글·댓글과 글 임베딩이 같은 DB에 있다. 아래 "주 DB를 PostgreSQL로 합침"이 그 결정이고, 그 위의 MySQL 이야기는 스텝 22까지의 기록이다.
+- **결정 (2026-10-07, 스텝 22까지)**: 주 DB는 MySQL. 개발도 docker compose의 MySQL 8을 쓴다(2026-10-08 변경, 아래 "개발 DB"). **Redis 사용**: Spring Cache 저장소(인기 글·주제별 글 TTL 5분), 연타 방지 Idempotency-Key 저장(R-09). 정지 회원 토큰 차단·로그아웃 토큰 처리도 R-03 확정 시 Redis 후보. **PostgreSQL + pgvector**: 비슷한 글 추천(OWN-06) 전용, 2주 안에 도전(도전 과제).
 - **이유**: 개발에 AI를 쓰므로 2주 안에 벡터 검색까지 가능하다고 판단(지원). 단, 주 데이터는 MySQL 하나로 두고 PostgreSQL에는 글 id와 임베딩만 저장해 일정이 밀리면 기능째 뺄 수 있게 한다.
 - **개발 DB (2026-10-08 변경)**: 원래 개발은 H2(MySQL 호환 모드)였는데, ERD에서 내보낸 `erd/schema.sql`이 H2에서 실행되지 않는다(`blog.primary_owner_id`의 `GENERATED ALWAYS AS … STORED`에서 문법 오류, H2 2.3.232로 확인). 스키마를 두 벌 관리하지 않으려고 개발·테스트도 MySQL 8로 맞춘다. 개발은 docker compose, 테스트는 Testcontainers. 스키마는 Flyway가 만든다.
-- **로컬 개발**: MySQL, Redis, PostgreSQL(pgvector, 도전 과제)은 docker compose로 띄운다. Redis가 없을 때 테스트는 embedded/Testcontainers 또는 ConcurrentMap 캐시로 대체.
+- **로컬 개발**: PostgreSQL(pgvector), Redis, Ollama는 docker compose로 띄운다(스텝 22까지는 MySQL도). Redis가 없을 때 테스트는 embedded/Testcontainers 또는 ConcurrentMap 캐시로 대체.
 - **임베딩 (2026-10-10 지원 결정, 스텝 10)**: 로컬 **Ollama + `bge-m3`**(다국어, 한국어 지원, 1024차원). 지원의 docker `ollama` 볼륨에 모델이 이미 있어 docker compose의 Ollama가 그 볼륨을 쓴다. API 키·비용이 없고 글이 외부로 나가지 않는다(외부 임베딩 API인 Voyage·OpenAI는 키·비용과 외부 전송 때문에 고르지 않음).
   - 넣는 글자: 제목 + 본문 글자(`content_text`) 앞 2,000자. **2026-10-13부터 `제목`, `태그: a, b`, `본문 글자`를 줄바꿈으로 이은 앞 2,000자**(지원 결정, 스텝 22). 넣는 글자 방식이 바뀌면 `post_embedding.text_version`을 올리고, 서버가 뜰 때 옛 방식 임베딩을 다시 만든다. 태그 이름을 바꾸거나 지우면 그 태그가 달린 글의 임베딩도 다시 만든다. 발행 글이면 공개 범위와 상관없이 모두 넣고(밖으로 나가지 않으므로), 볼 수 있는지는 추천할 때 거른다.
   - 갱신 시점: 발행·수정이 **커밋된 뒤 비동기**로 만든다(글 저장이 Ollama를 기다리지 않게). 글을 지우면 임베딩도 지운다. 서버가 뜰 때 임베딩이 없는 발행 글을 채운다(이미 있던 글).
   - Ollama가 꺼져 있거나 실패하면 경고만 남기고 넘어간다. 그 글의 추천은 빈 배열이다(contracts "추천이 준비 안 됐으면 빈 배열").
-  - 추천: pgvector 코사인 거리(`<=>`) 가까운 순 후보 30개 → MySQL에서 보는 사람 기준 가시성(`visibleTo`)으로 거르고 자기 글을 빼고 `size`개(기본 5, 1~10, 다른 블로그 포함).
-  - 표: PostgreSQL `post_embedding(post_id PK, embedding vector(1024), updated_at)`. 두 번째 DB라 Flyway를 따로 하나 더 둔다(`db/recommend`).
+  - 추천: pgvector 코사인 거리(`<=>`) 가까운 순으로, 보는 사람 기준 가시성(`visibleTo`)을 같은 쿼리에서 걸고 자기 글을 빼고 `size`개(기본 5, 1~10, 다른 블로그 포함). 스텝 22까지는 후보 30개를 뽑은 뒤 MySQL에서 걸렀다.
+  - 표: `post_embedding(post_id PK, embedding vector(1024), text_version, updated_at)`. 스텝 22까지는 두 번째 DB라 Flyway를 따로 하나 더 두었다(`db/recommend`). 스텝 23부터 주 DB의 V1에 있고 `post_id`는 `post` 외래 키(ON DELETE CASCADE)다.
   - **의미 검색 (2026-10-13 지원 결정, 스텝 22, OWN-07)**: 주 DB와 추천 DB를 합치지 않고 지금 구조로 한다. 검색어를 같은 모델로 임베딩(같은 검색어는 Redis 캐시 5분)해 `post_embedding`에서 코사인 유사도 0.40 이상인 글을 가까운 순 100개까지 뽑고, MySQL에서 글자 검색과 같은 가시성(전체: `visibleTo`, 블로그 안: `listedIn`)으로 거른 뒤 그 순서대로 10개씩 나눈다. 블로그 안 검색은 추천 DB가 블로그를 모르므로 MySQL에서 그 블로그의 볼 수 있는 글 번호를 먼저 읽어 그 안에서만 찾는다. 0.40은 bge-m3로 잰 값이다(관련 있는 글 0.42~0.58, 관련 없는 글 0.21~0.39, 2026-10-13 개발 Ollama로 측정). 설정값 `app.search.semantic.min-similarity`. 의미 검색은 앞쪽 결과만 쓸모가 있어 100개 제한을 둔다. 글자 검색과 점수를 섞는 방식(RRF)은 고르지 않았다(탭으로 나눠 차이를 보이기로, 지원 결정).
+- **주 DB를 PostgreSQL로 합침 (2026-10-13 지원 결정, 스텝 23·24)**: 주 DB(MySQL)와 추천 DB(PostgreSQL)를 PostgreSQL 하나로 합친다. 운영 데이터가 아주 적은(발행 글 2개, 회원 몇 명) 지금이 옮기기 가장 싸고, 임베딩과 글이 한 DB에 있으면 의미 검색·추천의 가시성 조건을 SQL 한 번으로 쓰고 글을 지울 때 임베딩을 외래 키로 함께 지울 수 있다. DataSource·Flyway·테스트 컨테이너도 하나가 된다. 스텝 24에서 이 절과 plan·data-model·ERD를 PostgreSQL 기준으로 다시 쓴다.
+  - 대소문자: MySQL `utf8mb4_0900_ai_ci`가 하던 대소문자 무시 비교(이메일·닉네임·블로그 주소·카테고리·태그·금칙어의 중복 막기와 찾기)는 `citext`로 한다. 글자 검색·관리자 회원 검색은 `ILIKE`. 악센트 무시(é = e)는 잃는다(한글에는 영향 없음, 지원 결정).
+  - `updated_at`: MySQL의 `ON UPDATE CURRENT_TIMESTAMP`는 옮기지 않는다(트리거 없음). 엔티티 수정은 JPA `@LastModifiedDate`가 채우고, 네이티브 UPDATE 중 시각을 바꿔야 하는 곳만 직접 넣는다.
+  - 운영: s2 서버에 이미 떠 있는 `aigj017-recommend-db`(pgvector pg17) 컨테이너 안에 `blog` DB를 새로 만들어 쓴다. 서버 포트는 열지 않고 docker 네트워크 안에서만 닿는다. 데이터는 docker 볼륨 `aigj017-recommend-data`.
+  - 데이터 이전: 표는 Flyway로 만들고, s4 MySQL에서 표마다 `mysql -N -B --raw`로 꺼내(NULL·\·탭·줄바꿈은 SELECT에서 COPY 글자 형식으로 바꿈) `\copy`로 넣은 뒤 시퀀스를 `max(id)`에 맞춘다(코드 저장소 `deploy/migrate-from-mysql.sh`, 스텝 24). 임베딩은 옮기지 않고 서버가 뜰 때 다시 만든다. `pgloader`는 MySQL 8 기본 인증(`caching_sha2_password`)에 접속하지 못할 수 있어 쓰지 않는다. s4 MySQL은 되돌릴 길로 며칠 지우지 않는다.
+  - 백업: 하지 않는다(과제 규모, 지원 결정). 볼륨을 지우는 명령(`docker volume rm`, `docker system prune --volumes`)을 쓰면 데이터를 잃는다.
+  - 접속 설정: `stringtype=unspecified`(Hikari data-source-properties). JDBC가 글자 값을 `varchar`로 보내면 `citext = varchar`가 대소문자를 가리기 때문이다(스텝 23에서 확인). 연결마다 `hnsw.ef_search = 200`, `hnsw.iterative_scan = strict_order`.
+  - 의미 검색·비슷한 글 (스텝 23): 글과 `post_embedding`을 JPA Criteria 한 쿼리로 묶어(hibernate-vector `cosine_distance`) 가시성 조건(`visibleTo`·`listedIn`)과 거리 순·페이지를 DB가 한 번에 한다. 블로그 안 검색의 글 번호 목록과 추천 후보 30개 거르기는 없앴다. 503 `SEMANTIC_SEARCH_UNAVAILABLE`은 임베딩 서버(Ollama)에 닿지 않을 때만이고, DB 오류는 다른 API처럼 500이다.
+  - 운영 전환 순서 (스텝 24): 코드 PR 병합 → 자동 배포가 `blog` DB를 만들고 앱이 빈 DB로 뜸(Flyway V1·V2) → 지원이 서버에서 `migrate-from-mysql.sh` 실행(앱 정지, 표 비우기, 옮기기, 시퀀스, 행 수 비교, 앱 다시 띄움). 그 사이 몇 분은 사이트가 비어 보인다. 되돌리기는 이전 커밋으로 다시 배포(MySQL과 GitHub secrets `DB_*`는 며칠 남겨 둠). 옛 `recommend` DB(스텝 22까지의 임베딩)도 며칠 뒤 지운다.
 
 ## R-03 인증 (2026-10-07 확정, 2026-10-12 쿠키 Domain 없앰)
 

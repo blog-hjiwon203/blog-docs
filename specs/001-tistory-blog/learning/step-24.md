@@ -1,0 +1,103 @@
+# 스텝 24. 운영 데이터 옮기기·배포·문서
+
+> 작업: T129~T132 · 코드 브랜치: `step-23-postgres` (스텝 23에 이어서, 코드 PR 하나) · 날짜: 2026-10-13 · 결정: research.md R-02(주 DB를 PostgreSQL로 합침, 운영 전환 순서), 2026-10-13 지원 결정
+
+## 한눈에 보기
+
+운영(https://now-log.java21.net)을 PostgreSQL 하나로 옮길 준비를 끝냈다.
+
+- 배포 스크립트가 앱을 s2 서버의 PostgreSQL(`aigj017-recommend-db` 안의 `blog` DB)에 붙인다.
+- 학교 MySQL(s4)의 데이터를 그대로 옮기는 스크립트를 만들고, 노트북에서 시험했다.
+- 문서의 기준 DB를 PostgreSQL로 바꿨다.
+
+운영 전환(T131)은 코드 PR을 병합한 뒤 지원이 서버에서 스크립트를 한 번 실행하는 일이다.
+
+| 작업 | 만든 것 | 핵심 파일 |
+| --- | --- | --- |
+| T129 배포 | PostgreSQL·Ollama를 늘 띄우고(`RECOMMEND_DB_PASSWORD` 필수), 같은 컨테이너에 `blog` DB가 없으면 만들고, 앱을 `jdbc:postgresql://aigj017-recommend-db:5432/blog`로. 비밀번호는 명령줄에 찍히지 않게. 워크플로에서 MySQL secrets(`DB_*`)를 빼고, 이전 스크립트도 서버에 올림 | `deploy/deploy.sh`, `.github/workflows/deploy.yml` |
+| T130 이전 스크립트 | 앱 정지 → 표 비우기 → 표마다 MySQL을 COPY 글자 형식으로 꺼내 `\copy` → 시퀀스 → 행 수 비교 → 앱 다시 띄움 | `deploy/migrate-from-mysql.sh` |
+| T131 운영 전환 | **아직 안 함**: 코드 PR 병합 뒤 지원이 서버에서 실행 | (아래 "운영 전환 순서") |
+| T132 문서 | CLAUDE.md(두 벌), 코드 README, plan, research R-02, data-model, `erd/schema.sql`(PostgreSQL V1 사본)·ERD README, quickstart, contracts 503 | `blog-docs/specs/001-tistory-blog/…` |
+
+## 운영 전환 순서 (T131, 지원이 할 일)
+
+```
+1. 문서 PR(blog-docs #53) 병합 → 코드 PR 병합
+   → GitHub Actions: 테스트 → 이미지 → s2에 deploy.sh 실행
+   → 로그 "blog DB를 새로 만들었습니다 …", 앱이 빈 DB로 뜸 (여기서부터 사이트가 비어 보임)
+
+2. s2에 ssh로 들어가서
+   bash ~/now-log/deploy/migrate-from-mysql.sh
+   → MySQL(cf_u31_d1) 비밀번호 입력 → "yes" 입력
+   → 표 26개 행 수 비교표, "옮기기 끝: 행 수가 모두 같습니다."
+   출력을 그대로 붙여 주면 Claude가 확인한다
+
+3. https://now-log.java21.net 에서 로그인, 글 하나 열기, 글 하나 써 보기(번호 중복 없는지)
+
+4. 며칠 뒤 정리
+   - GitHub secrets에서 DB_ADDRESS, DB_PORT, DB_NAME, DB_USERNAME, DB_PASSWORD 지우기
+   - 옛 임베딩 DB: docker exec aigj017-recommend-db dropdb -U blog recommend
+     (주의: 컨테이너 기본 DB가 recommend라 deploy.sh가 거기 접속한다. 지우기 전에 deploy.sh의 -d recommend를 바꿔야 한다. 스텝 25 이후 과제)
+```
+
+잘못되면 이전 커밋(스텝 22 상태)으로 다시 배포한다. 옛 `deploy.sh`가 s4 MySQL로 앱을 띄운다.
+
+## 요청 흐름
+
+```
+[배포] git push main → Actions
+  test: ./mvnw test (Testcontainers PostgreSQL·Redis)
+  deploy: 이미지 → scp(now-log.tar.gz, deploy/deploy.sh, deploy/migrate-from-mysql.sh) → ssh: bash deploy.sh
+[deploy.sh @ s2]
+  네트워크 aigj017-net → Redis → PostgreSQL(없으면 만듦) → 계정 비밀번호 맞춤 → blog DB(없으면 만듦)
+  → Ollama(bge-m3) → 앱(DB_URL=…/blog) → "Started BlogApplication"
+[migrate-from-mysql.sh @ s2]
+  blog DB에 표가 있나(Flyway가 돌았나) → MySQL 접속 확인 → 표 목록 대조 → yes
+  → docker stop aigj017-app → TRUNCATE … RESTART IDENTITY CASCADE
+  → 표마다: mysql(s4) --raw | psql \copy (session_replication_role=replica)
+  → setval(…, max(id)+1) → 행 수 비교 → docker start aigj017-app → 임베딩 다시 만들기
+```
+
+## 이 스텝을 이해하려면 (읽는 순서)
+
+| 순서 | 개념 문서 | 이 스텝에서 쓰인 곳 |
+| --- | --- | --- |
+| 1 | [68 운영 데이터 옮기기와 전환](./concepts/68-data-migration-cutover.md) (새 문서) | 이 스텝 전부: 서버·Docker·포트·네트워크, 개발용과 운영용, COPY 글자 형식과 이스케이프, 외래 키 순서와 시퀀스, 행 수·내용 대조, 전환과 되돌리기, 비밀번호를 명령줄에 쓰지 않기 |
+| 2 | (복습) [67 MySQL에서 PostgreSQL로 옮기기](./concepts/67-mysql-to-postgresql.md) | 스텝 23의 코드 쪽 변화(citext, `stringtype`, 타입 대응) |
+| 3 | (복습) [03 Flyway](./concepts/03-flyway-migration.md) | 앱이 먼저 떠서 Flyway가 표를 만든 뒤에 데이터를 넣는 이유 |
+
+## 막혔던 점
+
+- **운영 DB가 어디 있는지**: 지원이 "운영 PostgreSQL은 어디 떠 있나, 노트북 Docker에는 개발용만 보인다"를 계속 헷갈렸다. Docker는 컴퓨터마다 따로이고, 포트를 열지 않은 것과 위치는 상관이 없다는 것을 건물·방·현관문 비유로 정리했다([68](./concepts/68-data-migration-cutover.md) 3.1~3.3).
+- **NULL과 글자 'NULL'**: 처음 계획은 `mysql --batch` 출력을 그대로 `\copy`에 넣는 것이었다. 그런데 기본 출력은 NULL을 `NULL` 네 글자로 내서 진짜 글자 'NULL'과 구분할 수 없다. `--raw`로 받고 SELECT에서 직접 COPY 모양으로 바꿨다.
+- **따옴표 지옥**: 처음에는 칸마다 이스케이프 식을 sed로 만들었는데, bash·sed·MySQL 세 겹의 역슬래시를 세다가 틀리기 쉬웠다. 따옴표 친 here-doc에 MySQL 식을 그대로 적고 `@` 자리에 칸 이름만 끼우는 방식으로 바꿨다.
+- **`docker exec -i`가 입력을 먹는다**: 시퀀스를 맞추는 `while read` 반복문 안에서 `docker exec -i`를 쓰면 그 명령이 반복문의 입력(남은 표 이름)을 읽어 버린다. 입력이 필요 없는 명령에서는 `-i`를 뺐다. MySQL 쪽도 `-i`가 있으면 터미널 입력을 가로챌 수 있어 뺐다.
+- **비밀번호가 명령줄에**: `deploy.sh`를 고치며 처음에 `-e DB_PASSWORD="$RECOMMEND_DB_PASSWORD"`라고 썼다. 이러면 값이 `ps`에 보인다. 원래 파일의 규칙("-e 이름만")대로 바꿨다. MySQL 비밀번호도 임시 설정 파일로 넘긴다.
+- **노트북 시험**: 개발 MySQL → 개발 PostgreSQL의 시험 DB로 같은 스크립트를 돌렸다. 26개 표 행 수, 글 33개의 본문·시각·숨김·카테고리, 회원 17명의 이메일·해시·상태, 계산 칸이 모두 같았다. 줄바꿈·역슬래시가 든 글도 있었다. 다음 글 번호는 34. 그 DB로 앱을 띄우니 옛 비밀번호 로그인, 임베딩 26개 다시 만들기, 글자·의미 검색이 됐다. 시험 DB는 지웠다.
+- **학교 MySQL의 설정을 모른다**: 처음 식은 `'\\'`, `'\t'` 같은 문자열 이스케이프를 썼다. 그런데 `sql_mode`에 `NO_BACKSLASH_ESCAPES`가 켜져 있으면 MySQL이 역슬래시를 그냥 글자로 봐서 결과가 달라진다. 특수 글자를 글자 번호(`CHAR(92 USING utf8mb4)` 등)로 바꿔 설정과 상관없게 했다. 개발 MySQL에서 그 모드를 켜고 탭·줄바꿈·역슬래시·이모지·NULL을 넣어 확인했다.
+- **운영에서는 못 해 봤다**: s2에 Claude가 접속할 수 없어 운영 MySQL로는 돌려 보지 못했다. 스크립트는 행 수가 다르면 앱을 멈춘 채로 끝나므로, 운영에서 이상하면 출력을 보고 고친다.
+- **전체 테스트**: 백엔드 `./mvnw test` 409개 통과(자바 코드는 스텝 23과 같음).
+
+## 명세와 다르거나 아직 채우지 않은 것
+
+- **T131 운영 전환은 아직**: 코드 PR 병합과 지원의 스크립트 실행이 남았다. 끝나면 T131을 체크한다.
+- **사이트가 몇 분 비어 보인다**: 병합(자동 배포)과 스크립트 실행 사이. 그 사이의 가입·글은 스크립트가 지운다(R-02에서 받아들임).
+- **옛 `recommend` DB**: `deploy.sh`가 컨테이너 기본 DB(`recommend`)로 접속해 계정 비밀번호를 맞추고 `blog` DB가 있는지 본다. 그래서 `recommend` DB를 바로 지우면 다음 배포가 실패한다. 지우려면 `deploy.sh`의 `-d recommend`를 `-d blog`(또는 `postgres`)로 바꾼 뒤에 지운다.
+- **Crowfoot 문서는 MySQL 그대로**: `erd/schema.sql`은 PostgreSQL V1 사본이 되었지만, 원본이던 Crowfoot 문서 665는 MySQL 타입 그대로다. 표·칸·관계는 같다. Crowfoot도 PostgreSQL로 맞출지는 지원이 정한다.
+
+## 직접 해 보기
+
+1. **스크립트 읽기**: `deploy/migrate-from-mysql.sh`를 위에서부터 읽으며 [68](./concepts/68-data-migration-cutover.md) 4장의 순서와 맞춰 본다.
+2. **노트북에서 시험**:
+   ```bash
+   docker compose up -d mysql 2>/dev/null || docker start blog-mysql     # 개발 MySQL(스텝 22까지의 데이터)
+   docker exec blog-postgres psql -U blog -d blog -c "CREATE DATABASE migtest"
+   for f in src/main/resources/db/migration/V1__init.sql src/main/resources/db/migration/V2__admin_account.sql; do
+     docker exec -i blog-postgres psql -q -v ON_ERROR_STOP=1 -U blog -d migtest < $f; done
+   MYSQL_HOST=blog-mysql MYSQL_PORT=3306 MYSQL_USER=blog MYSQL_DB=blog MYSQL_PASSWORD=blog \
+   NETWORK=blog_default PG=blog-postgres PG_DB=migtest APP=no-such-app \
+   bash deploy/migrate-from-mysql.sh --yes
+   docker exec blog-postgres psql -U blog -d blog -c "DROP DATABASE migtest"
+   ```
+3. **다음 번호**: 위 3번째 줄 뒤에 `docker exec blog-postgres psql -U blog -d migtest -c "select nextval(pg_get_serial_sequence('post','id')), (select max(id) from post)"` → 다음 번호가 max + 1.
+4. **운영 컨테이너 보기**(s2에서): `docker ps --format '{{.Names}}  {{.Image}}'`, `docker exec aigj017-recommend-db psql -U blog -l` → `blog`와 `recommend` DB.
