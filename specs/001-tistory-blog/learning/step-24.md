@@ -62,13 +62,13 @@
 
 | 순서 | 개념 문서 | 이 스텝에서 쓰인 곳 |
 | --- | --- | --- |
-| 1 | [68 운영 데이터 옮기기와 전환](./concepts/68-data-migration-cutover.md) (새 문서) | 이 스텝 전부: 서버·Docker·포트·네트워크, 개발용과 운영용, COPY 글자 형식과 이스케이프, 외래 키 순서와 시퀀스, 행 수·내용 대조, 전환과 되돌리기, 비밀번호를 명령줄에 쓰지 않기 |
-| 2 | (복습) [67 MySQL에서 PostgreSQL로 옮기기](./concepts/67-mysql-to-postgresql.md) | 스텝 23의 코드 쪽 변화(citext, `stringtype`, 타입 대응) |
+| 1 | [68 서버와 Docker](./concepts/68-server-docker-dev-prod.md) (새 문서) | 서버·Docker·포트·docker 네트워크, 개발용과 운영용 두 벌, 같은 컨테이너에 DB 하나 더, 비밀번호를 명령줄에 쓰지 않기 |
+| 2 | [65 MySQL과 PostgreSQL](./concepts/65-postgresql-vs-mysql.md) 3.9~3.10, 4.5, 5.8~5.9 | 데이터 옮기기: COPY 글자 형식과 이스케이프, 외래 키 순서와 시퀀스, 행 수·내용 대조, 전환과 되돌리기 (처음에 개념 68에 썼다가 65에 합침) |
 | 3 | (복습) [03 Flyway](./concepts/03-flyway-migration.md) | 앱이 먼저 떠서 Flyway가 표를 만든 뒤에 데이터를 넣는 이유 |
 
 ## 막혔던 점
 
-- **운영 DB가 어디 있는지**: 지원이 "운영 PostgreSQL은 어디 떠 있나, 노트북 Docker에는 개발용만 보인다"를 계속 헷갈렸다. Docker는 컴퓨터마다 따로이고, 포트를 열지 않은 것과 위치는 상관이 없다는 것을 건물·방·현관문 비유로 정리했다([68](./concepts/68-data-migration-cutover.md) 3.1~3.3).
+- **운영 DB가 어디 있는지**: 지원이 "운영 PostgreSQL은 어디 떠 있나, 노트북 Docker에는 개발용만 보인다"를 계속 헷갈렸다. Docker는 컴퓨터마다 따로이고, 포트를 열지 않은 것과 위치는 상관이 없다는 것을 건물·방·현관문 비유로 정리했다([68](./concepts/68-server-docker-dev-prod.md) 3.1~3.3).
 - **NULL과 글자 'NULL'**: 처음 계획은 `mysql --batch` 출력을 그대로 `\copy`에 넣는 것이었다. 그런데 기본 출력은 NULL을 `NULL` 네 글자로 내서 진짜 글자 'NULL'과 구분할 수 없다. `--raw`로 받고 SELECT에서 직접 COPY 모양으로 바꿨다.
 - **따옴표 지옥**: 처음에는 칸마다 이스케이프 식을 sed로 만들었는데, bash·sed·MySQL 세 겹의 역슬래시를 세다가 틀리기 쉬웠다. 따옴표 친 here-doc에 MySQL 식을 그대로 적고 `@` 자리에 칸 이름만 끼우는 방식으로 바꿨다.
 - **`docker exec -i`가 입력을 먹는다**: 시퀀스를 맞추는 `while read` 반복문 안에서 `docker exec -i`를 쓰면 그 명령이 반복문의 입력(남은 표 이름)을 읽어 버린다. 입력이 필요 없는 명령에서는 `-i`를 뺐다. MySQL 쪽도 `-i`가 있으면 터미널 입력을 가로챌 수 있어 뺐다.
@@ -87,7 +87,7 @@
 
 ## 직접 해 보기
 
-1. **스크립트 읽기**: `deploy/migrate-from-mysql.sh`를 위에서부터 읽으며 [68](./concepts/68-data-migration-cutover.md) 4장의 순서와 맞춰 본다.
+1. **스크립트 읽기**: `deploy/migrate-from-mysql.sh`를 위에서부터 읽으며 [65](./concepts/65-postgresql-vs-mysql.md) 4.5의 순서와 맞춰 본다.
 2. **노트북에서 시험**:
    ```bash
    docker compose up -d mysql 2>/dev/null || docker start blog-mysql     # 개발 MySQL(스텝 22까지의 데이터)

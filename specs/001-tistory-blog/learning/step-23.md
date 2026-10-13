@@ -43,8 +43,8 @@
 
 | 순서 | 개념 문서 | 이 스텝에서 쓰인 곳 |
 | --- | --- | --- |
-| 1 | (복습) [65 PostgreSQL vs MySQL](./concepts/65-postgresql-vs-mysql.md) | 왜 합치나, 두 DB의 차이 표 |
-| 2 | [67 MySQL에서 PostgreSQL로 옮기기](./concepts/67-mysql-to-postgresql.md) (새 문서) | 이 스텝 전부: 타입 대응, citext와 `stringtype`, `ON CONFLICT`·`UPDATE … FROM`, `updated_at`, 격리 수준, Criteria 한 쿼리 벡터 검색, 테스트 SQL |
+| 1 | [65 MySQL과 PostgreSQL](./concepts/65-postgresql-vs-mysql.md) 2~3.4, 4.1 | 왜 합치나, 두 DB의 차이 표, 왜 pgvector인가 |
+| 2 | [65 MySQL과 PostgreSQL](./concepts/65-postgresql-vs-mysql.md) 3.5~3.8, 4.2~4.4, 5.2~5.7 | 이 스텝 전부: 타입 대응, citext와 `stringtype`, `ON CONFLICT`·`UPDATE … FROM`, `updated_at`, 격리 수준, Criteria 한 쿼리 벡터 검색, 테스트 SQL (처음에 개념 67로 썼다가 65에 합침) |
 | 3 | (복습) [03 Flyway](./concepts/03-flyway-migration.md) | 이미 적용된 파일은 고치지 않는다 → 새 DB라 V1을 새로 시작한 이유 |
 | 4 | (복습) [33 격리 수준과 데드락](./concepts/33-isolation-deadlock.md) | REPEATABLE READ와 READ COMMITTED, MySQL의 빈 자리 잠금과 외래 키 공유 잠금 |
 | 5 | (복습) [32 글자 검색](./concepts/32-search-like.md) | LIKE 이스케이프, 이제 ILIKE |
@@ -52,7 +52,7 @@
 
 ## 막혔던 점
 
-- **citext인데 대소문자를 가렸다**: 시작하기 전에 psql로 확인해 보니 `citext칸 = 'x'::varchar`가 거짓이었다. PgJDBC는 자바 `String`을 `varchar`로 보내므로, 칸만 citext로 바꾸면 JPA 쿼리는 대소문자를 가린다. 접속 설정 `stringtype: unspecified`로 막았다([67](./concepts/67-mysql-to-postgresql.md) 3.4). 이 설정을 끄면 `TagIntegrationTest` 3개가 500으로 실패하는 것도 확인했다.
+- **citext인데 대소문자를 가렸다**: 시작하기 전에 psql로 확인해 보니 `citext칸 = 'x'::varchar`가 거짓이었다. PgJDBC는 자바 `String`을 `varchar`로 보내므로, 칸만 citext로 바꾸면 JPA 쿼리는 대소문자를 가린다. 접속 설정 `stringtype: unspecified`로 막았다([65](./concepts/65-postgresql-vs-mysql.md) 3.6). 이 설정을 끄면 `TagIntegrationTest` 3개가 500으로 실패하는 것도 확인했다.
 - **처음 돌린 테스트가 전부 실패**: 지운 V3 파일이 `target/classes`에 남아 Flyway가 실행했다(MySQL 문법이라 오류). `./mvnw clean test`로 다시 돌리니 409개 중 9개 실패였다.
 - **cosine_distance가 float[]를 거절**: Criteria에서 `cb.literal(float[])`로 넘기니 hibernate-vector가 "인자는 vector여야 한다"며 쿼리를 만들지 않았다. 공개 API(`HibernateCriteriaBuilder`)에 "칸의 타입을 물려받는 값"이 없어서, Hibernate 구현 클래스(`SqmCriteriaNodeBuilder.value(값, 칸)`)를 썼다. Hibernate를 올릴 때 다시 확인할 자리다.
 - **의미 검색이 0개**: 쿼리는 도는데 결과가 비었다. `show-sql`로 본 SQL에 `join category`가 있었다. `fetch("category")`는 INNER JOIN이라 미분류 글이 모두 빠졌다. `JoinType.LEFT`로 고쳤다.
