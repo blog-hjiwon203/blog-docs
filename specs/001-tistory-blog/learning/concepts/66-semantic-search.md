@@ -2,6 +2,8 @@
 
 > 관련 스텝: [스텝 22](../step-22.md) (T120, T121, T122) · 관련 개념: [41-embedding-vector-search](./41-embedding-vector-search.md), [42-second-db-async-events](./42-second-db-async-events.md), [35-spring-cache-redis](./35-spring-cache-redis.md), [32-search-like](./32-search-like.md), [65-postgresql-vs-mysql](./65-postgresql-vs-mysql.md)
 
+> **스텝 23 이후**: 주 DB를 PostgreSQL 하나로 합치면서(2026-10-13 지원 결정) "두 DB에서 뽑고 → 거르고 → 자르기"는 **글과 임베딩을 조인한 쿼리 한 번**(가시성 조건 + 거리 순 + 페이지)으로 바뀌었다. 블로그 안 검색의 글 번호 목록도 없어졌다. 기준값, `ef_search`, 캐시, `text_version`, 503은 그대로다. 바뀐 코드는 [67](./67-mysql-to-postgresql.md) 5.5. 아래는 스텝 22 때의 구조다.
+
 ## 1. 이 문서로 배우는 것
 
 - **의미 검색**(semantic search)이 글자 검색(`LIKE`)과 무엇이 다른가

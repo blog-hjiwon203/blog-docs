@@ -4,6 +4,8 @@
 
 > **한 줄 답**: 설계만 보면 **PostgreSQL 하나에 pgvector를 같이 두는 것**이 가장 낫다. 추천의 "볼 수 없는 글 빼기"를 SQL 한 번에 하고, 외래 키와 한 트랜잭션을 쓸 수 있기 때문이다. 그래도 지금 MySQL을 주 DB로 둔 데는 이유가 있다. 운영 서버의 DB가 MySQL이고(추측, 5.2), 코드가 MySQL 전용 문법과 대소문자 무시 비교에 기대고 있다(5.4).
 
+> **스텝 23 이후 (2026-10-13 지원 결정)**: 운영 데이터가 아주 적은 지금이 옮기기 가장 싸다고 보고 ②(PostgreSQL 하나 + pgvector)로 옮겼다. 아래 5장은 옮기기 전(스텝 22까지)의 구조와 판단이다. 실제로 옮기며 만난 것(citext와 드라이버 타입, `ON CONFLICT`, Criteria 한 쿼리 벡터 검색 등)은 [67](./67-mysql-to-postgresql.md)에 있다.
+
 ## 1. 이 문서로 배우는 것
 
 - PostgreSQL과 MySQL의 **같은 점**(관계형, SQL, 트랜잭션, JPA로 거의 같게 씀)과 **다른 점**(확장, 문법, 문자열 비교, 기능 범위)
@@ -101,20 +103,20 @@ LIMIT 6;
 
 ## 5. 이 프로젝트에서는
 
-### 5.1 지금 구조
+### 5.1 스텝 22까지의 구조
 
 | | 개발 (`docker-compose.yml`) | 운영 (`deploy/deploy.sh`) |
 | --- | --- | --- |
 | 주 DB | `mysql:8.4`, 콜레이션 `utf8mb4_0900_ai_ci` | `DB_URL=jdbc:mysql://${DB_ADDRESS}…` (서버가 띄우지 않고 받아 씀) |
-| 추천 DB | `pgvector/pgvector:pg17` | 없음. `APP_RECOMMEND_ENABLED` 기본 `false`라 추천이 꺼짐 |
-| Flyway | `db/migration`(MySQL), `db/recommend`(PostgreSQL) | `db/migration`만 |
+| 추천 DB | `pgvector/pgvector:pg17` | 1차 배포에는 없어서 추천이 꺼졌다(`APP_RECOMMEND_ENABLED` 기본 `false`). 2차 배포(2026-10-13)부터 `RECOMMEND_DB_PASSWORD`가 있으면 `deploy.sh`가 `aigj017-recommend-db`(pgvector)·`aigj017-ollama`를 띄우고 켠다 |
+| Flyway | `db/migration`(MySQL), `db/recommend`(PostgreSQL) | `db/migration`, 2차 배포부터 `db/recommend`도 |
 
-추천 쪽 설정은 `recommend/config/RecommendDataSourceConfig`가 `@ConditionalOnProperty(name = "app.recommend.enabled", matchIfMissing = true)`로 켜고 끈다. 두 번째 DataSource를 만드는 법은 [42](./42-second-db-async-events.md) 3.2.
+추천 쪽 설정은 `recommend/config/RecommendDataSourceConfig`(스텝 23에서 없앰)가 `@ConditionalOnProperty(name = "app.recommend.enabled", matchIfMissing = true)`로 켜고 끈다. 두 번째 DataSource를 만드는 법은 [42](./42-second-db-async-events.md) 3.2.
 
 ### 5.2 왜 주 DB가 MySQL인가
 
 - 처음 설계(research R-02)에서 주 DB를 MySQL로, 추천은 도전 과제라 떼어 낼 수 있게 PostgreSQL로 나눴다([41](./41-embedding-vector-search.md) 3.4).
-- 운영 서버의 DB 주소를 `DB_ADDRESS`로 받아 `jdbc:mysql://`로 붙는다. 배포 스크립트가 DB 컨테이너를 띄우지 않으므로, **학교 실습 서버가 MySQL을 제공하는 것으로 보인다**(코드에서 추측한 것). 그렇다면 ②로 가려면 운영 DB부터 바꿀 수 있어야 한다.
+- 운영 서버의 DB 주소를 `DB_ADDRESS`로 받아 `jdbc:mysql://`로 붙는다. 배포 스크립트가 DB 컨테이너를 띄우지 않는다. 실제로 운영 DB는 **학교가 관리하는 MySQL 서버**(s4)였다. ②로 가려면 운영 DB를 우리 컨테이너(s2의 PostgreSQL)로 옮겨야 했다. 스텝 23·24가 그 일이다.
 
 ### 5.3 그래서 이 프로젝트의 답
 
@@ -126,7 +128,7 @@ LIMIT 6;
 | 무엇 | 어디 | 개수 | 바꾸는 법 |
 | --- | --- | --- | --- |
 | `INSERT IGNORE` | 공감, 구독, 저장, 태그, 신고, 차단, 금칙어, 방문 기록 Repository의 네이티브 쿼리 | 8곳 | `INSERT … ON CONFLICT DO NOTHING`. "넣은 행 수"(0 또는 1)로 판단하는 코드는 그대로 동작 |
-| `UPDATE … JOIN` | `MemberTraceCleaner`(2), `BlogContentCleaner`(1), `BlogStatsRepository`(1) | 4곳 | `UPDATE … SET … FROM … WHERE …` |
+| `UPDATE … JOIN`, `DELETE x FROM … JOIN` | `MemberTraceCleaner`(UPDATE 2), `BlogContentCleaner`(UPDATE 1, DELETE 3), `BlogStatsRepository`(UPDATE 1) | 7곳 | `UPDATE … SET … FROM … WHERE …`, `DELETE FROM … USING … WHERE …` |
 | `ON UPDATE CURRENT_TIMESTAMP` | `V1__init.sql`의 `updated_at` | 9개 표 | 트리거, 또는 JPA Auditing에 맡기고 네이티브 UPDATE에서 직접 넣기. "숨겨도 수정 시각 그대로"([53](./53-admin-moderation-audit.md)) 같은 규칙을 다시 확인 |
 | 계산 칸 | `blog.primary_owner_id`, `category.parent_key` | 2개 | 같은 문법이 되지만, PostgreSQL은 부분 UNIQUE 인덱스(`WHERE is_primary AND deleted_at IS NULL`)로 계산 칸 없이 더 간단히 됨 |
 | 대소문자 무시 비교 | 검색 LIKE([32](./32-search-like.md)), 금칙어 UNIQUE([57](./57-spam-block-banned-words.md)), 태그 이름 | 여러 곳 | **가장 위험.** 문법 오류 없이 결과만 달라진다. `ILIKE`·`lower()` 인덱스·`citext`·비결정적 콜레이션 중 하나로 맞추고 테스트로 확인 |
@@ -137,7 +139,7 @@ ENUM 칸은 쓰지 않아서(문자열 + 자바 enum) 고칠 것이 없다. JPA�
 
 ## 6. 자주 하는 실수와 함정
 
-- **"SQL은 표준이니 DB만 바꾸면 된다"고 믿는다.** 네이티브 쿼리와 마이그레이션 SQL은 DB마다 다르다. 이 프로젝트만 해도 `INSERT IGNORE` 8곳, `UPDATE … JOIN` 4곳이 바로 문법 오류가 난다.
+- **"SQL은 표준이니 DB만 바꾸면 된다"고 믿는다.** 네이티브 쿼리와 마이그레이션 SQL은 DB마다 다르다. 이 프로젝트만 해도 `INSERT IGNORE` 8곳, `UPDATE`·`DELETE … JOIN` 7곳이 바로 문법 오류가 났다(스텝 23).
 - **문법 오류보다 무서운 "조용한 차이"를 놓친다.** 대소문자 비교가 바뀌면 검색 결과가 줄고 금칙어 "Casino"/"casino"가 둘 다 들어간다. 오류가 안 나서 테스트가 없으면 모른다.
 - **DB 두 개를 한 트랜잭션처럼 믿는다.** MySQL이 롤백돼도 PostgreSQL 쓰기는 남는다([42](./42-second-db-async-events.md) 6절).
 - **기능 하나 때문에 DB를 하나 더 들인다.** 운영할 것(백업, 연결, 마이그레이션, 테스트)이 두 배가 된다. 먼저 "본 DB에 확장으로 붙일 수 있나"를 본다.
@@ -146,13 +148,13 @@ ENUM 칸은 쓰지 않아서(문자열 + 자바 enum) 고칠 것이 없다. JPA�
 
 ## 7. 직접 해 보기
 
-준비: `docker compose up -d`.
+준비: `docker compose up -d`. 7.1은 MySQL 컨테이너가 있던 스텝 22까지의 docker compose 기준이다(스텝 23부터 개발 DB는 PostgreSQL 하나).
 
 ### 7.1 같은 비교, 다른 결과: 대소문자
 
 ```bash
 docker exec -it blog-mysql mysql -ublog -pblog blog -e "SELECT 'JPA' LIKE '%jpa%' AS mysql_like;"
-docker exec -it blog-postgres psql -U blog -d recommend -c "SELECT 'JPA' LIKE '%jpa%' AS pg_like, 'JPA' ILIKE '%jpa%' AS pg_ilike;"
+docker exec -it blog-postgres psql -U blog -d blog -c "SELECT 'JPA' LIKE '%jpa%' AS pg_like, 'JPA' ILIKE '%jpa%' AS pg_ilike;"
 ```
 
 MySQL은 1, PostgreSQL `LIKE`는 false, `ILIKE`는 true.
@@ -160,7 +162,7 @@ MySQL은 1, PostgreSQL `LIKE`는 false, `ILIKE`는 true.
 ### 7.2 "있으면 무시하고 넣기" 두 가지
 
 ```bash
-docker exec -it blog-postgres psql -U blog -d recommend -c "
+docker exec -it blog-postgres psql -U blog -d blog -c "
 CREATE TEMP TABLE t (id int PRIMARY KEY);
 INSERT INTO t VALUES (1) ON CONFLICT DO NOTHING;
 INSERT INTO t VALUES (1) ON CONFLICT DO NOTHING;   -- INSERT 0 0
@@ -171,17 +173,20 @@ MySQL이라면 `INSERT IGNORE INTO t VALUES (1)` 두 번째에 `0 rows affected`
 
 ### 7.3 MySQL 전용 문법 세어 보기
 
-코드 저장소에서:
+코드 저장소에서, 옮기기 전 커밋(스텝 22까지, 예: `git checkout 5682239`)으로:
 
 ```bash
 grep -rn 'INSERT IGNORE' src/main/java | grep -vE ':[0-9]+:\s+(\*|//)' | wc -l   # 8
 grep -c 'ON UPDATE' src/main/resources/db/migration/V1__init.sql                  # 9
 grep -rnE 'UPDATE [a-z_]+ [a-z]+\s+JOIN' src/main/java                            # 4줄
+grep -rnE 'DELETE [a-z]+ FROM' src/main/java                                      # 3줄
 ```
+
+스텝 23 뒤의 코드에서는 모두 0이다. 확인한 뒤 `git checkout -`로 돌아온다.
 
 ### 7.4 추천을 꺼 보기
 
-`application-dev.yml`에 `app.recommend.enabled: false`를 넣고 서버를 띄운다. PostgreSQL 컨테이너를 멈춰도(`docker stop blog-postgres`) 서버가 뜨고, 글 상세의 "비슷한 글"은 빈 목록이 된다. 확인 후 되돌린다.
+`application-dev.yml`에 `app.recommend.enabled: false`를 넣고 서버를 띄운다. 스텝 22까지는 PostgreSQL 컨테이너를 멈춰도(`docker stop blog-postgres`) 서버가 떴다. 스텝 23부터는 PostgreSQL이 주 DB라 멈추면 서버가 뜨지 않고, 이 설정은 임베딩 서버(Ollama)만 끈다. 그래도 글 상세의 "비슷한 글"은 빈 목록이 된다. 확인 후 되돌린다.
 
 ## 8. 확인 문제
 
@@ -201,7 +206,7 @@ grep -rnE 'UPDATE [a-z_]+ [a-z]+\s+JOIN' src/main/java                          
 <details><summary>답</summary>모든 글의 벡터를 읽어 비교해야 해서 글 수에 비례해 느려진다. 인덱스가 없다. 작은 규모의 임시 방안이다.</details>
 
 6. 그런데도 이 프로젝트가 주 DB를 MySQL로 둔 이유(코드에서 보이는 것)는?
-<details><summary>답</summary>운영 배포가 DB를 띄우지 않고 <code>DB_ADDRESS</code>로 받아 <code>jdbc:mysql://</code>로 붙는다. 운영 DB가 MySQL로 주어진 것으로 보이고, 추천은 운영에서 꺼 둔다(<code>APP_RECOMMEND_ENABLED</code> 기본 false).</details>
+<details><summary>답</summary>운영 배포가 DB를 띄우지 않고 <code>DB_ADDRESS</code>로 받아 <code>jdbc:mysql://</code>로 붙는다. 운영 DB가 학교가 관리하는 MySQL로 주어져 있었다. (스텝 23·24에서 운영 DB를 s2의 PostgreSQL로 옮겼다.)</details>
 
 7. PostgreSQL로 옮길 때 가장 위험한 차이는? 왜 위험한가?
 <details><summary>답</summary>문자열 대소문자 비교. MySQL 콜레이션(<code>utf8mb4_0900_ai_ci</code>)은 대소문자를 무시하지만 PostgreSQL 기본은 구분한다. 문법 오류 없이 검색 결과나 금칙어·태그 UNIQUE 판단만 달라져서 테스트가 없으면 알아차리기 어렵다.</details>

@@ -803,12 +803,12 @@ description: "지원 서비스 구현 작업 (2주 일정 기준)"
 
 2026-10-13 지원 결정: 주 DB와 추천 DB를 PostgreSQL 하나로 합친다. 대소문자 무시 비교는 `citext`, 백업은 하지 않는다(R-02).
 
-- [ ] T123 [구조] PostgreSQL용 Flyway V1(지금 스키마, `citext`·`vector`, `post_embedding` 외래 키) in `src/main/resources/db/migration/` (R-02)
-- [ ] T124 [구조] MySQL 전용 SQL(`INSERT IGNORE`, `UPDATE`·`DELETE … JOIN` 등)을 PostgreSQL로 in 각 기능 `domain/`·`application/` (R-02)
-- [ ] T125 [구조] 대소문자 무시 비교(`citext`, `ILIKE`)와 그 테스트 in `search/`, `admin/`, `src/test/` (R-02)
-- [ ] T126 [구조] DB 하나로: 추천 DataSource·Flyway 없앰, 의미 검색·추천을 한 쿼리로 in `recommend/`, `search/`, `global/config/` (R-02, OWN-06, OWN-07)
-- [ ] T127 [구조] 잠금·격리 수준(READ COMMITTED) 다시 확인과 주석 in 잠그는 쿼리가 있는 곳, `src/test/` (R-02)
-- [ ] T128 [구조] pom, Testcontainers, 테스트 SQL, docker compose, 설정 파일을 PostgreSQL로 (R-02)
+- [X] T123 [구조] PostgreSQL용 Flyway V1(지금 스키마, `citext`·`vector`, `post_embedding` 외래 키) in `src/main/resources/db/migration/` (R-02)
+- [X] T124 [구조] MySQL 전용 SQL(`INSERT IGNORE`, `UPDATE`·`DELETE … JOIN` 등)을 PostgreSQL로 in 각 기능 `domain/`·`application/` (R-02)
+- [X] T125 [구조] 대소문자 무시 비교(`citext`, `ILIKE`)와 그 테스트 in `search/`, `admin/`, `src/test/` (R-02)
+- [X] T126 [구조] DB 하나로: 추천 DataSource·Flyway 없앰, 의미 검색·추천을 한 쿼리로 in `recommend/`, `search/`, `global/config/` (R-02, OWN-06, OWN-07)
+- [X] T127 [구조] 잠금·격리 수준(READ COMMITTED) 다시 확인과 주석 in 잠그는 쿼리가 있는 곳, `src/test/` (R-02)
+- [X] T128 [구조] pom, Testcontainers, 테스트 SQL, docker compose, 설정 파일을 PostgreSQL로 (R-02)
 
 **스텝 24. 운영 데이터 옮기기·배포·문서**
 
