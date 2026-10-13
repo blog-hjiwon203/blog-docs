@@ -715,12 +715,12 @@ description: "지원 서비스 구현 작업 (2주 일정 기준)"
 
 로그인 잠금 악용 줄이기(T055b): 스텝 9의 시도 제한(T055a, R-17)은 다른 사람이 내 이메일로 5번 틀리면 나도 15분 동안 로그인하지 못한다. 이것을 두 겹(T055b, T088)으로 줄인다(2026-10-09 지원 결정). 저장·랭킹 방식은 2026-10-08(R-13), 방문 통계 ERD는 2026-10-08(R-14), 사이드바 모듈과 포인트 색은 2026-10-08 지원 결정이다.
 
-2026-10-11 지원 결정: 앱 키가 필요 없는 작업(T055b, T074~T085)을 먼저 했다. T088(메일), T099·T100(카카오, 구글은 2026-10-12 지원 결정으로 뺌)은 지원이 SMTP·OAuth 키를 `config/application-dev.yml`(git 제외)에 넣은 뒤 이어서 한다.
+2026-10-11 지원 결정: 앱 키가 필요 없는 작업(T055b, T074~T085)을 먼저 했다. T088(메일), T099·T100(카카오, 구글은 2026-10-12 지원 결정으로 뺌)은 지원이 SMTP·OAuth 키를 `config/application-dev.yml`(git 제외)에 넣은 뒤 이어서 한다. 운영(`now-log.java21.net`)에서 카카오 로그인과 Gmail 인증 메일이 실제로 동작하는 것을 지원이 확인했다(2026-10-13).
 
 - [X] T088 [US5] 비밀번호 재설정(OWN-02)과 메일로 잠금 풀기: 실제 메일 발송(지금의 LoggingEmailSender 대신), 재설정 링크 30분, 잠긴 계정에 "본인이면 이 링크로" 메일. 토큰은 추측할 수 없는 임의 값·한 번만·짧은 유효 시간, 메일 발송 횟수 제한(메일 폭탄 방지) in `auth/` (OWN-02, R-17)
 - [X] T055b [US5] 전에 로그인한 브라우저는 잠그지 않기: 로그인에 성공하면 그 회원의 서명된 기기 쿠키(HttpOnly, 임의 값)를 주고, 이메일별 잠금 판단에서 그 쿠키를 가진 요청은 빼고 센다(공격자는 쿠키가 없어 계속 막힘). IP별 제한은 그대로 in `auth/`(스텝 19b에서 옮김) (AUTH-01, R-17, OWASP device cookie)
-- [ ] T099 [US10] 소셜 로그인·가입: 카카오 OAuth(구글은 운영 주소가 https가 아니라 뺌, 2026-10-12 지원 결정)(`/api/auth/oauth/{provider}/authorize`·`callback`, state 검증), 처음이면 닉네임 확인 뒤 가입(`/api/auth/oauth/signup`), `social_account`, 소셜 가입 회원의 탈퇴 본인 확인(`mode=reauth`, 10분 안에 `DELETE /api/me {}`, 스텝 19의 T108이 비밀번호 확인까지 만들고 남김). 앱 키는 지원이 준비 in `auth/` (AUTH-01 소셜, AUTH-06, R-07, 2026-10-11 추가)
-- [ ] T100 [US10] 소셜 계정 연동·해제(마이페이지, 제공사당 하나, 마지막 로그인 수단은 해제 불가) in `auth/`, `frontend/src/pages/me/` (OWN-03, R-07, 2026-10-11 추가)
+- [X] T099 [US10] 소셜 로그인·가입: 카카오 OAuth(구글은 운영 주소가 https가 아니라 뺌, 2026-10-12 지원 결정)(`/api/auth/oauth/{provider}/authorize`·`callback`, state 검증), 처음이면 닉네임 확인 뒤 가입(`/api/auth/oauth/signup`), `social_account`, 소셜 가입 회원의 탈퇴 본인 확인(`mode=reauth`, 10분 안에 `DELETE /api/me {}`, 스텝 19의 T108이 비밀번호 확인까지 만들고 남김). 앱 키는 지원이 준비 in `auth/` (AUTH-01 소셜, AUTH-06, R-07, 2026-10-11 추가)
+- [X] T100 [US10] 소셜 계정 연동·해제(마이페이지, 제공사당 하나, 마지막 로그인 수단은 해제 불가) in `auth/`, `frontend/src/pages/me/` (OWN-03, R-07, 2026-10-11 추가)
 - [X] T082 [US13] `blog_visit` 기록(블로그·날짜·방문자 하루 1회, 주인 제외, Referer로 유입 종류·사이트), 새벽 집계 작업(`blog_daily_stat`, `blog_referrer_daily`, `blog.total_visitor_count`), 7일 지난 방문 기록 삭제 in `manage/` (MNG-03)
 - [X] T083 [US13] 통계 API: 관리 홈(오늘·어제·누적, 최근 댓글·글 요약), 일·주·월 그래프, 인기 글(누적·7일), 유입 경로 in `manage/` (MNG-03)
 - [X] T084 [US13] `blog_blocked_member`, `blog_banned_word` 엔티티와 관리 API(차단 시 기존 구독 삭제, 금칙어 100개), 댓글·방명록 작성과 구독에 차단·금칙어 검사 연결 in `manage/` (MNG-04)
