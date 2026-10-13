@@ -2,7 +2,7 @@
 
 > 관련 스텝: [스텝 10](../step-10.md) (T069a, T069b) · 관련 개념: [41-embedding-vector-search](./41-embedding-vector-search.md), [01-spring-boot-basics](./01-spring-boot-basics.md), [03-flyway-migration](./03-flyway-migration.md), [04-docker-compose](./04-docker-compose.md), [05-spring-testing](./05-spring-testing.md), [23-transactions-locking](./23-transactions-locking.md), [35-spring-cache-redis](./35-spring-cache-redis.md)
 
-> **스텝 23 이후**: 두 번째 DB(추천용 PostgreSQL)는 주 DB에 합쳐져 없어졌다([67](./67-mysql-to-postgresql.md)). `@Bean(defaultCandidate = false)` DataSource와 DB별 Flyway는 이 문서로 공부하되, 지금 코드에는 없다. 커밋 뒤 비동기로 임베딩을 만드는 부분(이벤트, `@TransactionalEventListener`, `@Async`)은 그대로 쓴다.
+> **스텝 23 이후**: 두 번째 DB(추천용 PostgreSQL)는 주 DB에 합쳐져 없어졌다([65](./65-postgresql-vs-mysql.md)). `@Bean(defaultCandidate = false)` DataSource와 DB별 Flyway는 이 문서로 공부하되, 지금 코드에는 없다. 커밋 뒤 비동기로 임베딩을 만드는 부분(이벤트, `@TransactionalEventListener`, `@Async`)은 그대로 쓴다.
 
 ## 1. 이 문서로 배우는 것
 
