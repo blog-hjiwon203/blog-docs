@@ -87,10 +87,10 @@
 | [36 집계 쿼리로 순위 매기기](./concepts/36-집계-쿼리로-순위-매기기.md) | `GROUP BY`·`SUM`, `UNION ALL`로 가중치 점수, 시각 인덱스, 동점 처리, `NamedParameterJdbcTemplate`, 태그별 글 수 |
 | [43 글 공유 미리보기: Open Graph](./concepts/43-Open-Graph-공유-미리보기.md) | 봇은 자바스크립트를 안 돌린다, 서버가 넣는 og 태그, 이스케이프, 절대 주소, charset, 비회원 기준 |
 | [44 휴대폰 화면: 반응형과 헤드리스 Chrome 점검](./concepts/44-휴대폰-화면-반응형-점검.md) | viewport, 미디어 쿼리, `minmax(0, 1fr)`, 표를 카드로, CDP로 360px 화면 재기·스크린숏 |
-| [41 임베딩과 벡터 검색](./concepts/41-임베딩과-벡터-검색.md) | 임베딩, 코사인 유사도·거리, pgvector `<=>`와 HNSW, Ollama bge-m3, 추천에서 볼 수 없는 글 거르기, 가짜 임베딩 테스트 |
+| [41 임베딩과 벡터 검색](./concepts/41-임베딩과-벡터-검색.md) | 임베딩, 코사인 유사도·거리, pgvector `<=>`와 HNSW, pgvector 이미지와 확장 켜기, Ollama bge-m3와 "요청을 기다리는 서버"(누가 언제 부르나), 임베딩을 만드는 다른 방법, 추천에서 볼 수 없는 글 거르기(한 쿼리), 가짜 임베딩 테스트 |
 | [42 두 번째 DB와 커밋 뒤 비동기 처리](./concepts/42-두-번째-DB와-비동기-처리.md) | `@Bean(defaultCandidate = false)` DataSource, DB별 Flyway, 최종 일관성, 이벤트·`@TransactionalEventListener`·`@Async`, 비동기 테스트 |
 | [65 MySQL과 PostgreSQL: 비교, 옮기는 이유, 옮기는 법](./concepts/65-PostgreSQL-vs-MySQL.md) | 두 DB의 같은 점과 다른 점(문법·타입·글자 비교·격리 수준·확장), PostgreSQL이 들어온 이유와 벡터를 pgvector에 두는 이유, 두 DB를 합치는 장단점과 선택지, 옮기기의 세 겹, **대소문자 구분 문제와 해결**(citext, JDBC `varchar` 함정과 `stringtype=unspecified`, ILIKE, 자바 비교), `updated_at`, 격리 수준·잠금, Criteria 한 쿼리 벡터 검색(hibernate-vector), 데이터 옮기기(COPY 형식·이스케이프·외래 키 순서·시퀀스·대조), 전환과 되돌리기 (옛 65·67과 68의 데이터 부분을 합침, 스텝 23·24)
-| [66 의미 검색: 낱말이 아니라 뜻으로 찾기](./concepts/66-의미-검색.md) | 글자 검색과 의미 검색, 검색어도 같은 모델로, 기준값을 재서 정하기, 최대 결과 수, 두 DB에서 뽑고 → 거르고 → 자르기, 블로그 안 검색은 범위 먼저, HNSW `hnsw.ef_search`, 검색어 임베딩 캐시와 프록시, 넣는 글자 버전(`text_version`), 실패는 503 |
+| [66 의미 검색: 낱말이 아니라 뜻으로 찾기](./concepts/66-의미-검색.md) | 글자 검색과 의미 검색, 검색어도 같은 모델로, 기준값을 재서 정하기, 최대 결과 수, 가시성·블로그 조건을 같은 쿼리에(스텝 22의 두 DB 뽑고 → 거르고 → 자르기와 비교), HNSW `hnsw.ef_search`와 `iterative_scan`, 검색어 임베딩 캐시와 프록시, 넣는 글자 버전(`text_version`), Ollama 실패는 503·DB 오류는 500 |
 | [68 서버와 Docker: 개발용과 운영용](./concepts/68-서버와-Docker-개발용-운영용.md) | 서버·이미지·컨테이너, Docker는 컴퓨터마다 따로, 서버에서도 Docker를 쓰는 이유, 건물·방·현관문으로 본 포트와 docker 네트워크, 개발용과 운영용 두 벌과 연결 정보가 있는 곳, 누가 운영 컨테이너를 띄우나(Actions → deploy.sh), 볼륨, 같은 컨테이너에 DB 하나 더, 비밀번호를 `ps`에 안 보이게 (스텝 24) |
 | [37 거르기 조건이 있는 목록과 일괄 처리](./concepts/37-조건-목록과-일괄-처리.md) | 동적 Specification, `COALESCE` 정렬과 개수 쿼리, 주인 확인 뒤 값 검사, 일괄 변경·삭제, `LikePatterns`, 주소에 둔 거르기 조건 |
 | [39 계층 데이터: 카테고리 2단계와 주제](./concepts/39-카테고리-계층.md) | 자기 참조 트리, 2단계 제한, 계산 칸 `parent_key`와 UNIQUE, 주제 enum, 주제별 글 채우기, 비공개 카테고리의 글 숨기기(NOT EXISTS 부분 쿼리), 전체 순서 한 번에 저장과 끌어서 놓기 순수 함수 |
