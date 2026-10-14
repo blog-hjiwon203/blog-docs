@@ -77,7 +77,7 @@
 
 ## Claude Code에서 쓰는 법
 
-`/speckit-specify`(기능 명세), `/speckit-plan`(구현 계획), `/speckit-tasks`(작업 목록)는 이미 끝난 상태다. 구현은 이 저장소가 아니라 코드 저장소 [AIP-1/blog-basic-AIGJ_01_017-blog](https://github.com/AIP-1/blog-basic-AIGJ_01_017-blog)에 한다.
+`/speckit-specify`(기능 명세), `/speckit-plan`(구현 계획), `/speckit-tasks`(작업 목록)는 이미 끝난 상태다. 구현은 이 저장소가 아니라 코드 저장소 [blog-hjiwon203/now-log](https://github.com/blog-hjiwon203/now-log)에 한다(2026-10-14에 제출용 [AIP-1/blog-basic-AIGJ_01_017-blog](https://github.com/AIP-1/blog-basic-AIGJ_01_017-blog)에서 커밋 기록째 옮김, 그때까지의 PR은 [history/pull-requests](history/pull-requests/README.md)).
 
 ### 폴더 배치 (지원 컴퓨터)
 

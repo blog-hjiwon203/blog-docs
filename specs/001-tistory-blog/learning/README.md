@@ -4,7 +4,7 @@
 > - **개념 문서**(`concepts/`): 개념 하나를 처음부터 설명한다. 왜 필요한지, 어떻게 동작하는지, 이 프로젝트 코드에서 어떻게 쓰였는지, 직접 해 볼 실습과 확인 문제까지 담았다.
 > - **스텝 노트**(`step-NN.md`): 그 스텝에서 무엇을 만들었는지, 이해하려면 어떤 개념 문서를 어떤 순서로 읽으면 되는지, 막혔던 점을 정리한 지도다.
 
-코드 경로는 코드 저장소(`~/IdeaProjects/blog`, GitHub [AIP-1/blog-basic-AIGJ_01_017-blog](https://github.com/AIP-1/blog-basic-AIGJ_01_017-blog)) 기준이다.
+코드 경로는 코드 저장소(`~/IdeaProjects/blog`, GitHub [blog-hjiwon203/now-log](https://github.com/blog-hjiwon203/now-log), 2026-10-14 전 PR 링크는 제출용 원본 AIP-1/blog-basic-AIGJ_01_017-blog를 가리킨다) 기준이다.
 
 ## 스텝 노트
 
