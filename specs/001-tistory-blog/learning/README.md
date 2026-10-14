@@ -52,6 +52,9 @@
 | [03 Flyway와 스키마 마이그레이션](./concepts/03-flyway-migration.md) | 마이그레이션, 체크섬, `ddl-auto`, ERD → schema.sql → V1 흐름 |
 | [04 Docker와 Docker Compose](./concepts/04-docker-compose.md) | 이미지와 컨테이너, compose 파일 항목, 볼륨, 포트, healthcheck |
 | [05 Spring 테스트와 Testcontainers](./concepts/05-spring-testing.md) | 단위·통합·슬라이스 테스트, 컨텍스트 캐싱, `@ServiceConnection`, MockMvc |
+| [69 CI/CD 개념](./concepts/69-ci-cd-concepts.md) | CI와 지속적 전달·배포, 파이프라인·잡·스텝·러너, 산출물과 레지스트리, SHA 태그, 브랜치 전략과 브랜치 보호, 환경과 승인, 배포 전략(다시 띄우기·롤링·블루그린·카나리), 헬스 체크와 되돌리기, 마이그레이션과 늘리기→옮기기→줄이기, 비밀값과 OIDC, 캐시·동시 실행 제어 |
+| [70 CI/CD 설정 방법 여러 가지](./concepts/70-ci-cd-setup-methods.md) | 방법 고르기(push·pull 방식), 배포 전용 SSH 키와 되돌리는 배포 스크립트, A GitHub Actions PR CI, B Actions + GHCR + SSH, C 셀프 호스티드 러너, D Jenkins(Jenkinsfile·Credentials·Multibranch), E GitLab CI(dind·manual·resource_group), F AWS OIDC + ECR + ECS, G 쿠버네티스 + Argo CD(GitOps) |
+| [71 이 프로젝트의 CI/CD](./concepts/71-ci-cd-this-project.md) | now-log의 `deploy.yml`·`deploy.sh`·`Dockerfile` 읽기, 비밀값이 서버까지 가는 길, 잘된 점과 빈 곳, 고치는 순서 7단계(PR CI, 브랜치 보호, 배포 키, production 환경, SHA 태그·GHCR·자동 되돌리기, Actuator, 정리), 되돌리기와 Flyway |
 
 ### 2부. 데이터와 웹
 
