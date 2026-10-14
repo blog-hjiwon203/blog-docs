@@ -499,7 +499,7 @@ description: "지원 서비스 구현 작업 (2주 일정 기준)"
 
 **Claude Code CLI에 시키는 법**: 코드 저장소(`~/IdeaProjects/blog`)에서 `claude --add-dir ../blog-docs`로 열고 "스텝 3 진행해"처럼 스텝 번호를 준다. `../blog-docs`는 `~/IdeaProjects/blog-docs`다. Claude Code는 코드 저장소의 `CLAUDE.md`([원본](./code-repo-CLAUDE.md))에 따라 그 스텝의 작업만 하고 결과를 정리한 뒤 멈춘다.
 
-**스텝이 끝나면 Claude Code가 보여 줄 것**: 끝낸 작업 번호, `./mvnw test` 결과, 바뀐 파일 목록, 만든 API(contracts/rest-api.md와 다른 점과 이유), 미룬 것, 확인 방법. 그리고 이 저장소에 [학습 자료](./learning/README.md)를 쓴다(지원 공부용): 새로 쓰인 개념의 개념 문서 `learning/concepts/`(처음부터 상세히, 실습·확인 문제 포함)와 스텝 노트 `learning/step-NN.md`(개념 문서 읽는 순서, 막혔던 점).
+**스텝이 끝나면 Claude Code가 보여 줄 것**: 끝낸 작업 번호, `./mvnw test` 결과, 바뀐 파일 목록, 만든 API(contracts/rest-api.md와 다른 점과 이유), 미룬 것, 확인 방법. 그리고 이 저장소에 [학습 자료](../../learning/README.md)를 쓴다(지원 공부용): 새로 쓰인 개념의 개념 문서 `learning/concepts/`(처음부터 상세히, 실습·확인 문제 포함)와 스텝 노트 `learning/스텝-NN.md`(개념 문서 읽는 순서, 막혔던 점).
 
 **체크박스**: 스텝이 끝나면 Claude Code가 그 스텝에서 끝낸 작업의 체크박스를 아래 작업 목록에서 `[X]`로 바꾼다(명세 반영과 같은 `docs/...` 브랜치, 2026-10-09 지원 결정). 백로그 작업은 [2주 범위 밖 (백로그)](#2주-범위-밖-백로그) 절에 모여 있고, 진행 체크는 그 절의 작업 목록에서만 한다(절 끝 "기능별로 보기"는 체크박스 없는 대응표, 2026-10-11 지원 결정). 못 끝낸 작업은 `[ ]`로 두고 보고에 적는다.
 
