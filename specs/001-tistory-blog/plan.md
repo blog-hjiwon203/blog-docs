@@ -101,7 +101,7 @@ specs/001-tistory-blog/
 
 ### 소스 코드 (저장소 루트)
 
-코드 저장소는 GitHub [AIP-1/blog-basic-AIGJ_01_017-blog](https://github.com/AIP-1/blog-basic-AIGJ_01_017-blog)이고, 지원 컴퓨터의 `/Users/chosun-nhn54/IdeaProjects/blog`가 그 클론이다(IntelliJ 프로젝트). 이 문서 저장소(blog-docs)와는 별개다. Spring Initializr로 만든 Maven 프로젝트가 루트에 있어서 **저장소 루트가 곧 백엔드**이고, 프론트만 `frontend/` 하위 폴더에 둔다. 기본 패키지는 `com.nhnacademy.blog`. 아래 경로는 모두 이 저장소 루트 기준이다.
+코드 저장소는 GitHub [blog-hjiwon203/now-log](https://github.com/blog-hjiwon203/now-log)이고(2026-10-14에 제출용 AIP-1/blog-basic-AIGJ_01_017-blog에서 옮김), 지원 컴퓨터의 `/Users/chosun-nhn54/IdeaProjects/blog`가 그 클론이다(IntelliJ 프로젝트). 이 문서 저장소(blog-docs)와는 별개다. Spring Initializr로 만든 Maven 프로젝트가 루트에 있어서 **저장소 루트가 곧 백엔드**이고, 프론트만 `frontend/` 하위 폴더에 둔다. 기본 패키지는 `com.nhnacademy.blog`. 아래 경로는 모두 이 저장소 루트 기준이다.
 
 ```text
 docker-compose.yml          # 개발용 PostgreSQL(pgvector), Redis, Ollama (스텝 23까지는 MySQL도)

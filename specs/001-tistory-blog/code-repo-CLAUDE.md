@@ -4,7 +4,7 @@
 
 ## 이 저장소
 
-티스토리형 블로그(지원)의 구현 코드다. GitHub: AIP-1/blog-basic-AIGJ_01_017-blog
+티스토리형 블로그(지원)의 구현 코드다. GitHub: blog-hjiwon203/now-log (2026-10-14 옮김, 배포도 여기서. 제출용 원본 AIP-1/blog-basic-AIGJ_01_017-blog는 그대로 두고 PR #1~#39 기록이 거기 있다)
 
 명세·계획·작업 목록은 별도 문서 저장소에 있다. 옆 폴더 `../blog-docs`에 클론되어 있고, Claude Code는 `claude --add-dir ../blog-docs`로 열어 읽는다.
 
