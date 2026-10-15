@@ -495,6 +495,25 @@ description: "지원 서비스 구현 작업 (2주 일정 기준)"
 
 **확인할 것**: 이전 스크립트가 출력한 표마다 MySQL·PostgreSQL 행 수가 같음, 운영에서 기존 글·댓글이 보이고 기존 계정으로 로그인됨, 새 가입·글쓰기가 됨(번호 중복 없음), 의미 검색·비슷한 글이 됨. 병합 뒤 이전 스크립트를 돌리기 전 몇 분 동안은 운영이 빈 DB로 뜬다.
 
+### 스텝 25. 이중화·무중단 배포 (2026-10-14 지원 결정)
+
+**무엇을 만드나**: 앱을 두 대 늘 띄우고(이중화), 배포를 한 대씩 바꾸는 롤링으로 바꾼다(R-18). 먼저 앱 코드를 두 대에서도 맞게 고치고(PR #3), 그다음 배포 스크립트를 바꾼다(PR #4). 이 스텝은 tasks 표 없이 대화로 진행했고, 끝난 뒤 문서에 옮겼다.
+
+**끝나면**: 운영에 앱 두 대가 떠 있고, 학교 nginx가 둘로 나눠 보내며, 배포하는 동안 사이트가 끊기지 않는다.
+
+| 작업 | 내용 |
+| --- | --- |
+| T133 | 예약 발행을 조건부 UPDATE로(`PostRepository.findDueScheduledIds`·`publishIfDue`). 1행을 받은 쪽만 발행 이벤트. 두 스레드 동시 발행·읽은 뒤 고친 글·거둔 글 테스트 |
+| T134 | 글을 고치는 요청(`PostService.edit`·`changeVisibility`·`delete`, 일괄 공개 범위 변경, 블로그 이동)이 읽기 전에 행을 잠금(`lockById`·`lockAllById`). 지원 리뷰(PR #3)로 찾은 경합: 작업 UPDATE 후 커밋 전의 예약 취소·일괄 공개 범위 변경 테스트 |
+| T135 | 새벽 통계를 advisory lock으로 한 앱만(`BlogStatsRepository.tryLockAggregation`). 잠금을 쥔 동안 건너뛰는 테스트 |
+| T136 | 헬스체크: actuator, `/actuator/health/readiness`(readinessState·db·redis)·`/liveness`, health만 열고 details 숨김, 메일 검사 끔 |
+| T137 | 앱이 꺼질 때 `@Async` 작업 확인: 기본값으로 종료 단계(30초)에서 기다림, `await-termination`은 오히려 나빠서 넣지 않음(실험, `AsyncConfig` 주석). 코드 변경 없음 |
+| T138 | `deploy.sh` 두 대 롤링: app-2 → app, stop -t 70 → readiness UP → 12초, 실패하면 옛 이미지로 거꾸로 되돌리기, Redis 다시 만들지 않기. 가짜 docker·curl로 6가지 경우 |
+| T139 | 학교 nginx upstream 반영(지원이 설정 파일을 고쳐 강사님께 요청)과 확인: 두 앱에 요청이 나뉨, 배포 중 502 없음 |
+| T140 | 문서: research R-18, plan, 이 표, 학습 자료(동시성 제어, 이중화·롤링 배포, 스텝 노트) |
+
+**확인할 것**: 서버에서 `docker ps`에 `aigj017-app`(8460)·`aigj017-app-2`(8461)가 같은 이미지로 Up, `curl http://127.0.0.1:8460/actuator/health/readiness`와 `:8461`이 모두 `{"status":"UP"}`. nginx 반영 뒤 `while true; do curl -s -o /dev/null -w '%{http_code}\n' https://now-log.java21.net/; sleep 0.5; done | uniq -c`를 돌린 채 배포를 한 번 돌려 200만 나옴.
+
 ### 진행 방식
 
 **Claude Code CLI에 시키는 법**: 코드 저장소(`~/IdeaProjects/blog`)에서 `claude --add-dir ../blog-docs`로 열고 "스텝 3 진행해"처럼 스텝 번호를 준다. `../blog-docs`는 `~/IdeaProjects/blog-docs`다. Claude Code는 코드 저장소의 `CLAUDE.md`([원본](./code-repo-CLAUDE.md))에 따라 그 스텝의 작업만 하고 결과를 정리한 뒤 멈춘다.
@@ -817,6 +836,19 @@ description: "지원 서비스 구현 작업 (2주 일정 기준)"
 - [X] T131 [구조] 운영 전환과 확인(지원이 서버에서 이전 스크립트 실행) (R-02)
 - [X] T132 [구조] 문서를 PostgreSQL 기준으로: CLAUDE.md, plan, research, data-model, ERD, quickstart, 학습 자료 (R-02)
 
+**스텝 25. 이중화·무중단 배포**
+
+2026-10-14 지원 결정: 앱 두 대 + 롤링 배포, 학교 nginx upstream. 스케줄 작업은 두 앱 모두 켜고 DB가 가른다(R-18).
+
+- [X] T133 [구조] 예약 발행 조건부 UPDATE in `post/application/ScheduledPublisher`, `post/domain/PostRepository` (R-18, POST-13)
+- [X] T134 [구조] 글을 고치는 요청이 읽기 전에 행 잠금(지원 리뷰) in `post/application/PostService`, `manage/application/ManagePostService`, `blog/application/BlogMoveService` (R-18, POST-13)
+- [X] T135 [구조] 새벽 통계 advisory lock in `manage/application/StatsAggregator`, `manage/domain/BlogStatsRepository` (R-18, MNG-03)
+- [X] T136 [구조] 헬스체크 actuator in `pom.xml`, `application.yml` (R-18)
+- [X] T137 [구조] 꺼질 때 비동기 작업 확인(코드 변경 없음, 주석) in `global/config/AsyncConfig` (R-18)
+- [X] T138 [구조] 두 대 롤링 배포 in `deploy/deploy.sh` (R-18)
+- [ ] T139 [구조] 학교 nginx upstream 반영과 무중단 확인(지원·강사님) (R-18)
+- [ ] T140 [구조] 문서: research, plan, tasks, 학습 자료 (R-18)
+
 ### 기능별로 보기
 
 2주 범위 밖 기능이 어느 작업·스텝에서 만들어지는지 보는 대응표다. 진행 체크는 위의 작업 목록 한 곳에서만 한다(이 표에는 체크박스를 두지 않는다).
@@ -847,6 +879,7 @@ description: "지원 서비스 구현 작업 (2주 일정 기준)"
 | US10 | 회원 탈퇴 (AUTH-06, Q1) | T108 | 19 |
 | (구조) | 인증 경계 정리 | T114, T115 | 19b |
 | (구조) | 주 DB를 PostgreSQL로 합침 | T123~T128, T129~T132 | 23, 24 |
+| (구조) | 이중화·무중단 배포 | T133~T140 | 25 |
 | US14 | 블로그 이용 제한 (ADMIN-05), 신고 (ADMIN-04), 공지·관리 이력·대시보드 (ADMIN-06) | T109, T110, T111, T112 | 18 |
 | US12 | 알림 (SUB-04) | T113 | 16 |
 | US13 | 방문 통계 (MNG-03), 스팸·차단 (MNG-04) | T082~T085 | 20 |
