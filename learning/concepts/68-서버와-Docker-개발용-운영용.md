@@ -77,7 +77,7 @@
 | PostgreSQL | `blog-postgres`, `localhost:5432`, `blog`/`blog` | `aigj017-recommend-db` (s2), `blog` 계정, 비밀번호는 GitHub secret `RECOMMEND_DB_PASSWORD` |
 | Redis | `blog-redis` | `aigj017-redis` (s2) |
 | Ollama | `blog-ollama` | `aigj017-ollama` (s2) |
-| 블로그 앱 | `./mvnw spring-boot:run` (8080, 컨테이너 아님) | `aigj017-app` (s2, 8460) |
+| 블로그 앱 | `./mvnw spring-boot:run` (8080, 컨테이너 아님) | `aigj017-app` (s2, 8460), `aigj017-app-2` (s2, 8461). 스텝 25부터 두 대, 학교 nginx upstream이 나눠 보냄([73](./73-이중화와-롤링-배포.md)) |
 | MySQL | `blog-mysql` (스텝 23부터 안 씀) | s4 학교 MySQL (스텝 24 전까지. 우리가 띄운 것 아님) |
 | 메일 | `blog-mailpit`(가짜 메일함) | 없음(Gmail로 실제 발송) |
 

@@ -847,7 +847,7 @@ description: "지원 서비스 구현 작업 (2주 일정 기준)"
 - [X] T137 [구조] 꺼질 때 비동기 작업 확인(코드 변경 없음, 주석) in `global/config/AsyncConfig` (R-18)
 - [X] T138 [구조] 두 대 롤링 배포 in `deploy/deploy.sh` (R-18)
 - [ ] T139 [구조] 학교 nginx upstream 반영과 무중단 확인(지원·강사님) (R-18)
-- [ ] T140 [구조] 문서: research, plan, tasks, 학습 자료 (R-18)
+- [X] T140 [구조] 문서: research, plan, tasks, 학습 자료 (R-18)
 
 ### 기능별로 보기
 

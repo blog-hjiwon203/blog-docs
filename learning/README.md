@@ -38,6 +38,7 @@
 | 22 | [의미 검색](./스텝-22.md) | 검색 화면 "글자로 찾기 / 의미로 찾기" 탭(전체·블로그 안), 검색어를 같은 모델로 임베딩(Redis 캐시), 유사도 기준값 0.40(bge-m3로 잼), 두 DB에서 뽑고 → 거르고 → 자르기, 블로그 안은 범위를 먼저, HNSW `ef_search` 40개 함정, 임베딩에 태그를 넣고 `text_version`으로 다시 만들기, 안 되면 503 |
 | 23 | [주 DB를 PostgreSQL로](./스텝-23.md) | MySQL과 추천 DB를 PostgreSQL 하나로(개념 65): PostgreSQL용 Flyway V1, citext와 드라이버 `stringtype` 함정, `ON CONFLICT`·`UPDATE … FROM`·`DELETE … USING`, `updated_at`을 JPA에만, READ COMMITTED와 `FOR KEY SHARE`, 의미 검색·비슷한 글을 Criteria 한 쿼리로(hibernate-vector), 테스트 SQL 차이 |
 | 24 | [운영 데이터 옮기기·배포·문서](./스텝-24.md) | 서버·Docker·포트·docker 네트워크와 개발용·운영용 두 벌, `deploy.sh`가 같은 컨테이너에 `blog` DB를 만들고 앱을 붙임, MySQL → PostgreSQL 이전 스크립트(COPY 글자 형식, `sql_mode`와 상관없는 이스케이프, 외래 키 순서, 시퀀스), 행 수·내용 대조, 운영 전환과 되돌리기, 비밀번호를 명령줄에 쓰지 않기 |
+| 25 | [이중화·무중단 배포](./스텝-25.md) | 앱 두 대 + 학교 nginx upstream + 롤링 배포(블루·그린이 아닌 이유), 예약 발행을 조건부 UPDATE로(두 앱 중 한쪽만 발행), 지원 리뷰로 찾은 발행 직전 취소 경합과 읽기 전 행 잠금(비관적 잠금을 고른 이유), 새벽 통계 advisory lock, Actuator readiness, 꺼질 때 비동기 작업 실험(`await-termination`을 넣지 않는 이유), `deploy.sh` 롤링·되돌리기 규칙·Redis 유지, 가짜 docker로 시험 |
 
 ## 개념 문서
 
@@ -55,6 +56,7 @@
 | [69 CI/CD 개념](./concepts/69-CI-CD-개념.md) | CI와 지속적 전달·배포, 파이프라인·잡·스텝·러너, 산출물과 레지스트리, SHA 태그, 브랜치 전략과 브랜치 보호, 환경과 승인, 배포 전략(다시 띄우기·롤링·블루그린·카나리), 헬스 체크와 되돌리기, 마이그레이션과 늘리기→옮기기→줄이기, 비밀값과 OIDC, 캐시·동시 실행 제어 |
 | [70 CI/CD 설정 방법 여러 가지](./concepts/70-CI-CD-설정-방법.md) | 방법 고르기(push·pull 방식), 배포 전용 SSH 키와 되돌리는 배포 스크립트, A GitHub Actions PR CI, B Actions + GHCR + SSH, C 셀프 호스티드 러너, D Jenkins(Jenkinsfile·Credentials·Multibranch), E GitLab CI(dind·manual·resource_group), F AWS OIDC + ECR + ECS, G 쿠버네티스 + Argo CD(GitOps) |
 | [71 이 프로젝트의 CI/CD](./concepts/71-CI-CD-우리-프로젝트-적용.md) | now-log의 `deploy.yml`·`deploy.sh`·`Dockerfile` 읽기, 비밀값이 서버까지 가는 길, 잘된 점과 빈 곳, 고치는 순서 7단계(PR CI, 브랜치 보호, 배포 키, production 환경, SHA 태그·GHCR·자동 되돌리기, Actuator, 정리), 되돌리기와 Flyway |
+| [73 이중화와 롤링 배포](./concepts/73-이중화와-롤링-배포.md) | 이중화의 범위, 롤링·블루·그린·우리 nginx 비교, upstream과 수동 헬스 판단(`max_fails`·`fail_timeout`·`proxy_next_upstream`, POST는 다시 안 보냄), 앱을 늘리는 조건(상태를 앱 밖에), liveness·readiness와 Actuator, SIGTERM·graceful shutdown·종료 단계와 비동기 작업 실험(`await-termination`), 옛·새 버전 공존(늘리기→옮기기→줄이기, JS 404), `deploy.sh`의 준비 확인·되돌리기 규칙·Redis 유지, 가짜 docker 시험 (스텝 25) |
 
 ### 2부. 데이터와 웹
 
@@ -83,6 +85,7 @@
 | [27 소프트 삭제와 일괄 수정](./concepts/27-소프트-삭제와-일괄-수정.md) | 소프트 삭제, 딸린 데이터 처리, 변경 감지, `@Modifying`, 수정 시각 지키기 |
 | [23 트랜잭션과 동시성](./concepts/23-트랜잭션과-잠금.md) | `@Transactional`, 경쟁 조건, 비관적 잠금(`FOR UPDATE`), UNIQUE 제약, 동시성 테스트, 대표 블로그 바꾸기(끄고 flush 켜기) |
 | [33 격리 수준, 스냅샷, 데드락](./concepts/33-격리-수준과-데드락.md) | 격리 수준과 MVCC, 일관된 읽기와 잠금 읽기, 외래 키 공유 잠금과 데드락, 공감 버튼에서 겪은 두 버그 |
+| [72 동시 수정 막기](./concepts/72-동시-수정-막기.md) | 읽고→판단하고→쓰기와 갱신 손실, READ COMMITTED에서 UPDATE가 WHERE를 다시 보는 동작(DB가 "바뀐 것"을 막아 주지 않음), 변경 감지의 모든 칸 UPDATE, 조건부 UPDATE·비관적 잠금·낙관적 잠금(`@Version`)·advisory lock 비교와 틈의 길이로 고르기, 예약 발행·새벽 통계·지원 리뷰로 찾은 발행 직전 취소, 그 순간을 고정하는 테스트(래치·`pg_stat_activity`) (스텝 25) |
 | [34 조회수: 누가 봤는지, 5분 중복, 동시 새로고침](./concepts/34-조회수.md) | 조회자 키와 방문자 쿠키, 시간 창 중복 판정, 기록 테이블과 누적 칸, 잠금을 첫 문장으로, StrictMode effect 두 번 |
 | [36 집계 쿼리로 순위 매기기](./concepts/36-집계-쿼리로-순위-매기기.md) | `GROUP BY`·`SUM`, `UNION ALL`로 가중치 점수, 시각 인덱스, 동점 처리, `NamedParameterJdbcTemplate`, 태그별 글 수 |
 | [43 글 공유 미리보기: Open Graph](./concepts/43-Open-Graph-공유-미리보기.md) | 봇은 자바스크립트를 안 돌린다, 서버가 넣는 og 태그, 이스케이프, 절대 주소, charset, 비회원 기준 |
