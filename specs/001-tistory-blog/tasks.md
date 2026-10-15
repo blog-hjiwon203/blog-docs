@@ -509,7 +509,7 @@ description: "지원 서비스 구현 작업 (2주 일정 기준)"
 | T136 | 헬스체크: actuator, `/actuator/health/readiness`(readinessState·db·redis)·`/liveness`, health만 열고 details 숨김, 메일 검사 끔 |
 | T137 | 앱이 꺼질 때 `@Async` 작업 확인: 기본값으로 종료 단계(30초)에서 기다림, `await-termination`은 오히려 나빠서 넣지 않음(실험, `AsyncConfig` 주석). 코드 변경 없음 |
 | T138 | `deploy.sh` 두 대 롤링: app-2 → app, stop -t 70 → readiness UP → 12초, 실패하면 옛 이미지로 거꾸로 되돌리기, Redis 다시 만들지 않기. 가짜 docker·curl로 6가지 경우 |
-| T139 | 학교 nginx upstream 반영(지원이 설정 파일을 고쳐 강사님께 요청)과 확인: 두 앱에 요청이 나뉨, 배포 중 502 없음 |
+| T139 | 학교 nginx upstream 반영(지원이 설정 파일을 고치면 서버가 10분마다 자동으로 다시 읽음)과 확인: 두 앱에 요청이 나뉨, 배포 중 502 없음 |
 | T140 | 문서: research R-18, plan, 이 표, 학습 자료(동시성 제어, 이중화·롤링 배포, 스텝 노트) |
 
 **확인할 것**: 서버에서 `docker ps`에 `aigj017-app`(8460)·`aigj017-app-2`(8461)가 같은 이미지로 Up, `curl http://127.0.0.1:8460/actuator/health/readiness`와 `:8461`이 모두 `{"status":"UP"}`. nginx 반영 뒤 `while true; do curl -s -o /dev/null -w '%{http_code}\n' https://now-log.java21.net/; sleep 0.5; done | uniq -c`를 돌린 채 배포를 한 번 돌려 200만 나옴.
@@ -846,7 +846,7 @@ description: "지원 서비스 구현 작업 (2주 일정 기준)"
 - [X] T136 [구조] 헬스체크 actuator in `pom.xml`, `application.yml` (R-18)
 - [X] T137 [구조] 꺼질 때 비동기 작업 확인(코드 변경 없음, 주석) in `global/config/AsyncConfig` (R-18)
 - [X] T138 [구조] 두 대 롤링 배포 in `deploy/deploy.sh` (R-18)
-- [ ] T139 [구조] 학교 nginx upstream 반영과 무중단 확인(지원·강사님) (R-18)
+- [X] T139 [구조] 학교 nginx upstream 반영과 무중단 확인(지원) (R-18)
 - [X] T140 [구조] 문서: research, plan, tasks, 학습 자료 (R-18)
 
 ### 기능별로 보기

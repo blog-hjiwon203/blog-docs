@@ -162,8 +162,8 @@
 ## R-18 이중화·무중단 배포 (2026-10-14~15 지원 결정, 스텝 25)
 
 - **결정**: 같은 서버에 앱을 두 대(`aigj017-app` 8460, `aigj017-app-2` 8461, 배정 포트 8460~8469 안) 늘 띄우고, 학교 nginx 설정 파일(`~/nginx/now-log.java21.net.conf`)에 upstream(`now_log_java21_net`)을 두어 둘로 나눠 보낸다. 배포는 한 대씩 바꾸는 **롤링**이다. 이중화를 직접 해 보는 것도 목적이다.
-- **블루·그린을 고르지 않은 이유**: 블루·그린은 배포 때만 두 벌이라 평소에는 한 대이고(이중화가 아님), 배포마다 nginx가 보내는 곳을 바꿔야 한다. 학교 nginx는 설정 파일을 고칠 때마다 강사님께 말씀드려 반영해야 해서 배포마다 바꿀 수 없다. upstream은 한 번만 넣으면 이후 배포에서 nginx를 건드리지 않는다.
-- **우리 nginx 컨테이너를 두지 않은 이유**: 다른 학생이 학교 nginx에 upstream 두 대를 이미 쓰고 있어 허용됨을 확인했다. 강사님께 한 번만 요청하면 되고, 컨테이너를 하나 더 운영하지 않아도 된다. 대신 앱을 끄기 전에 upstream에서 미리 빼는 방식은 못 쓰고, 꺼진 앱을 nginx가 실패로 알아채 다른 앱으로 다시 보내는 방식이다(`max_fails=1 fail_timeout=10s`, `proxy_next_upstream error timeout http_502 http_503`, `proxy_next_upstream_tries 2`, `proxy_connect_timeout 3s`). POST처럼 이미 앱에 보낸 요청은 nginx가 다시 보내지 않으므로 두 번 저장되지 않는다.
+- **블루·그린을 고르지 않은 이유**: 블루·그린은 배포 때만 두 벌이라 평소에는 한 대이고(이중화가 아님), 배포마다 nginx가 보내는 곳을 바꿔야 한다. 학교 nginx는 학생이 reload할 수 없고(sudo 없음), 서버가 10분마다 설정을 자동으로 다시 읽는다. 배포마다 보내는 곳을 바꾸면 언제 바뀌는지 알 수 없어, 옛 앱을 언제 꺼도 되는지 정할 수 없다. upstream은 한 번만 넣으면 이후 배포에서 nginx를 건드리지 않는다.
+- **우리 nginx 컨테이너를 두지 않은 이유**: 다른 학생이 학교 nginx에 upstream 두 대를 이미 쓰고 있어 허용됨을 확인했다. 설정 파일을 한 번만 고치면 되고(10분 안에 자동 반영), 컨테이너를 하나 더 운영하지 않아도 된다. 대신 앱을 끄기 전에 upstream에서 미리 빼는 방식은 못 쓰고, 꺼진 앱을 nginx가 실패로 알아채 다른 앱으로 다시 보내는 방식이다(`max_fails=1 fail_timeout=10s`, `proxy_next_upstream error timeout http_502 http_503`, `proxy_next_upstream_tries 2`, `proxy_connect_timeout 3s`). POST처럼 이미 앱에 보낸 요청은 nginx가 다시 보내지 않으므로 두 번 저장되지 않는다.
 - **앱 두 대에서 같이 도는 서버 작업**: 스케줄 작업을 한 앱에서만 켜지 않고 두 앱 모두 켠다. 같은 일을 한 앱만 하도록 DB가 가른다. 그래서 한 앱이 배포로 꺼져 있어도 다른 앱이 계속 한다.
   - 예약 발행(POST-13): 글을 엔티티로 읽어 고쳐 저장하던 것을, 번호만 읽고 글마다 `UPDATE … WHERE id = ? AND status = 'SCHEDULED'`(조건부 UPDATE)로 바꿨다. 바뀐 행이 1인 쪽만 발행 이벤트를 보낸다. 늦은 쪽은 행 잠금을 기다렸다가 커밋된 행으로 WHERE를 다시 보고 0행이 된다(READ COMMITTED). 발행 칸만 바꾸므로 그사이 고친 제목을 덮어쓰지 않고, `updated_at`도 바꾸지 않는다(벌크 UPDATE라 Auditing을 거치지 않음).
   - 새벽 통계(MNG-03): `pg_try_advisory_xact_lock`을 잡은 앱만 모으고 나머지는 건너뛴다. 지우고 다시 넣기가 겹치면 UNIQUE 위반으로 한쪽이 실패하기 때문이다. 연달아 다시 모으는 것은 결과가 같아 막지 않는다.
