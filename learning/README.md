@@ -57,6 +57,7 @@
 | [70 CI/CD 설정 방법 여러 가지](./concepts/70-CI-CD-설정-방법.md) | 방법 고르기(push·pull 방식), 배포 전용 SSH 키와 되돌리는 배포 스크립트, A GitHub Actions PR CI, B Actions + GHCR + SSH, C 셀프 호스티드 러너, D Jenkins(Jenkinsfile·Credentials·Multibranch), E GitLab CI(dind·manual·resource_group), F AWS OIDC + ECR + ECS, G 쿠버네티스 + Argo CD(GitOps) |
 | [71 이 프로젝트의 CI/CD](./concepts/71-CI-CD-우리-프로젝트-적용.md) | now-log의 `deploy.yml`·`deploy.sh`·`Dockerfile` 읽기, 비밀값이 서버까지 가는 길, 잘된 점과 빈 곳, 고치는 순서 7단계(PR CI, 브랜치 보호, 배포 키, production 환경, SHA 태그·GHCR·자동 되돌리기, Actuator, 정리), 되돌리기와 Flyway |
 | [73 이중화와 롤링 배포](./concepts/73-이중화와-롤링-배포.md) | 이중화의 범위, 롤링·블루·그린·우리 nginx 비교, upstream과 수동 헬스 판단(`max_fails`·`fail_timeout`·`proxy_next_upstream`, POST는 다시 안 보냄), 앱을 늘리는 조건(상태를 앱 밖에), liveness·readiness와 Actuator, SIGTERM·graceful shutdown·종료 단계와 비동기 작업 실험(`await-termination`), 옛·새 버전 공존(늘리기→옮기기→줄이기, JS 404), `deploy.sh`의 준비 확인·되돌리기 규칙·Redis 유지, 가짜 docker 시험 (스텝 25) |
+| [74 SonarQube와 정적 분석](./concepts/74-SonarQube와-정적-분석.md) | 정적·동적 분석, 스캐너·서버·Compute Engine, 이슈와 보안 핫스팟, 품질 프로필·품질 게이트, 새 코드 기준(Previous version), Community Build의 한계(main만 분석), JaCoCo 에이전트와 V8 커버리지, `jacoco.xml`·`lcov.info` 경로 맞추기, surefire `@{argLine}` 함정 |
 
 ### 2부. 데이터와 웹
 
