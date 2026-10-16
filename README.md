@@ -2,7 +2,7 @@
 
 지원의 기능명세서(`docs/기능명세서_지원 (개인 설계 문서).md`, 이하 **원본**)를 [GitHub Spec Kit](https://github.com/github/spec-kit) 형식으로 정리한 저장소다. 원본의 기능 코드(`AUTH-01` 등)를 그대로 쓰고, 옮기며 고친 곳은 원본 검토에 모았다. 이 저장소 루트에서 Claude Code를 열면 `/speckit-*` 스킬을 바로 쓸 수 있다.
 
-> **확인하거나 정할 게 있는지 보려면 [지원이 확인할 것](specs/001-tistory-blog/review.md) 하나만 보면 된다.** 지원이 정한 것(A), Claude가 임의로 정한 것(B), 확인만 하면 되는 것(C)이 모두 거기 있다.
+> **확인하거나 정할 게 있는지 보려면 [지원이 확인할 것](./specs/001-tistory-blog/review.md) 하나만 보면 된다.** 지원이 정한 것(A), Claude가 임의로 정한 것(B), 확인만 하면 되는 것(C)이 모두 거기 있다.
 
 ## 문서 안내
 
@@ -11,19 +11,19 @@
 | 문서 | 무엇을 담나 | 이런 질문이 생기면 본다 |
 | --- | --- | --- |
 | [헌법](.specify/memory/constitution.md) | 이 서비스가 절대 어기면 안 되는 원칙 7개 | "비공개 글은 403이야 404야?", "관리자가 글을 지워도 돼?" |
-| [기능 명세](specs/001-tistory-blog/spec.md) | 사용자가 확인할 수 있는 동작 전부. 주요 방식, 유저 스토리, 권한, 공통 규칙, 기능 코드별 요구사항, 미결정 사항 | "이 기능이 어떻게 동작해야 해?", "우선순위가 뭐야?", "아직 안 정해진 건?" |
-| [지원이 확인할 것](specs/001-tistory-blog/review.md) | 지원이 정한 Q1~Q7, Claude가 임의로 정한 것, 원본을 옮기며 찾은 문제 16건 | "내가 정하거나 확인할 게 뭐야?", "원본이랑 왜 달라?" |
-| [명세 품질 체크리스트](specs/001-tistory-blog/checklists/requirements.md) | 기능 명세가 구현 계획으로 넘어가도 될 만큼 완성됐는지 점검표 | "명세에 빠진 게 있어?" |
-| [구현 계획](specs/001-tistory-blog/plan.md) | 기술 스택, 주요 방식의 구현, 자율 값, 헌법 점검, 폴더 구조 | "무슨 기술로 만들어?", "폴더는 어떻게 나눠?" |
-| [조사](specs/001-tistory-blog/research.md) | 기술 결정 하나하나의 결정·이유·대안, 남은 미결정 | "왜 JWT야?", "Redis는 어디에 써?", "연타 방지는 어떻게 해?" |
-| [데이터 모델](specs/001-tistory-blog/data-model.md) | 테이블과 컬럼, 제약, 글 가시성 판단 순서 | "post 테이블에 뭐가 있어?", "이 글을 누가 볼 수 있어?" |
-| [ERD](specs/001-tistory-blog/erd/README.md) | Crowfoot에서 설계한 ERD 사본: 관계도(Mermaid), 테이블별 컬럼·키·제약, 실행 가능한 DDL, 데이터 모델을 ERD에 맞춘 이력 | "테이블끼리 어떻게 이어져?", "실제 DDL은?" |
-| [REST API 명세](specs/001-tistory-blog/contracts/rest-api.md) | 엔드포인트, 요청·응답 본문, 응답 코드 규칙, 오류 코드 목록 | "글 목록 API 경로가 뭐야?", "몇 번 상태 코드를 줘?" |
-| [화면 목업](specs/001-tistory-blog/mockups/README.md) | 화면 31개의 정적 HTML 목업과 화면마다 부르는 API | "이 화면은 어떻게 생겼어?", "이 화면은 어떤 API를 불러?" |
-| [빠른 시작](specs/001-tistory-blog/quickstart.md) | 로컬 실행 방법과 손으로 확인하는 검증 시나리오 | "어떻게 띄워?", "다 만들었는지 어떻게 확인해?" |
-| [작업 목록](specs/001-tistory-blog/tasks.md) | 2주 일정에 맞춘 작업 T001~T073과 백로그 작업 T074~T087, 순서와 의존 관계 | "오늘 뭐 해?", "이건 몇 주차야?" |
-| [학습 자료](./learning/README.md) | 구현에 쓴 개념을 처음부터 공부하는 개념 문서 19개(실습·확인 문제 포함)와 스텝별 읽는 순서 | "이건 어떻게 동작해?", "왜 이렇게 만들었어?", "JWT가 뭐야?" |
-| [기능명세서_지원 원본](docs/기능명세서_지원%20%28개인%20설계%20문서%29.md) | 위 문서들의 원본인 개인 설계 문서 | "원래 문서 문장 그대로 보고 싶어", "예전 ID가 지금 어느 코드야?" (원본 5.15) |
+| [기능 명세](./specs/001-tistory-blog/spec.md) | 사용자가 확인할 수 있는 동작 전부. 주요 방식, 유저 스토리, 권한, 공통 규칙, 기능 코드별 요구사항, 미결정 사항 | "이 기능이 어떻게 동작해야 해?", "우선순위가 뭐야?", "아직 안 정해진 건?" |
+| [지원이 확인할 것](./specs/001-tistory-blog/review.md) | 지원이 정한 Q1~Q7, Claude가 임의로 정한 것, 원본을 옮기며 찾은 문제 16건 | "내가 정하거나 확인할 게 뭐야?", "원본이랑 왜 달라?" |
+| [명세 품질 체크리스트](./specs/001-tistory-blog/checklists/requirements.md) | 기능 명세가 구현 계획으로 넘어가도 될 만큼 완성됐는지 점검표 | "명세에 빠진 게 있어?" |
+| [구현 계획](./specs/001-tistory-blog/plan.md) | 기술 스택, 주요 방식의 구현, 자율 값, 헌법 점검, 폴더 구조 | "무슨 기술로 만들어?", "폴더는 어떻게 나눠?" |
+| [조사](./specs/001-tistory-blog/research.md) | 기술 결정 하나하나의 결정·이유·대안, 남은 미결정 | "왜 JWT야?", "Redis는 어디에 써?", "연타 방지는 어떻게 해?" |
+| [데이터 모델](./specs/001-tistory-blog/data-model.md) | 테이블과 컬럼, 제약, 글 가시성 판단 순서 | "post 테이블에 뭐가 있어?", "이 글을 누가 볼 수 있어?" |
+| [ERD](./specs/001-tistory-blog/erd/README.md) | Crowfoot에서 설계한 ERD 사본: 관계도(Mermaid), 테이블별 컬럼·키·제약, 실행 가능한 DDL, 데이터 모델을 ERD에 맞춘 이력 | "테이블끼리 어떻게 이어져?", "실제 DDL은?" |
+| [REST API 명세](./specs/001-tistory-blog/contracts/rest-api.md) | 엔드포인트, 요청·응답 본문, 응답 코드 규칙, 오류 코드 목록 | "글 목록 API 경로가 뭐야?", "몇 번 상태 코드를 줘?" |
+| [화면 목업](./specs/001-tistory-blog/mockups/README.md) | 화면 31개의 정적 HTML 목업과 화면마다 부르는 API | "이 화면은 어떻게 생겼어?", "이 화면은 어떤 API를 불러?" |
+| [빠른 시작](./specs/001-tistory-blog/quickstart.md) | 로컬 실행 방법과 손으로 확인하는 검증 시나리오 | "어떻게 띄워?", "다 만들었는지 어떻게 확인해?" |
+| [작업 목록](./specs/001-tistory-blog/tasks.md) | 2주 일정에 맞춘 작업 T001~T073과 백로그 작업 T074~T087, 순서와 의존 관계 | "오늘 뭐 해?", "이건 몇 주차야?" |
+| [학습 자료](./learning/README.md) | 구현에 쓴 개념을 처음부터 공부하는 주제 폴더 다섯 개로 나눈 개념 문서 59개(실습·확인 문제 포함)와 스텝별 읽는 순서 | "이건 어떻게 동작해?", "왜 이렇게 만들었어?", "JWT가 뭐야?" |
+| [기능명세서_지원 원본](./docs/기능명세서_지원 (개인 설계 문서).md) | 위 문서들의 원본인 개인 설계 문서 | "원래 문서 문장 그대로 보고 싶어", "예전 ID가 지금 어느 코드야?" (원본 5.15) |
 
 ### 문서끼리의 관계
 
@@ -77,7 +77,7 @@
 
 ## Claude Code에서 쓰는 법
 
-`/speckit-specify`(기능 명세), `/speckit-plan`(구현 계획), `/speckit-tasks`(작업 목록)는 이미 끝난 상태다. 구현은 이 저장소가 아니라 코드 저장소 [blog-hjiwon203/now-log](https://github.com/blog-hjiwon203/now-log)에 한다(2026-10-14에 제출용 [AIP-1/blog-basic-AIGJ_01_017-blog](https://github.com/AIP-1/blog-basic-AIGJ_01_017-blog)에서 커밋 기록째 옮김, 그때까지의 PR은 [history/pull-requests](history/pull-requests/README.md)).
+`/speckit-specify`(기능 명세), `/speckit-plan`(구현 계획), `/speckit-tasks`(작업 목록)는 이미 끝난 상태다. 구현은 이 저장소가 아니라 코드 저장소 [blog-hjiwon203/now-log](https://github.com/blog-hjiwon203/now-log)에 한다(2026-10-14에 제출용 [AIP-1/blog-basic-AIGJ_01_017-blog](https://github.com/AIP-1/blog-basic-AIGJ_01_017-blog)에서 커밋 기록째 옮김, 그때까지의 PR은 [history/pull-requests](./history/pull-requests/README.md)).
 
 ### 폴더 배치 (지원 컴퓨터)
 
@@ -102,7 +102,7 @@ cd blog && git add CLAUDE.md && git commit -m "docs: CLAUDE.md 추가" && git pu
 
 1. 문서가 바뀌었으면 `cd ~/IdeaProjects/blog-docs && git pull`
 2. IntelliJ 터미널에서 `cd ~/IdeaProjects/blog && claude --add-dir ../blog-docs`
-3. "스텝 1 진행해"처럼 [작업 목록의 구현 스텝](specs/001-tistory-blog/tasks.md#구현-스텝과-검토-포인트) 번호를 준다
+3. "스텝 1 진행해"처럼 [작업 목록의 구현 스텝](./specs/001-tistory-blog/tasks.md#구현-스텝과-검토-포인트) 번호를 준다
 4. Claude Code가 멈추고 정리해 주면 표의 "확인할 것"으로 확인하고, push → PR → 병합
 5. 다음 스텝
 
