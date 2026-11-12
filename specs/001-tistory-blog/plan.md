@@ -122,6 +122,7 @@ src/
     │   ├── reaction/        # 공감
     │   ├── bookmark/        # 저장 (SOC-03)
     │   ├── subscription/
+    │   ├── rss/             # 블로그 RSS 피드 (SUB-07, 스텝 26)
     │   ├── search/
     │   ├── home/
     │   ├── ranking/         # 인기 블로거·추천 블로그·랭킹 스냅숏 (HOME-04·05, SUB-06)
