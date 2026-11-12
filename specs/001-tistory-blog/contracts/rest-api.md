@@ -449,6 +449,36 @@
 | GET | /api/feed?cursor= | P | 회원 | 구독한 블로그의 새 글 `PostSummary` 20 최신순 `{ content, nextCursor }`(홈 최신 글과 같은 모양). 보는 사람이 볼 수 있는 글만(구독자 공개 글 포함) | SUB-02 |
 | GET | /api/recommend/blogs | P | 누구나 | 추천 블로그 5 `[BlogCard]`(`recentPostTitle` 포함). 인기 블로거 순위에서 내 블로그와 이미 구독한 블로그를 뺀 위에서부터. 비회원은 인기 블로거와 같음 | SUB-06 |
 
+#### RSS 피드 (SUB-07, 스텝 26)
+
+`/api/` 밖의 주소다. JSON이 아니라 RSS 2.0 XML을 준다. 읽는 쪽(다른 앱, RSS 리더)에 맞추지 않고 표준대로 칸을 채운다(조사 R-19).
+
+| 메서드 | 경로 | 권한 | 설명 | ID |
+| --- | --- | --- | --- | --- |
+| GET | /@{주소}/rss | 누구나 | 200 `application/rss+xml;charset=UTF-8`, `Cache-Control: max-age=300`. 로그인 쿠키가 있어도 **비회원 기준**으로 만든다(주인도 같은 피드). 없거나 규칙에 어긋난 주소, 지운 블로그(이사 대상 없음), 이용 제한·주인 정지 블로그는 404(본문 없음). 이사한 블로그는 `/@{새 주소}/rss`로 301(화면 주소와 같은 규칙, 이사 간 블로그가 지워졌으면 404) | SUB-07 |
+
+피드에 들어가는 글: 비회원이 볼 수 있는 글(`PostSpecifications.visibleTo(null)`, 전체 공개·발행됨·숨김 아님·비공개 카테고리 아님)만, 발행 시각 최신순(같으면 번호 큰 순) 20개. 비공개·구독자 공개·임시저장·예약 글은 넣지 않는다.
+
+| 칸 | 값 | 표준 |
+| --- | --- | --- |
+| `rss@version` | `2.0`. 이름공간 `content`(`http://purl.org/rss/1.0/modules/content/`), `atom`(`http://www.w3.org/2005/Atom`) | RSS 2.0 |
+| `channel/title` | 블로그 이름 | RSS 2.0 (필수) |
+| `channel/link` | 블로그 첫 화면 전체 주소 `http(s)://{플랫폼}/@{주소}` | RSS 2.0 (필수) |
+| `channel/description` | 블로그 소개글. 비었으면 블로그 이름 | RSS 2.0 (필수) |
+| `channel/language` | `ko` | RSS 2.0 |
+| `channel/lastBuildDate` | 가장 최근 글의 발행 시각. 글이 없으면 칸이 없다 | RSS 2.0 |
+| `channel/generator` | `now-log` | RSS 2.0 |
+| `channel/atom:link` | `rel="self"`, `type="application/rss+xml"`, `href` = 이 피드 전체 주소 | RSS Advisory Board 권고 |
+| `item/title` | 글 제목 | RSS 2.0 |
+| `item/link` | 글 전체 주소 `http(s)://{플랫폼}/@{주소}/{글 번호}` | RSS 2.0 |
+| `item/guid` | `link`와 같은 값, `isPermaLink="true"` | RSS 2.0 |
+| `item/pubDate` | 발행 시각, RFC 822 형식 한국 시간(`Thu, 12 Nov 2026 14:30:00 +0900`) | RSS 2.0 |
+| `item/category` | 카테고리 하나. 하위 카테고리는 `상위/하위`(RSS 2.0의 `/` 계층 표기). 미분류 글은 칸이 없다. **태그는 넣지 않는다** | RSS 2.0 |
+| `item/description` | 요약(목록에 쓰는 300자 `summary`, 글자만). 비었으면 칸이 없다 | RSS 2.0 |
+| `item/content:encoded` | 전체 본문 HTML(정화를 거친 `content_html`). 본문 이미지 `/uploads/…`는 플랫폼 전체 주소로 바꾼다 | RSS 1.0 Content 모듈 |
+
+글자는 XML로 이스케이프한다(CDATA를 쓰지 않는다).
+
 ### SRCH 검색 · HOME 홈
 
 | 메서드 | 경로 | 범위 | 권한 | 설명 | ID |
@@ -536,6 +566,7 @@
 | 블로그 확인 | 주소 규칙에 어긋나거나 예약어인 주소, 없거나 볼 수 없는 블로그 404 화면. 이사한 블로그는 새 블로그 같은 경로로 301(`/@old/category/3` → `/@new/category/3`) (주인의 `/manage/**`는 예외). 옛 블로그가 지워졌어도 이사 대상이 있으면 301(지운 블로그의 관리 화면은 없음). 이사 간 블로그가 삭제됐으면 404. 글 주소 `/{id}`는 아래 글 확인이 먼저다 | BLOG-06, BLOG-07, COM-01 |
 | 글 확인 | `/{id}`가 다른 블로그 소속이고 볼 수 있으면 지금 블로그로 301(`/@b/15` → `/@a/15`), 아니면 404 화면. 옛 블로그가 지워졌어도 옮긴 글은 301, 옮기지 않은 글은 함께 지워져 404. 이사한 블로그에 남은(옮기지 않은) 글은 옛 주소에서 그대로 보인다(블로그 301을 먼저 하면 옛 주소↔새 주소 무한 리다이렉트, 2026-10-08 지원 확인) | POST-04, SC-005 |
 | 방문 기록 | 블로그 주소의 화면 요청(볼 수 있는 블로그 화면·글 화면, 관리 화면 제외)마다 `blog_visit`에 블로그·날짜·방문자 하나를 남긴다(하루 한 번, `INSERT IGNORE`). 유입 종류·호스트는 `Referer`로 정하고(플랫폼 주소면, 그 아래 블로그 화면 `/@{주소}`도 같은 호스트라 `INTERNAL`), 주인 본인은 세지 않는다. 기록에 실패해도 화면은 그대로 준다. 앱 안의 화면 전환은 서버를 거치지 않아 세지 않는다 | MNG-03 |
+| 피드 자동 찾기 | 볼 수 있는 블로그 화면(블로그 첫 화면·글·카테고리·태그 등, 관리 화면 제외)이고 블로그가 다른 사람에게 열려 있으면(이용 제한·주인 정지가 아님) `index.html`의 head에 `<link rel="alternate" type="application/rss+xml" title="{블로그 이름}" href="{http(s)://플랫폼/@주소/rss}">`를 넣는다(HTML 표준 `rel=alternate`, RSS Autodiscovery). 404·301 응답에는 넣지 않는다 | SUB-07 |
 | 공유 미리보기 | 글 주소면 `index.html`에 `og:title`·`og:description`(요약)·`og:image`(대표 이미지)·`og:url`(글 주소 전체)을 넣는다. 볼 수 없는 글이면 넣지 않는다 | SOC-02 |
 
 ## 화면별 API
