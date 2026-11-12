@@ -868,10 +868,10 @@ description: "지원 서비스 구현 작업 (2주 일정 기준)"
 
 2026-11-12 지원 결정: 표준(RSS 2.0, Content 모듈, Autodiscovery)대로, 읽는 쪽에 맞추지 않는다(R-19).
 
-- [ ] T141 [US6] RSS 피드 `/@{주소}/rss` in `rss/application/RssFeedService`, `rss/presentation/RssFeedController` (SUB-07)
-- [ ] T142 [US6] 피드 자동 찾기 태그 in `global/config/SpaForwardController` (SUB-07)
-- [ ] T143 [US6] 블로그 머리글 RSS 링크 in `frontend/src/components/BlogHeader.tsx` (SUB-07)
-- [ ] T144 [US6] 문서·CHANGELOG·학습 자료 (SUB-07, R-19)
+- [X] T141 [US6] RSS 피드 `/@{주소}/rss` in `rss/application/RssFeedService`, `rss/presentation/RssFeedController` (SUB-07)
+- [X] T142 [US6] 피드 자동 찾기 태그 in `global/config/SpaForwardController` (SUB-07)
+- [X] T143 [US6] 블로그 머리글 RSS 링크 in `frontend/src/components/BlogHeader.tsx` (SUB-07)
+- [X] T144 [US6] 문서·CHANGELOG·학습 자료 (SUB-07, R-19)
 
 ### 기능별로 보기
 

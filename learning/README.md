@@ -39,6 +39,7 @@
 | 23 | [주 DB를 PostgreSQL로](./스텝-23.md) | MySQL과 추천 DB를 PostgreSQL 하나로(개념 "MySQL과 PostgreSQL"): PostgreSQL용 Flyway V1, citext와 드라이버 `stringtype` 함정, `ON CONFLICT`·`UPDATE … FROM`·`DELETE … USING`, `updated_at`을 JPA에만, READ COMMITTED와 `FOR KEY SHARE`, 의미 검색·비슷한 글을 Criteria 한 쿼리로(hibernate-vector), 테스트 SQL 차이 |
 | 24 | [운영 데이터 옮기기·배포·문서](./스텝-24.md) | 서버·Docker·포트·docker 네트워크와 개발용·운영용 두 벌, `deploy.sh`가 같은 컨테이너에 `blog` DB를 만들고 앱을 붙임, MySQL → PostgreSQL 이전 스크립트(COPY 글자 형식, `sql_mode`와 상관없는 이스케이프, 외래 키 순서, 시퀀스), 행 수·내용 대조, 운영 전환과 되돌리기, 비밀번호를 명령줄에 쓰지 않기 |
 | 25 | [이중화·무중단 배포](./스텝-25.md) | 앱 두 대 + 학교 nginx upstream + 롤링 배포(블루·그린이 아닌 이유), 예약 발행을 조건부 UPDATE로(두 앱 중 한쪽만 발행), 지원 리뷰로 찾은 발행 직전 취소 경합과 읽기 전 행 잠금(비관적 잠금을 고른 이유), 새벽 통계 advisory lock, Actuator readiness, 꺼질 때 비동기 작업 실험(`await-termination`을 넣지 않는 이유), `deploy.sh` 롤링·되돌리기 규칙·Redis 유지, 가짜 docker로 시험 |
+| 26 | [RSS 피드](./스텝-26.md) | 블로그마다 RSS 2.0 피드 `/@주소/rss`(비회원 기준 최신 20개), 요약은 `description`·전체 본문은 `content:encoded`, 카테고리는 `상위/하위` 하나(태그 없음), 자동 찾기 `<link rel="alternate">`, 머리글 RSS 링크, 읽는 쪽에 맞추지 않고 표준대로 |
 
 ## 개념 문서
 
@@ -108,7 +109,8 @@
 | [10 WYSIWYG 에디터와 Tiptap](./concepts/4-웹과-프론트/10-WYSIWYG-에디터와-Tiptap.md) | ProseMirror와 Tiptap, 허용 서식 맞추기, 이중 정화, 에디터 상태 |
 | [11 상태에 따라 갈 곳 정하기: 글쓰기 버튼](./concepts/4-웹과-프론트/11-글쓰기-버튼-갈-곳-정하기.md) | 판단을 순수 함수 하나에, `Pick`과 단위 테스트, 호스트를 넘는 이동, `?from=`으로 하려던 일 넘기기와 열린 리다이렉트, 버튼은 안내이고 권한은 서버 |
 | [12 글 공유 미리보기: Open Graph](./concepts/4-웹과-프론트/12-Open-Graph-공유-미리보기.md) | 봇은 자바스크립트를 안 돌린다, 서버가 넣는 og 태그, 이스케이프, 절대 주소, charset, 비회원 기준 |
-| [13 휴대폰 화면: 반응형과 헤드리스 Chrome 점검](./concepts/4-웹과-프론트/13-휴대폰-화면-반응형-점검.md) | viewport, 미디어 쿼리, `minmax(0, 1fr)`, 표를 카드로, CDP로 360px 화면 재기·스크린숏 |
+| [13 RSS 피드와 자동 찾기](./concepts/4-웹과-프론트/13-RSS-피드와-자동-찾기.md) | RSS 2.0 칸과 필수 칸, Content 모듈 `content:encoded`, Autodiscovery `rel=alternate`, Atom(RFC 4287), 표준을 지켜도 어긋나는 이유(칸은 쓰는 쪽·고르기는 읽는 쪽), 비회원 기준 피드, StAX와 XML에 못 넣는 글자, RFC 822와 시간대 (스텝 26) |
+| [14 휴대폰 화면: 반응형과 헤드리스 Chrome 점검](./concepts/4-웹과-프론트/14-휴대폰-화면-반응형-점검.md) | viewport, 미디어 쿼리, `minmax(0, 1fr)`, 표를 카드로, CDP로 360px 화면 재기·스크린숏 |
 
 ### 5부. 기능 설계 (`concepts/5-기능-설계/`)
 
