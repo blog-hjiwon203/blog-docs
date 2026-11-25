@@ -514,6 +514,21 @@ description: "지원 서비스 구현 작업 (2주 일정 기준)"
 
 **확인할 것**: 서버에서 `docker ps`에 `aigj017-app`(8460)·`aigj017-app-2`(8461)가 같은 이미지로 Up, `curl http://127.0.0.1:8460/actuator/health/readiness`와 `:8461`이 모두 `{"status":"UP"}`. nginx 반영 뒤 `while true; do curl -s -o /dev/null -w '%{http_code}\n' https://now-log.java21.net/; sleep 0.5; done | uniq -c`를 돌린 채 배포를 한 번 돌려 200만 나옴.
 
+### 스텝 26. RSS 피드 (SUB-07, 2026-11-12 지원 결정)
+
+**무엇을 만드나**: 블로그마다 RSS 2.0 피드 `/@{주소}/rss`를 내고, 블로그 화면 HTML에 피드 자동 찾기 태그를, 머리글에 RSS 링크를 둔다. 다른 앱(LOLog)이 블로그 글을 가져가려는 것이 계기지만, 읽는 쪽에 맞추지 않고 표준대로 만든다(R-19). v1.1.0 마무리 뒤 처음 다시 여는 스텝이라 pom을 1.2.0-SNAPSHOT으로 올린다.
+
+**끝나면**: RSS 리더에 블로그 주소만 넣어도 피드를 찾고, 전체 공개 글 최신 20개를 요약·전체 본문·카테고리와 함께 읽는다.
+
+| 작업 | 내용 |
+| --- | --- |
+| T141 | 피드 `GET /@{주소}/rss`: 비회원이 볼 수 있는 글 20개, 칸은 contracts의 RSS 피드 표, 이미지 전체 주소, 404·301 |
+| T142 | 블로그 화면 `index.html` head에 `<link rel="alternate" type="application/rss+xml">` (다른 사람에게 열린 블로그만, 관리 화면·404·301 제외) |
+| T143 | 블로그 머리글에 RSS 링크 |
+| T144 | 문서: spec·contracts·research R-19·plan·이 표, CHANGELOG, 학습 자료 |
+
+**확인할 것**: `./mvnw spring-boot:run` 뒤 `curl -i http://localhost:8080/@{주소}/rss`가 200 `application/rss+xml`이고 전체 공개 글만 나온다(비공개 글을 하나 만들어 빠지는지 확인). `curl -s http://localhost:8080/@{주소} | grep alternate`에 피드 주소가 보인다. 블로그 화면 머리글의 RSS를 누르면 피드가 열린다. 피드 주소를 [W3C Feed Validation Service](https://validator.w3.org/feed/)에 넣거나(운영 배포 뒤) RSS 리더에 블로그 주소만 넣어 글이 보이는지 본다.
+
 ### 진행 방식
 
 **Claude Code CLI에 시키는 법**: 코드 저장소(`~/IdeaProjects/blog`)에서 `claude --add-dir ../blog-docs`로 열고 "스텝 3 진행해"처럼 스텝 번호를 준다. `../blog-docs`는 `~/IdeaProjects/blog-docs`다. Claude Code는 코드 저장소의 `CLAUDE.md`([원본](./code-repo-CLAUDE.md))에 따라 그 스텝의 작업만 하고 결과를 정리한 뒤 멈춘다.
@@ -849,6 +864,15 @@ description: "지원 서비스 구현 작업 (2주 일정 기준)"
 - [X] T139 [구조] 학교 nginx upstream 반영과 무중단 확인(지원) (R-18)
 - [X] T140 [구조] 문서: research, plan, tasks, 학습 자료 (R-18)
 
+**스텝 26. RSS 피드**
+
+2026-11-12 지원 결정: 표준(RSS 2.0, Content 모듈, Autodiscovery)대로, 읽는 쪽에 맞추지 않는다(R-19).
+
+- [X] T141 [US6] RSS 피드 `/@{주소}/rss` in `rss/application/RssFeedService`, `rss/presentation/RssFeedController` (SUB-07)
+- [X] T142 [US6] 피드 자동 찾기 태그 in `global/config/SpaForwardController` (SUB-07)
+- [X] T143 [US6] 블로그 머리글 RSS 링크 in `frontend/src/components/BlogHeader.tsx` (SUB-07)
+- [X] T144 [US6] 문서·CHANGELOG·학습 자료 (SUB-07, R-19)
+
 ### 기능별로 보기
 
 2주 범위 밖 기능이 어느 작업·스텝에서 만들어지는지 보는 대응표다. 진행 체크는 위의 작업 목록 한 곳에서만 한다(이 표에는 체크박스를 두지 않는다).
@@ -882,6 +906,7 @@ description: "지원 서비스 구현 작업 (2주 일정 기준)"
 | (구조) | 이중화·무중단 배포 | T133~T140 | 25 |
 | US14 | 블로그 이용 제한 (ADMIN-05), 신고 (ADMIN-04), 공지·관리 이력·대시보드 (ADMIN-06) | T109, T110, T111, T112 | 18 |
 | US12 | 알림 (SUB-04) | T113 | 16 |
+| US6 | RSS 피드 (SUB-07) | T141~T144 | 26 |
 | US13 | 방문 통계 (MNG-03), 스팸·차단 (MNG-04) | T082~T085 | 20 |
 | US16 | 저장한 글 (SOC-03) | T074~T077 | 20 |
 | US16 | 인기 블로거 (HOME-04), 추천 블로그 (SUB-06), 랭킹 전체보기 (HOME-05) | T078~T081 | 20 |
