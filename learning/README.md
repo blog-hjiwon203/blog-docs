@@ -39,6 +39,7 @@
 | 23 | [주 DB를 PostgreSQL로](./스텝-23.md) | MySQL과 추천 DB를 PostgreSQL 하나로(개념 "MySQL과 PostgreSQL"): PostgreSQL용 Flyway V1, citext와 드라이버 `stringtype` 함정, `ON CONFLICT`·`UPDATE … FROM`·`DELETE … USING`, `updated_at`을 JPA에만, READ COMMITTED와 `FOR KEY SHARE`, 의미 검색·비슷한 글을 Criteria 한 쿼리로(hibernate-vector), 테스트 SQL 차이 |
 | 24 | [운영 데이터 옮기기·배포·문서](./스텝-24.md) | 서버·Docker·포트·docker 네트워크와 개발용·운영용 두 벌, `deploy.sh`가 같은 컨테이너에 `blog` DB를 만들고 앱을 붙임, MySQL → PostgreSQL 이전 스크립트(COPY 글자 형식, `sql_mode`와 상관없는 이스케이프, 외래 키 순서, 시퀀스), 행 수·내용 대조, 운영 전환과 되돌리기, 비밀번호를 명령줄에 쓰지 않기 |
 | 25 | [이중화·무중단 배포](./스텝-25.md) | 앱 두 대 + 학교 nginx upstream + 롤링 배포(블루·그린이 아닌 이유), 예약 발행을 조건부 UPDATE로(두 앱 중 한쪽만 발행), 지원 리뷰로 찾은 발행 직전 취소 경합과 읽기 전 행 잠금(비관적 잠금을 고른 이유), 새벽 통계 advisory lock, Actuator readiness, 꺼질 때 비동기 작업 실험(`await-termination`을 넣지 않는 이유), `deploy.sh` 롤링·되돌리기 규칙·Redis 유지, 가짜 docker로 시험 |
+| 27 | [조회 중복 판정을 Redis로](./스텝-27.md) | 글 행 잠금 + `view_log` 확인을 Redis `SET NX EX 300` 한 명령으로, 잠금이 글 단위라 아쉬웠던 점, DB 실패 때 표시 지우기, 고르지 않은 것(조회수 Write-Behind, Refresh 토큰 로테이션)과 이유 |
 
 ## 개념 문서
 
@@ -119,7 +120,7 @@
 | [03 이미지 업로드와 처리](./concepts/5-기능-설계/03-이미지-업로드.md) | multipart, 크기 제한, 매직 넘버, Thumbnailator·EXIF, WebP 플러그인, `/uploads` 내보내기와 캐시, 목록 썸네일 |
 | [04 임시저장과 자동 저장](./concepts/5-기능-설계/04-임시저장과-자동-저장.md) | 글의 상태와 되돌릴 수 없는 이동, 상태별 검증, 처음 POST 그 뒤 PUT, `setInterval`과 낡은 값·`useRef`, 저장 줄 세우기, 스냅숏 |
 | [05 대표 이미지](./concepts/5-기능-설계/05-대표-이미지.md) | 고른 번호 검증(본문 안에 있나), `null` = 자동, `ON DELETE SET NULL`, 한 페이지 쿼리 두 번, 파생 값 |
-| [06 조회수: 누가 봤는지, 5분 중복, 동시 새로고침](./concepts/5-기능-설계/06-조회수.md) | 조회자 키와 방문자 쿠키, 시간 창 중복 판정, 기록 테이블과 누적 칸, 잠금을 첫 문장으로, StrictMode effect 두 번 |
+| [06 조회수: 누가 봤는지, 5분 중복, 동시 새로고침](./concepts/5-기능-설계/06-조회수.md) | 조회자 키와 방문자 쿠키, 시간 창 중복 판정, 기록 테이블과 누적 칸, 잠금을 첫 문장으로, Redis `SET NX`로 바꾸기와 Write-Behind를 고르지 않은 이유, StrictMode effect 두 번 |
 | [07 통계와 순위](./concepts/5-기능-설계/07-통계와-순위.md) | **집계 쿼리로 순위 매기기**: `GROUP BY`·`SUM`, `UNION ALL`로 가중치 점수, 시각 인덱스, 동점 처리, `NamedParameterJdbcTemplate`, 태그별 글 수 / **방문 통계**: 하루 방문자(순 방문자), 원본과 요약 표, 멱등한 배치(지우고 넣기, 다시 계산, 지난 7일), 오늘은 바로·어제까지는 요약, Referer로 유입 나누기와 한계, SPA에서 방문을 아는 곳, `UPDATE … JOIN`과 `ON UPDATE`, 그래프 빈 칸·주·월 칸 / **시간 칸 스냅숏**: 작업 대신 시간 칸을 키로 한 캐시, 결정적 계산(끝을 정시로), 더보기 중 순위 고정과 409 `RANKING_UPDATED`, 블로그 점수 SQL, 캐시엔 번호만, 추천은 같은 순위표에서, 테스트의 캐시·시간대 |
 | [08 구독과 알림](./concepts/5-기능-설계/08-구독과-알림.md) | 멱등한 PUT·DELETE와 INSERT IGNORE의 "넣은 행 수", 부수 효과(알림)를 같은 트랜잭션에서 만들기와 다른 방법(이벤트·비동기), 쓸 때 정하는 것(문구)과 읽을 때 정하는 것(링크·가시성), 거르는 커서 목록, 구독자 공개와 "있지만 못 보는" 403, 클립보드와 보안 컨텍스트, 제재·해제 알림(SANCTION) |
 | [09 저장한 글](./concepts/5-기능-설계/09-저장한-글과-스냅숏.md) | 멱등한 PUT·DELETE와 INSERT IGNORE, 스냅숏(정규화의 예외), 저장할 때와 읽을 때의 판단, 이유를 말하지 않는 "볼 수 없음", `@JsonInclude(NON_NULL)`, 목록에서 바로 취소, 탈퇴 정리 |

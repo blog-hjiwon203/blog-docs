@@ -514,6 +514,19 @@ description: "지원 서비스 구현 작업 (2주 일정 기준)"
 
 **확인할 것**: 서버에서 `docker ps`에 `aigj017-app`(8460)·`aigj017-app-2`(8461)가 같은 이미지로 Up, `curl http://127.0.0.1:8460/actuator/health/readiness`와 `:8461`이 모두 `{"status":"UP"}`. nginx 반영 뒤 `while true; do curl -s -o /dev/null -w '%{http_code}\n' https://now-log.java21.net/; sleep 0.5; done | uniq -c`를 돌린 채 배포를 한 번 돌려 200만 나옴.
 
+### 스텝 27. 조회 중복 판정을 Redis로 (2026-11-26 지원 결정)
+
+**무엇을 만드나**: 조회 5분 중복 판정을 글 행 잠금 + `view_log` 확인에서 Redis `SET NX EX`로 바꾼다(R-02 "조회 중복 표시"). 지원 기준 "Redis가 지금 구현보다 나은 경우만 반영"으로 후보를 따졌고, 조회수 Write-Behind·Refresh 토큰 로테이션·글 상세 캐시는 넣지 않았다(이유는 R-02, 학습 노트 스텝 27). 이 스텝은 tasks 표 없이 대화로 진행했고, 끝난 뒤 문서에 옮겼다.
+
+**끝나면**: 같은 사람의 5분 안 재조회는 DB에 가지 않고, 다른 사람의 조회끼리 글 행 잠금을 기다리지 않는다. API·화면은 그대로다.
+
+| 작업 | 내용 |
+| --- | --- |
+| T141 | `ViewService.record`: `lockById` + `existsBy…ViewedAtAfter` → `setIfAbsent("view:seen:{글}:{조회자}", 5분)`, DB 실패 때 키 삭제, 안 쓰는 `ViewLogRepository.existsBy…` 삭제. `ViewCountIntegrationTest`의 5분 흉내를 Redis 키 TTL 확인·삭제로 |
+| T142 | 문서: research R-02, 이 표, 학습 자료(조회수 4.5 등, 캐시와 저장소 고르기 5.11, 스텝 노트) |
+
+**확인할 것**: `./mvnw test -Dtest=ViewCountIntegrationTest`가 통과. 개발 서버에서 글을 연 뒤 `docker exec -it blog-redis redis-cli --scan --pattern 'view:seen:*'`에 키가 있고 `TTL`이 300 이하.
+
 ### 진행 방식
 
 **Claude Code CLI에 시키는 법**: 코드 저장소(`~/IdeaProjects/blog`)에서 `claude --add-dir ../blog-docs`로 열고 "스텝 3 진행해"처럼 스텝 번호를 준다. `../blog-docs`는 `~/IdeaProjects/blog-docs`다. Claude Code는 코드 저장소의 `CLAUDE.md`([원본](./code-repo-CLAUDE.md))에 따라 그 스텝의 작업만 하고 결과를 정리한 뒤 멈춘다.
@@ -848,6 +861,13 @@ description: "지원 서비스 구현 작업 (2주 일정 기준)"
 - [X] T138 [구조] 두 대 롤링 배포 in `deploy/deploy.sh` (R-18)
 - [X] T139 [구조] 학교 nginx upstream 반영과 무중단 확인(지원) (R-18)
 - [X] T140 [구조] 문서: research, plan, tasks, 학습 자료 (R-18)
+
+**스텝 27. 조회 중복 판정을 Redis로**
+
+2026-11-26 지원 결정: Redis가 지금 구현보다 나은 경우만 반영. 조회 중복 판정만 바꾼다(R-02).
+
+- [X] T141 [US5] 조회 5분 중복 판정을 Redis SET NX로 in `post/application/ViewService`, `post/domain/ViewLogRepository` (R-02, POST-09)
+- [X] T142 [구조] 문서: research, tasks, 학습 자료 (R-02)
 
 ### 기능별로 보기
 
